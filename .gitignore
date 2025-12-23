@@ -1,0 +1,13 @@
+# Node / Vercel
+vercel/node_modules/
+vercel/.vercel/
+vercel/.env
+vercel/.env.*
+
+# Service account keys (never commit)
+*.json
+!appscript.json
+
+# OS
+.DS_Store
+Thumbs.db

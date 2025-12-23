@@ -1,3 +1,5 @@
+import { rpcGetAllData, rpcPing } from '../src/rpc/data';
+
 type RpcRequestBody = {
   name?: unknown;
   args?: unknown;
@@ -6,18 +8,6 @@ type RpcRequestBody = {
 type RpcResponse =
   | { ok: true; result: unknown }
   | { ok: false; error: string };
-
-import { rpcGetAllData, rpcPing } from '../src/rpc/data';
-import {
-  rpcAppendDocWithMemo,
-  rpcCreateDailyReportDoc,
-  rpcCreateMinuteDoc,
-  rpcCreateProjectDoc,
-  rpcCreateTaskDoc,
-  rpcGetLogoDataUrl,
-  rpcReplaceDocWithMemo,
-  rpcSetDocLinkShare,
-} from '../src/rpc/docs';
 
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -31,14 +21,39 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   ping: rpcPing,
 
   // Docs
-  getLogoDataUrl: rpcGetLogoDataUrl,
-  setDocLinkShare: rpcSetDocLinkShare,
-  replaceDocWithMemo: rpcReplaceDocWithMemo,
-  appendDocWithMemo: rpcAppendDocWithMemo,
-  createProjectDoc: rpcCreateProjectDoc,
-  createTaskDoc: rpcCreateTaskDoc,
-  createMinuteDoc: rpcCreateMinuteDoc,
-  createDailyReportDoc: rpcCreateDailyReportDoc,
+  // (lazy import to avoid loading googleapis on every cold start)
+  async getLogoDataUrl() {
+    const m = await import('../src/rpc/docs');
+    return (m as any).rpcGetLogoDataUrl();
+  },
+  async setDocLinkShare(...args: any[]) {
+    const m = await import('../src/rpc/docs');
+    return (m as any).rpcSetDocLinkShare(...args);
+  },
+  async replaceDocWithMemo(...args: any[]) {
+    const m = await import('../src/rpc/docs');
+    return (m as any).rpcReplaceDocWithMemo(...args);
+  },
+  async appendDocWithMemo(...args: any[]) {
+    const m = await import('../src/rpc/docs');
+    return (m as any).rpcAppendDocWithMemo(...args);
+  },
+  async createProjectDoc(...args: any[]) {
+    const m = await import('../src/rpc/docs');
+    return (m as any).rpcCreateProjectDoc(...args);
+  },
+  async createTaskDoc(...args: any[]) {
+    const m = await import('../src/rpc/docs');
+    return (m as any).rpcCreateTaskDoc(...args);
+  },
+  async createMinuteDoc(...args: any[]) {
+    const m = await import('../src/rpc/docs');
+    return (m as any).rpcCreateMinuteDoc(...args);
+  },
+  async createDailyReportDoc(...args: any[]) {
+    const m = await import('../src/rpc/docs');
+    return (m as any).rpcCreateDailyReportDoc(...args);
+  },
 
   // Minimal stubs so the copied UI can boot on Vercel.
 

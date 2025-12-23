@@ -15,6 +15,13 @@ function errorMessage(e: unknown): string {
 async function loadHandler(name: string) {
   // Keep lazy imports so Vercel cold starts don't pay cost when not needed.
   switch (name) {
+    case 'getAllData':
+    case 'getAllDataPlain':
+    case 'ping': {
+      const data = await import('../src/rpc/data');
+      if (name === 'getAllData' || name === 'getAllDataPlain') return (data as any).rpcGetAllData;
+      return (data as any).rpcPing;
+    }
     case 'getLogoDataUrl':
     case 'setDocLinkShare':
     case 'replaceDocWithMemo':
@@ -44,39 +51,7 @@ async function loadHandler(name: string) {
 
 const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   // Minimal stubs so the copied UI can boot on Vercel.
-  async getAllData() {
-    return {
-      version: null,
-      users: [],
-      projects: [],
-      tasks: [],
-      subs: [],
-      ledger: [],
-      ledgerPlans: [],
-      credentials: [],
-      attachments: [],
-      minutes: [],
-      dailyReports: [],
-      shareds: [],
-    };
-  },
-
-  async getAllDataPlain() {
-    return handlers.getAllData();
-  },
-
-  async ping() {
-    return {
-      ok: true,
-      counts: {
-        users: 0,
-        projects: 0,
-        tasks: 0,
-        subs: 0,
-      },
-      now: new Date().toISOString(),
-    };
-  },
+  // Note: getAllData/getAllDataPlain/ping are now provided via lazy import in loadHandler().
 
   async getSpreadsheetInfo() {
     return { url: null, name: null, id: null, via: 'vercel' };

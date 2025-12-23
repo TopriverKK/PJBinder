@@ -3,6 +3,7 @@ vercel/node_modules/
 vercel/.vercel/
 vercel/.env
 vercel/.env.*
+vercel/.smoke-dist/
 
 # Service account keys (never commit)
 *.json

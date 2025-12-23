@@ -1258,7 +1258,9 @@ button.link:hover { opacity: .8; }
               body: JSON.stringify({ name: String(prop), args })
             });
 
-            const data = await resp.json().catch(async () => ({ ok: false, error: await resp.text().catch(()=>'RPC error') }));
+            const raw = await resp.text().catch(() => '');
+            let data = null;
+            try { data = raw ? JSON.parse(raw) : null; } catch { data = { ok: false, error: raw || 'RPC error' }; }
             if (!resp.ok || !data || data.ok !== true) {
               throw new Error((data && data.error) ? data.error : `RPC failed: ${resp.status}`);
             }
@@ -1470,7 +1472,7 @@ function refresh() {
     })
     .withFailureHandler(err => {
       console.error(err);
-      toast && toast('データ取得エラー','ng');
+      showToast && showToast('ng','データ取得エラー');
       Busy.pop();
     })
     .getAllData();

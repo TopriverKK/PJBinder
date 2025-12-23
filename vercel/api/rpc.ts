@@ -7,51 +7,40 @@ type RpcResponse =
   | { ok: true; result: unknown }
   | { ok: false; error: string };
 
+import { rpcGetAllData, rpcPing } from '../src/rpc/data';
+import {
+  rpcAppendDocWithMemo,
+  rpcCreateDailyReportDoc,
+  rpcCreateMinuteDoc,
+  rpcCreateProjectDoc,
+  rpcCreateTaskDoc,
+  rpcGetLogoDataUrl,
+  rpcReplaceDocWithMemo,
+  rpcSetDocLinkShare,
+} from '../src/rpc/docs';
+
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   return typeof e === 'string' ? e : JSON.stringify(e);
 }
 
-async function loadHandler(name: string) {
-  // Keep lazy imports so Vercel cold starts don't pay cost when not needed.
-  switch (name) {
-    case 'getAllData':
-    case 'getAllDataPlain':
-    case 'ping': {
-      const data = await import('../src/rpc/data');
-      if (name === 'getAllData' || name === 'getAllDataPlain') return (data as any).rpcGetAllData;
-      return (data as any).rpcPing;
-    }
-    case 'getLogoDataUrl':
-    case 'setDocLinkShare':
-    case 'replaceDocWithMemo':
-    case 'appendDocWithMemo':
-    case 'createProjectDoc':
-    case 'createTaskDoc':
-    case 'createMinuteDoc':
-    case 'createDailyReportDoc': {
-      const docs = await import('../src/rpc/docs');
-      return (docs as any)[
-        {
-          getLogoDataUrl: 'rpcGetLogoDataUrl',
-          setDocLinkShare: 'rpcSetDocLinkShare',
-          replaceDocWithMemo: 'rpcReplaceDocWithMemo',
-          appendDocWithMemo: 'rpcAppendDocWithMemo',
-          createProjectDoc: 'rpcCreateProjectDoc',
-          createTaskDoc: 'rpcCreateTaskDoc',
-          createMinuteDoc: 'rpcCreateMinuteDoc',
-          createDailyReportDoc: 'rpcCreateDailyReportDoc',
-        }[name] as any
-      ];
-    }
-    default:
-      return undefined;
-  }
-}
-
 const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
+  // Data
+  getAllData: rpcGetAllData,
+  getAllDataPlain: rpcGetAllData,
+  ping: rpcPing,
+
+  // Docs
+  getLogoDataUrl: rpcGetLogoDataUrl,
+  setDocLinkShare: rpcSetDocLinkShare,
+  replaceDocWithMemo: rpcReplaceDocWithMemo,
+  appendDocWithMemo: rpcAppendDocWithMemo,
+  createProjectDoc: rpcCreateProjectDoc,
+  createTaskDoc: rpcCreateTaskDoc,
+  createMinuteDoc: rpcCreateMinuteDoc,
+  createDailyReportDoc: rpcCreateDailyReportDoc,
+
   // Minimal stubs so the copied UI can boot on Vercel.
-  // Note: getAllData/getAllDataPlain/ping are now provided via lazy import in loadHandler().
 
   async getSpreadsheetInfo() {
     return { url: null, name: null, id: null, via: 'vercel' };
@@ -87,7 +76,7 @@ export default async function handler(req: any, res: any) {
   const name = typeof body?.name === 'string' ? body.name : '';
   const args = Array.isArray(body?.args) ? body.args : [];
 
-  const fn = handlers[name] ?? (await loadHandler(name));
+  const fn = handlers[name];
   if (!fn) {
     res.statusCode = 404;
     const out: RpcResponse = { ok: false, error: `Unknown RPC: ${name}` };

@@ -1,5 +1,6 @@
 {
   "name": "pj-binder-vercel",
+  "type": "module",
   "private": true,
   "dependencies": {
     "googleapis": "^146.0.0"

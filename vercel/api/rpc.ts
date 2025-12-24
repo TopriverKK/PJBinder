@@ -251,11 +251,11 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   },
   async createMinuteDoc(...args: any[]) {
     const docs = await getDocsMod();
-    return await docs.rpcCreateMinuteDoc(String(args[0]));
+    return await docs.rpcCreateMinuteDoc(args[0]);
   },
   async createDailyReportDoc(...args: any[]) {
     const docs = await getDocsMod();
-    return await docs.rpcCreateDailyReportDoc(String(args[0]));
+    return await docs.rpcCreateDailyReportDoc(args[0]);
   },
 
   // Attendance

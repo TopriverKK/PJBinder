@@ -41,8 +41,10 @@ export function getGoogleClients(): GoogleClients {
     scopes: [...new Set([...DRIVE_SCOPES, ...DOCS_SCOPES])],
   });
 
-  return {
+  cachedClients = {
     drive: google.drive({ version: 'v3', auth }),
     docs: google.docs({ version: 'v1', auth }),
   };
+
+  return cachedClients;
 }

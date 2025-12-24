@@ -320,26 +320,31 @@ export async function appendDocWithMemo(docId: string, memoText: string) {
 }
 
 export async function getLogoDataUrl() {
-  const { drive } = getGoogleClients();
-  const { logoFileId } = loadGoogleEnv();
-  if (!logoFileId) throw new Error('Missing env: GOOGLE_LOGO_FILE_ID');
+  try {
+    const { drive } = getGoogleClients();
+    const { logoFileId } = loadGoogleEnv();
+    if (!logoFileId) return null;
 
-  const params = driveParams();
+    const params = driveParams();
 
-  // `alt=media` returns binary; googleapis gives it back in `data`.
-  const res: any = await drive.files.get(
-    { ...params, fileId: logoFileId, alt: 'media' as any },
-    { responseType: 'arraybuffer' }
-  );
+    // `alt=media` returns binary; googleapis gives it back in `data`.
+    const res: any = await drive.files.get(
+      { ...params, fileId: logoFileId, alt: 'media' as any },
+      { responseType: 'arraybuffer' }
+    );
 
-  const meta = await drive.files.get({
-    ...params,
-    fileId: logoFileId,
-    fields: 'mimeType',
-  });
+    const meta = await drive.files.get({
+      ...params,
+      fileId: logoFileId,
+      fields: 'mimeType',
+    });
 
-  const mimeType = meta.data.mimeType || 'application/octet-stream';
-  const buf = Buffer.from(res.data as ArrayBuffer);
-  const base64 = buf.toString('base64');
-  return `data:${mimeType};base64,${base64}`;
+    const mimeType = meta.data.mimeType || 'application/octet-stream';
+    const buf = Buffer.from(res.data as ArrayBuffer);
+    const base64 = buf.toString('base64');
+    return `data:${mimeType};base64,${base64}`;
+  } catch (e) {
+    console.warn('[getLogoDataUrl] Failed:', e);
+    return null;
+  }
 }

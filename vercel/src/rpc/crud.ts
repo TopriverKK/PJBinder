@@ -128,7 +128,7 @@ export async function rpcUpsertMinute(m: any) {
       return result; // Already saved in createMinuteDoc
     } catch (e) {
       console.error('Failed to create minute doc:', e);
-      throw e;
+      // Fall through and save the row without a doc.
     }
   }
   
@@ -151,7 +151,7 @@ export async function rpcUpsertDailyReport(r: any) {
       return result; // Already saved in createDailyReportDoc
     } catch (e) {
       console.error('Failed to create daily report doc:', e);
-      throw e;
+      // Fall through and save the row without a doc.
     }
   }
   

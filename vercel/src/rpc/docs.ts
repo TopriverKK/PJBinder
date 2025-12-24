@@ -11,7 +11,6 @@ import {
 } from '../google/driveDocs.js';
 import { sbSelectOneById, sbUpsert } from '../supabase/rest.js';
 import { getSetting } from '../supabase/settings.js';
-import { randomUUID } from 'crypto';
 
 function sanitizeName(s: string) {
   return String(s || '').replace(/[\\/:*?"<>|]/g, ' ').trim() || 'untitled';
@@ -48,10 +47,10 @@ export async function rpcCreateProjectDoc(projectId: string) {
 
   const env = loadGoogleEnv();
   const base = env.projectDocsFolderId || env.baseFolderId;
-  if (!base) throw new Error('Missing env: GOOGLE_PROJECT_DOCS_FOLDER_ID (or GOOGLE_BASE_FOLDER_ID)');
 
   // GAS: ['プロジェクトDocs', projectName]
-  const folderId = await ensureFolderPath(base, ['プロジェクトDocs', sanitizeName(p.name || p.id)]);
+  // If base folder is not configured, fall back to Drive root.
+  const folderId = base ? await ensureFolderPath(base, ['プロジェクトDocs', sanitizeName(p.name || p.id)]) : undefined;
   const title = `プロジェクト ${p.name || p.id}`;
 
   const initialText =
@@ -81,14 +80,16 @@ export async function rpcCreateTaskDoc(taskId: string) {
 
   const env = loadGoogleEnv();
   const base = env.projectDocsFolderId || env.baseFolderId;
-  if (!base) throw new Error('Missing env: GOOGLE_PROJECT_DOCS_FOLDER_ID (or GOOGLE_BASE_FOLDER_ID)');
 
   // GAS: ['プロジェクトDocs', projName, 'タスクDocs']
-  const folderId = await ensureFolderPath(base, [
-    'プロジェクトDocs',
-    sanitizeName(proj ? proj.name || proj.id : '未割当'),
-    'タスクDocs',
-  ]);
+  // If base folder is not configured, fall back to Drive root.
+  const folderId = base
+    ? await ensureFolderPath(base, [
+        'プロジェクトDocs',
+        sanitizeName(proj ? proj.name || proj.id : '未割当'),
+        'タスクDocs',
+      ])
+    : undefined;
 
   const title = `${proj ? `${proj.name || proj.id} - ` : ''}タスク ${t.title || t.id}`;
   const initialText =
@@ -123,7 +124,6 @@ export async function rpcCreateMinuteDoc(input: any) {
 
   const env = loadGoogleEnv();
   const base = env.minutesFolderId || env.baseFolderId;
-  if (!base) throw new Error('Missing env: GOOGLE_MINUTES_FOLDER_ID (or GOOGLE_BASE_FOLDER_ID)');
 
   const dateStr = String(input.date);
   const dt = new Date(dateStr);
@@ -133,7 +133,8 @@ export async function rpcCreateMinuteDoc(input: any) {
   const dateFormatted = `${yyyy}_${mm}_${dd}`;
 
   const ym = `${yyyy}年${mm}月`;
-  const folderId = await ensureFolderPath(base, ['議事録', ym]);
+  // If base folder is not configured, fall back to Drive root.
+  const folderId = base ? await ensureFolderPath(base, ['議事録', ym]) : undefined;
 
   const title = String(input.title);
   const meetingKey = `${dateFormatted}_${sanitizeName(title)}`;
@@ -156,44 +157,51 @@ export async function rpcCreateMinuteDoc(input: any) {
   // Template (settings) or fallback
   const templateId = await getSetting('MINUTES_TEMPLATE_ID');
 
-  let docId: string;
-  let url: string;
+  let docId: string | null = null;
+  let url: string | null = null;
 
-  if (templateId) {
-    const result = await copyDocTemplate({
-      templateId,
-      title: fileTitle,
-      folderId,
-      shareRole: 'editor',
-      replacements: {
-        '【会議名】': meetingKey,
-        '【日付】': dateStr,
-        '【プロジェクト】': projectLabel || '-',
-        '【タスク】': taskIdsCsv || '-',
-        '【参加者】': attendees || '-',
-      },
-    });
-    docId = result.docId;
-    url = result.url;
-  } else {
-    const initialText =
-      `議事録: ${title}\n` +
-      `日付: ${dateStr}\n` +
-      `プロジェクト: ${projectLabel || '-'}\n` +
-      `タスク: ${taskIdsCsv || '-'}\n` +
-      `参加者: ${attendees || '-'}\n` +
-      `\n――――\n` +
-      `■ アクションアイテム\n` +
-      `■ 議題 / メモ\n`;
+  try {
+    if (templateId) {
+      const result = await copyDocTemplate({
+        templateId,
+        title: fileTitle,
+        folderId,
+        shareRole: 'editor',
+        replacements: {
+          '【会議名】': meetingKey,
+          '【日付】': dateStr,
+          '【プロジェクト】': projectLabel || '-',
+          '【タスク】': taskIdsCsv || '-',
+          '【参加者】': attendees || '-',
+        },
+      });
+      docId = result.docId;
+      url = result.url;
+    } else {
+      const initialText =
+        `議事録: ${title}\n` +
+        `日付: ${dateStr}\n` +
+        `プロジェクト: ${projectLabel || '-'}\n` +
+        `タスク: ${taskIdsCsv || '-'}\n` +
+        `参加者: ${attendees || '-'}\n` +
+        `\n――――\n` +
+        `■ アクションアイテム\n` +
+        `■ 議題 / メモ\n`;
 
-    const result = await createGoogleDocInFolder({
-      title: fileTitle,
-      folderId,
-      shareRole: 'editor',
-      initialText,
-    });
-    docId = result.docId;
-    url = result.url;
+      const result = await createGoogleDocInFolder({
+        title: fileTitle,
+        folderId,
+        shareRole: 'editor',
+        initialText,
+      });
+      docId = result.docId;
+      url = result.url;
+    }
+  } catch (e) {
+    // If Google API or folder env isn't configured, still save the minutes row.
+    console.error('[docs] Failed to create minute doc (will save row without doc):', e);
+    docId = null;
+    url = null;
   }
 
   // Ensure selected info is present even if the template has no placeholders.
@@ -203,7 +211,9 @@ export async function rpcCreateMinuteDoc(input: any) {
   if (projectLabel) metaLines.push(`プロジェクト: ${projectLabel}`);
   if (taskIdsCsv) metaLines.push(`タスク: ${taskIdsCsv}`);
   if (attendees) metaLines.push(`参加者: ${attendees}`);
-  await prependDocText(docId, metaLines.join('\n'));
+  if (docId) {
+    await prependDocText(docId, metaLines.join('\n'));
+  }
 
   // Supabase: Minutes row
   const now = isoDate(new Date());
@@ -237,7 +247,6 @@ export async function rpcCreateDailyReportDoc(r: any) {
 
   const env = loadGoogleEnv();
   const base = env.dailyReportsFolderId || env.baseFolderId;
-  if (!base) throw new Error('Missing env: GOOGLE_DAILY_REPORTS_FOLDER_ID (or GOOGLE_BASE_FOLDER_ID)');
 
   // ユーザー名（無ければ userId）
   let uname = userId;
@@ -249,7 +258,8 @@ export async function rpcCreateDailyReportDoc(r: any) {
   }
 
   const yyyy = dateStr.slice(0, 4) || String(new Date().getFullYear());
-  const folderId = await ensureFolderPath(base, ['日報', sanitizeName(uname), yyyy]);
+  // If base folder is not configured, fall back to Drive root.
+  const folderId = base ? await ensureFolderPath(base, ['日報', sanitizeName(uname), yyyy]) : undefined;
   const fileTitle = `日報 ${dateStr} ${uname}`;
 
   const templateId = await getSetting('DAILY_TEMPLATE_ID');
@@ -268,41 +278,48 @@ export async function rpcCreateDailyReportDoc(r: any) {
     }
   }
 
-  let docId: string;
-  let url: string;
+  let docId: string | null = null;
+  let url: string | null = null;
 
-  if (templateId) {
-    const result = await copyDocTemplate({
-      templateId,
-      title: fileTitle,
-      folderId,
-      shareRole: 'editor',
-      replacements: {
-        '【日付】': dateStr,
-        '【ユーザー名】': uname,
-        '【工数】': String(hours),
-        '【プロジェクト】': projectLabel || '-',
-        '【本文】': body,
-      },
-    });
-    docId = result.docId;
-    url = result.url;
-  } else {
-    const titleLine = `日報 ${dateStr} / ${uname}`;
-    const initialText =
-      `${titleLine}\n` +
-      `ユーザー: ${uname}　日付: ${dateStr}　工数: ${hours}h\n` +
-      (projectLabel ? `プロジェクト: ${projectLabel}\n` : '') +
-      `\n${body}\n`;
+  try {
+    if (templateId) {
+      const result = await copyDocTemplate({
+        templateId,
+        title: fileTitle,
+        folderId,
+        shareRole: 'editor',
+        replacements: {
+          '【日付】': dateStr,
+          '【ユーザー名】': uname,
+          '【工数】': String(hours),
+          '【プロジェクト】': projectLabel || '-',
+          '【本文】': body,
+        },
+      });
+      docId = result.docId;
+      url = result.url;
+    } else {
+      const titleLine = `日報 ${dateStr} / ${uname}`;
+      const initialText =
+        `${titleLine}\n` +
+        `ユーザー: ${uname}　日付: ${dateStr}　工数: ${hours}h\n` +
+        (projectLabel ? `プロジェクト: ${projectLabel}\n` : '') +
+        `\n${body}\n`;
 
-    const result = await createGoogleDocInFolder({
-      title: fileTitle,
-      folderId,
-      shareRole: 'editor',
-      initialText,
-    });
-    docId = result.docId;
-    url = result.url;
+      const result = await createGoogleDocInFolder({
+        title: fileTitle,
+        folderId,
+        shareRole: 'editor',
+        initialText,
+      });
+      docId = result.docId;
+      url = result.url;
+    }
+  } catch (e) {
+    // If Google API or folder env isn't configured, still save the daily report row.
+    console.error('[docs] Failed to create daily report doc (will save row without doc):', e);
+    docId = null;
+    url = null;
   }
 
   // Supabase: DailyReports row

@@ -100,7 +100,7 @@ export async function setDocLinkShare(docId: string, role: DocShareRole) {
 
 export async function createGoogleDocInFolder(opts: {
   title: string;
-  folderId: string;
+  folderId?: string;
   shareRole?: DocShareRole;
   initialText?: string;
 }) {
@@ -112,21 +112,23 @@ export async function createGoogleDocInFolder(opts: {
   const docId = created.data.documentId;
   if (!docId) throw new Error('Failed to create document');
 
-  // 2) move into folder
-  const parents = await drive.files.get({
-    ...params,
-    fileId: docId,
-    fields: 'parents',
-  });
-  const prevParents = (parents.data.parents || []).join(',');
+  // 2) move into folder (optional)
+  if (opts.folderId) {
+    const parents = await drive.files.get({
+      ...params,
+      fileId: docId,
+      fields: 'parents',
+    });
+    const prevParents = (parents.data.parents || []).join(',');
 
-  await drive.files.update({
-    ...params,
-    fileId: docId,
-    addParents: opts.folderId,
-    removeParents: prevParents || undefined,
-    fields: 'id,webViewLink',
-  });
+    await drive.files.update({
+      ...params,
+      fileId: docId,
+      addParents: opts.folderId,
+      removeParents: prevParents || undefined,
+      fields: 'id,webViewLink',
+    });
+  }
 
   // 3) optional text
   if (opts.initialText && opts.initialText.trim()) {
@@ -186,7 +188,7 @@ export async function prependDocText(docId: string, text: string) {
 export async function copyDocTemplate(opts: {
   templateId: string;
   title: string;
-  folderId: string;
+  folderId?: string;
   shareRole?: DocShareRole;
   replacements?: Record<string, string>;
 }): Promise<{ docId: string; url: string }> {
@@ -199,7 +201,7 @@ export async function copyDocTemplate(opts: {
     fileId: opts.templateId,
     requestBody: {
       name: opts.title,
-      parents: [opts.folderId],
+      ...(opts.folderId ? { parents: [opts.folderId] } : {}),
     },
     fields: 'id,webViewLink',
   });

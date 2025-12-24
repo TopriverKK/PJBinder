@@ -4,7 +4,7 @@ import {
   rpcCreateMinuteDoc,
   rpcCreateProjectDoc,
   rpcCreateTaskDoc,
-} from './docs';
+} from './docs.js';
 
 function isoDate(d: Date): string {
   return d.toISOString().split('T')[0]; // YYYY-MM-DD for text columns

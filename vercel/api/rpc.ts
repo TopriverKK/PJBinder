@@ -72,7 +72,15 @@ async function readJsonBody(req: any): Promise<RpcRequestBody> {
           return {};
         }
       }
-      if (typeof existing === 'object') return existing as RpcRequestBody;
+      if (typeof existing === 'object') {
+        // Avoid mistaking streams/buffers for a parsed JSON payload.
+        const isBuffer = typeof Buffer !== 'undefined' && Buffer.isBuffer(existing);
+        const isStreamLike = typeof (existing as any).pipe === 'function' || typeof (existing as any).on === 'function';
+        const looksLikeRpc =
+          Object.prototype.hasOwnProperty.call(existing, 'name') ||
+          Object.prototype.hasOwnProperty.call(existing, 'args');
+        if (!isBuffer && !isStreamLike && looksLikeRpc) return existing as RpcRequestBody;
+      }
     }
   } catch (e) {
     // Some runtimes expose req.body as a getter that can throw.

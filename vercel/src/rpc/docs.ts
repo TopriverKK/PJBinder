@@ -8,6 +8,7 @@ import {
   setDocLinkShare,
 } from '../google/driveDocs';
 import { sbSelectOneById, sbUpsert } from '../supabase/rest';
+import { randomUUID } from 'crypto';
 
 function sanitizeName(s: string) {
   return String(s || '').replace(/[\\/:*?"<>|]/g, ' ').trim() || 'untitled';
@@ -132,7 +133,7 @@ export async function rpcCreateMinuteDoc(input: any) {
   });
 
   // Supabase: Minutes row
-  const id = crypto.randomUUID();
+  const id = randomUUID();
   const nowIso = new Date().toISOString();
   await sbUpsert(
     'minutes',
@@ -145,6 +146,7 @@ export async function rpcCreateMinuteDoc(input: any) {
       docId,
       docUrl: url,
       createdAt: nowIso,
+      updatedAt: nowIso,
     },
     'id'
   );
@@ -190,7 +192,8 @@ export async function rpcCreateDailyReportDoc(r: any) {
   });
 
   // Supabase: DailyReports row (最小)
-  const id = String(r?.id || `dr_${crypto.randomUUID().slice(0, 8)}`);
+  const id = String(r?.id || `dr_${randomUUID().slice(0, 8)}`);
+  const nowIso = new Date().toISOString();
   await sbUpsert(
     'dailyreports',
     {
@@ -203,11 +206,11 @@ export async function rpcCreateDailyReportDoc(r: any) {
       tasks: r?.tasks || '',
       docId,
       docUrl: url,
-      updatedAt: new Date().toISOString(),
-      createdAt: r?.createdAt || new Date().toISOString(),
+      updatedAt: nowIso,
+      createdAt: r?.createdAt || nowIso,
     },
     'id'
   );
 
-  return { ok: true, docId, url };
+  return { ok: true, docId, url, id };
 }

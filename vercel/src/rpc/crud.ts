@@ -19,7 +19,19 @@ export async function rpcUpsertProject(p: any) {
   const results = await sbUpsert('projects', p, 'id');
   const saved = Array.isArray(results) ? results[0] : results;
   
-  // TODO: Auto-create doc if needed
+  // Auto-create doc if needed and docId is missing
+  if (saved && !saved.docId) {
+    try {
+      const { rpcCreateProjectDoc } = await import('./docs');
+      const { docId, url } = await rpcCreateProjectDoc(saved.id);
+      saved.docId = docId;
+      saved.docUrl = url;
+    } catch (e) {
+      console.error('Failed to create project doc:', e);
+      // Continue without doc
+    }
+  }
+  
   return saved;
 }
 
@@ -33,7 +45,19 @@ export async function rpcUpsertTask(t: any) {
   const results = await sbUpsert('tasks', t, 'id');
   const saved = Array.isArray(results) ? results[0] : results;
   
-  // TODO: Auto-create doc if needed
+  // Auto-create doc if needed and docId is missing
+  if (saved && !saved.docId && saved.type !== 'recurring') {
+    try {
+      const { rpcCreateTaskDoc } = await import('./docs');
+      const { docId, url } = await rpcCreateTaskDoc(saved.id);
+      saved.docId = docId;
+      saved.docUrl = url;
+    } catch (e) {
+      console.error('Failed to create task doc:', e);
+      // Continue without doc
+    }
+  }
+  
   return saved;
 }
 
@@ -93,6 +117,19 @@ export async function rpcUpsertCredential(c: any) {
 }
 
 export async function rpcUpsertMinute(m: any) {
+  // If no docId, create doc first
+  if (!m.docId) {
+    try {
+      const { rpcCreateMinuteDoc } = await import('./docs');
+      const result = await rpcCreateMinuteDoc(m);
+      return result; // Already saved in createMinuteDoc
+    } catch (e) {
+      console.error('Failed to create minute doc:', e);
+      throw e;
+    }
+  }
+  
+  // Update existing
   m.updatedAt = isoDate(new Date());
   if (!m.id) {
     m.id = `min_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -104,6 +141,19 @@ export async function rpcUpsertMinute(m: any) {
 }
 
 export async function rpcUpsertDailyReport(r: any) {
+  // If no docId, create doc first
+  if (!r.docId) {
+    try {
+      const { rpcCreateDailyReportDoc } = await import('./docs');
+      const result = await rpcCreateDailyReportDoc(r);
+      return result; // Already saved in createDailyReportDoc
+    } catch (e) {
+      console.error('Failed to create daily report doc:', e);
+      throw e;
+    }
+  }
+  
+  // Update existing
   r.updatedAt = isoDate(new Date());
   if (!r.id) {
     r.id = `dr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

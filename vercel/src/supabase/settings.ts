@@ -1,4 +1,4 @@
-import { sbSelectAllSafe } from './selectAll';
+import { sbSelectAllSafe } from './selectAll.js';
 
 let settingsCache: Record<string, string> | null = null;
 let cacheTime = 0;

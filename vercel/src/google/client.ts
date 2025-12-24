@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import type { drive_v3, docs_v1 } from 'googleapis';
-import { loadGoogleEnv } from './env';
+import { loadGoogleEnv } from './env.js';
 
 const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive',

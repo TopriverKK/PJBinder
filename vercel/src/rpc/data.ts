@@ -1,5 +1,5 @@
-import { sbSelectAllSafe } from '../supabase/selectAll';
-import { sbDelete, sbUpsert } from '../supabase/rest';
+import { sbSelectAllSafe } from '../supabase/selectAll.js';
+import { sbDelete, sbUpsert } from '../supabase/rest.js';
 
 export type AllData = {
   version: string | null;

@@ -1,4 +1,4 @@
-import { loadGoogleEnv } from '../google/env';
+import { loadGoogleEnv } from '../google/env.js';
 import {
   appendDocWithMemo,
   createGoogleDocInFolder,
@@ -9,8 +9,8 @@ import {
   replaceDocWithMemo,
   setDocLinkShare,
 } from '../google/driveDocs';
-import { sbSelectOneById, sbUpsert } from '../supabase/rest';
-import { getSetting } from '../supabase/settings';
+import { sbSelectOneById, sbUpsert } from '../supabase/rest.js';
+import { getSetting } from '../supabase/settings.js';
 import { randomUUID } from 'crypto';
 
 function sanitizeName(s: string) {

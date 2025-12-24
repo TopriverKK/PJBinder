@@ -1,5 +1,5 @@
-import { getGoogleClients } from './client';
-import { loadGoogleEnv } from './env';
+import { getGoogleClients } from './client.js';
+import { loadGoogleEnv } from './env.js';
 
 const GOOGLE_DOC_MIME = 'application/vnd.google-apps.document';
 const GOOGLE_FOLDER_MIME = 'application/vnd.google-apps.folder';

@@ -1,4 +1,4 @@
-import { sbUpsert, sbSelectOneById, sbDelete } from '../supabase/rest';
+import { sbUpsert, sbSelectOneById, sbDelete } from '../supabase/rest.js';
 import {
   rpcCreateDailyReportDoc,
   rpcCreateMinuteDoc,

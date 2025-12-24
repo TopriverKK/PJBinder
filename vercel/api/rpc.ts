@@ -1,4 +1,4 @@
-import { rpcGetAllData, rpcPing } from '../src/rpc/data';
+import { rpcGetAllData, rpcPing } from '../src/rpc/data.js';
 import {
   rpcUpsertProject,
   rpcUpsertTask,
@@ -21,7 +21,7 @@ import {
   rpcDeleteMinute,
   rpcDeleteDailyReport,
   rpcDeleteShared,
-} from '../src/rpc/crud';
+} from '../src/rpc/crud.js';
 import {
   rpcAppendDocWithMemo,
   rpcCreateDailyReportDoc,
@@ -31,7 +31,7 @@ import {
   rpcGetLogoDataUrl,
   rpcReplaceDocWithMemo,
   rpcSetDocLinkShare,
-} from '../src/rpc/docs';
+} from '../src/rpc/docs.js';
 
 type RpcRequestBody = {
   name?: unknown;

@@ -158,6 +158,67 @@ export async function createGoogleDocInFolder(opts: {
   return { docId, url };
 }
 
+/**
+ * Copy a Google Doc template to a new document
+ */
+export async function copyDocTemplate(opts: {
+  templateId: string;
+  title: string;
+  folderId: string;
+  shareRole?: DocShareRole;
+  replacements?: Record<string, string>;
+}): Promise<{ docId: string; url: string }> {
+  const { drive, docs } = getGoogleClients();
+  const params = driveParams();
+
+  // Copy the template
+  const copyRes = await drive.files.copy({
+    ...params,
+    fileId: opts.templateId,
+    requestBody: {
+      name: opts.title,
+      parents: [opts.folderId],
+    },
+    fields: 'id,webViewLink',
+  });
+
+  const docId = copyRes.data.id;
+  if (!docId) throw new Error('Failed to copy template');
+
+  let url = copyRes.data.webViewLink ?? `https://docs.google.com/document/d/${docId}`;
+
+  // Apply text replacements if provided
+  if (opts.replacements && Object.keys(opts.replacements).length > 0) {
+    const requests: any[] = [];
+
+    for (const [search, replace] of Object.entries(opts.replacements)) {
+      requests.push({
+        replaceAllText: {
+          containsText: {
+            text: search,
+            matchCase: false,
+          },
+          replaceText: replace,
+        },
+      });
+    }
+
+    if (requests.length > 0) {
+      await docs.documents.batchUpdate({
+        documentId: docId,
+        requestBody: { requests },
+      });
+    }
+  }
+
+  if (opts.shareRole) {
+    const shared = await setDocLinkShare(docId, opts.shareRole);
+    url = shared.url;
+  }
+
+  return { docId, url };
+}
+
 export async function replaceDocWithMemo(docId: string, memoText: string) {
   const { docs } = getGoogleClients();
   const text = String(memoText || '');

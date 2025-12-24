@@ -1,7 +1,11 @@
 import { sbUpsert, sbSelectOneById, sbDelete } from '../supabase/rest';
 
 function isoDate(d: Date): string {
-  return d.toISOString().split('T')[0];
+  return d.toISOString().split('T')[0]; // YYYY-MM-DD for text columns
+}
+
+function isoTimestamp(d: Date): string {
+  return d.toISOString(); // Full ISO timestamp for timestamp columns
 }
 
 // Upsert functions
@@ -157,10 +161,10 @@ export async function rpcDeleteDailyReport(id: string) {
 }
 
 export async function rpcUpsertShared(s: any) {
-  s.updatedAt = isoDate(new Date());
+  s.updatedAt = isoTimestamp(new Date());
   if (!s.id) {
-    s.id = `sh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     s.createdAt = s.updatedAt;
+    delete s.id; // Let Supabase generate UUID
   }
   
   const results = await sbUpsert('shareds', s, 'id');
@@ -179,12 +183,15 @@ export async function rpcUpsertAttachments(kind: string, parentId: string, items
       id: item.id || `att_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       kind,
       parentId,
-      name: item.name,
+      parentType: item.parentType || kind, // Map to correct column names
+      title: item.name || item.title,
       url: item.url,
-      mimeType: item.mimeType || '',
-      size: item.size || 0,
+      mime: item.mimeType || item.mime || '',
+      type: item.type || '',
+      fileId: item.fileId || '',
+      createdBy: item.createdBy || '',
       createdAt: item.createdAt || isoDate(new Date()),
-      updatedAt: isoDate(new Date()),
+      updatedAt: isoTimestamp(new Date()), // timestamp with time zone
     };
     const result = await sbUpsert('attachments', attachment, 'id');
     results.push(Array.isArray(result) ? result[0] : result);

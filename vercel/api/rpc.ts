@@ -42,6 +42,52 @@ type RpcResponse =
   | { ok: true; result: unknown }
   | { ok: false; error: string };
 
+async function readRawBody(req: any): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    try {
+      let data = '';
+      req.setEncoding?.('utf8');
+      req.on?.('data', (chunk: any) => {
+        data += String(chunk ?? '');
+      });
+      req.on?.('end', () => resolve(data));
+      req.on?.('error', (err: any) => reject(err));
+      // If req isn't a stream, resolve empty.
+      if (!req.on) resolve('');
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+async function readJsonBody(req: any): Promise<RpcRequestBody> {
+  // Prefer whatever the platform already parsed.
+  try {
+    const existing = (req as any).body;
+    if (existing != null) {
+      if (typeof existing === 'string') {
+        try {
+          return JSON.parse(existing);
+        } catch {
+          return {};
+        }
+      }
+      if (typeof existing === 'object') return existing as RpcRequestBody;
+    }
+  } catch (e) {
+    // Some runtimes expose req.body as a getter that can throw.
+    console.warn('[RPC] Failed to access req.body; falling back to raw stream:', e);
+  }
+
+  const raw = await readRawBody(req);
+  if (!raw || !raw.trim()) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   return typeof e === 'string' ? e : JSON.stringify(e);
@@ -146,14 +192,7 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  let body: RpcRequestBody = req.body;
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch {
-      body = {};
-    }
-  }
+  const body: RpcRequestBody = await readJsonBody(req);
 
   const name = typeof body?.name === 'string' ? body.name : '';
   const args = Array.isArray(body?.args) ? body.args : [];

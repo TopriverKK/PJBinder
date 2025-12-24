@@ -8,7 +8,7 @@ import {
   prependDocText,
   replaceDocWithMemo,
   setDocLinkShare,
-} from '../google/driveDocs';
+} from '../google/driveDocs.js';
 import { sbSelectOneById, sbUpsert } from '../supabase/rest.js';
 import { getSetting } from '../supabase/settings.js';
 import { randomUUID } from 'crypto';

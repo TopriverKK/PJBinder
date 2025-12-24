@@ -69,7 +69,7 @@ export async function rpcCreateProjectDoc(projectId: string) {
   await sbUpsert('projects', { id: pid, docId }, 'id');
   const updated = await sbSelectOneById('projects', pid);
 
-  return { ok: true, project: updated, url };
+  return { ok: true, docId, project: updated, url };
 }
 
 export async function rpcCreateTaskDoc(taskId: string) {
@@ -108,6 +108,16 @@ export async function rpcCreateTaskDoc(taskId: string) {
   return { docId, url };
 }
 
+function isoDate(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+function normalizeCsv(v: any): string {
+  if (!v) return '';
+  if (Array.isArray(v)) return v.map(x => String(x ?? '').trim()).filter(Boolean).join(',');
+  return String(v).split(',').map(s => s.trim()).filter(Boolean).join(',');
+}
+
 export async function rpcCreateMinuteDoc(input: any) {
   if (!input || !input.date || !input.title) throw new Error('date と title は必須です');
 
@@ -121,21 +131,35 @@ export async function rpcCreateMinuteDoc(input: any) {
   const mm = String(dt.getMonth() + 1).padStart(2, '0');
   const dd = String(dt.getDate()).padStart(2, '0');
   const dateFormatted = `${yyyy}_${mm}_${dd}`;
-  
+
   const ym = `${yyyy}年${mm}月`;
   const folderId = await ensureFolderPath(base, ['議事録', ym]);
 
-  const meetingKey = `${dateFormatted}_${input.title}`;
+  const title = String(input.title);
+  const meetingKey = `${dateFormatted}_${sanitizeName(title)}`;
   const fileTitle = meetingKey;
-  
-  // Get template ID from settings
+
+  const taskIdsCsv = normalizeCsv(input.taskIds || input.taskId || '');
+  const attendees = String(input.attendees || '').trim();
+
+  // Best-effort: resolve project name for display.
+  let projectLabel = String(input.projectId || '').trim();
+  if (projectLabel) {
+    try {
+      const proj = await sbSelectOneById('projects', projectLabel);
+      projectLabel = proj?.name || proj?.id || projectLabel;
+    } catch {
+      // ignore
+    }
+  }
+
+  // Template (settings) or fallback
   const templateId = await getSetting('MINUTES_TEMPLATE_ID');
-  
+
   let docId: string;
   let url: string;
-  
+
   if (templateId) {
-    // Use template
     const result = await copyDocTemplate({
       templateId,
       title: fileTitle,
@@ -144,19 +168,20 @@ export async function rpcCreateMinuteDoc(input: any) {
       replacements: {
         '【会議名】': meetingKey,
         '【日付】': dateStr,
-        '【プロジェクト】': input.projectId || '-',
-        '【タスク】': String(input.taskIds || input.taskId || '') || '-',
-        '【参加者】': input.attendees || '-',
+        '【プロジェクト】': projectLabel || '-',
+        '【タスク】': taskIdsCsv || '-',
+        '【参加者】': attendees || '-',
       },
     });
     docId = result.docId;
     url = result.url;
   } else {
-    // Fallback: create from scratch
     const initialText =
-      `議事録: ${input.title}\n` +
-      `日付: ${dateStr}　プロジェクト: ${input.projectId || '-'}　タスク: ${String(input.taskIds || '') || '-'}\n` +
-      `参加者: ${input.attendees || '-'}\n` +
+      `議事録: ${title}\n` +
+      `日付: ${dateStr}\n` +
+      `プロジェクト: ${projectLabel || '-'}\n` +
+      `タスク: ${taskIdsCsv || '-'}\n` +
+      `参加者: ${attendees || '-'}\n` +
       `\n――――\n` +
       `■ アクションアイテム\n` +
       `■ 議題 / メモ\n`;
@@ -175,65 +200,39 @@ export async function rpcCreateMinuteDoc(input: any) {
   const metaLines: string[] = [];
   metaLines.push(`会議名: ${meetingKey}`);
   metaLines.push(`日付: ${dateStr}`);
-  if (input.projectId) metaLines.push(`プロジェクト: ${input.projectId}`);
-  const taskCsv = String(input.taskIds || input.taskId || '').trim();
-  if (taskCsv) metaLines.push(`タスク: ${taskCsv}`);
-  if (input.attendees) metaLines.push(`参加者: ${input.attendees}`);
+  if (projectLabel) metaLines.push(`プロジェクト: ${projectLabel}`);
+  if (taskIdsCsv) metaLines.push(`タスク: ${taskIdsCsv}`);
+  if (attendees) metaLines.push(`参加者: ${attendees}`);
   await prependDocText(docId, metaLines.join('\n'));
 
   // Supabase: Minutes row
-  const id = randomUUID();
-  const nowIso = new Date().toISOString();
+  const now = isoDate(new Date());
+  const id = String(input?.id || `min_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`);
   await sbUpsert(
     'minutes',
     {
+      ...(input || {}),
       id,
       date: dateStr,
-      title: input.title,
-  
-  // Get template ID from settings
-  const templateId = await getSetting('DAILY_TEMPLATE_ID');
-  
-  let docId: string;
-  let url: string;
-  
-  if (templateId) {
-    // Use template
-    const result = await copyDocTemplate({
-      templateId,
-      title: fileTitle,
-      folderId,
-      shareRole: 'editor',
-      replacements: {
-        '【日付】': dateStr,
-        '【ユーザー名】': uname,
-        '【工数】': String(Number(r?.hours || 0)),
-        '【プロジェクト】': r?.projectId || '-',
-        '【本文】': String(r?.body || ''),
-      },
-    });
-    docId = result.docId;
-    url = result.url;
-  } else {
-    // Fallback: create from scratch
-    const titleLine = `日報 ${dateStr} / ${uname}`;
-    const initialText =
-      `${titleLine}\n` +
-      `ユーザー: ${uname}　日付: ${dateStr}　工数: ${Number(r?.hours || 0)}h\n` +
-      (r?.projectId ? `プロジェクト: ${r.projectId}\n` : '') +
-      `\n${String(r?.body || '')}\n`;
+      title,
+      projectId: input.projectId || null,
+      taskIds: taskIdsCsv,
+      taskId: String(input.taskId || taskIdsCsv.split(',')[0] || ''),
+      attendees: attendees || '',
+      docId,
+      docUrl: url,
+      updatedAt: now,
+      createdAt: String(input?.createdAt || now),
+    },
+    'id'
+  );
 
-    const result = await createGoogleDocInFolder({
-      title: fileTitle,
-      folderId,
-      shareRole: 'editor',
-      initialText,
-    });
-    docId = result.docId;
-    url = result.url;
-  }
+  return { ok: true, docId, url, id };
+}
 
-  // Supabase: DailyReports row '');
+export async function rpcCreateDailyReportDoc(r: any) {
+  const dateStr = String(r?.date || todayYMD());
+  const userId = String(r?.userId || '').trim();
   if (!userId) throw new Error('userId は必須です');
 
   const env = loadGoogleEnv();
@@ -251,40 +250,79 @@ export async function rpcCreateMinuteDoc(input: any) {
 
   const yyyy = dateStr.slice(0, 4) || String(new Date().getFullYear());
   const folderId = await ensureFolderPath(base, ['日報', sanitizeName(uname), yyyy]);
-
   const fileTitle = `日報 ${dateStr} ${uname}`;
-  const titleLine = `日報 ${dateStr} / ${uname}`;
 
-  const initialText =
-    `${titleLine}\n` +
-    `ユーザー: ${uname}　日付: ${dateStr}　工数: ${Number(r?.hours || 0)}h\n` +
-    (r?.projectId ? `プロジェクト: ${r.projectId}\n` : '') +
-    `\n${String(r?.body || '')}\n`;
+  const templateId = await getSetting('DAILY_TEMPLATE_ID');
+  const hours = Number(r?.hours || 0);
+  const projectId = String(r?.projectId || '').trim();
+  const body = String(r?.body || '');
 
-  const { docId, url } = await createGoogleDocInFolder({
-    title: fileTitle,
-    folderId,
-    shareRole: 'editor',
-    initialText,
-  });
+  // Best-effort: resolve project name
+  let projectLabel = projectId;
+  if (projectLabel) {
+    try {
+      const proj = await sbSelectOneById('projects', projectLabel);
+      projectLabel = proj?.name || proj?.id || projectLabel;
+    } catch {
+      // ignore
+    }
+  }
 
-  // Supabase: DailyReports row (最小)
-  const id = String(r?.id || `dr_${randomUUID().slice(0, 8)}`);
-  const nowIso = new Date().toISOString();
+  let docId: string;
+  let url: string;
+
+  if (templateId) {
+    const result = await copyDocTemplate({
+      templateId,
+      title: fileTitle,
+      folderId,
+      shareRole: 'editor',
+      replacements: {
+        '【日付】': dateStr,
+        '【ユーザー名】': uname,
+        '【工数】': String(hours),
+        '【プロジェクト】': projectLabel || '-',
+        '【本文】': body,
+      },
+    });
+    docId = result.docId;
+    url = result.url;
+  } else {
+    const titleLine = `日報 ${dateStr} / ${uname}`;
+    const initialText =
+      `${titleLine}\n` +
+      `ユーザー: ${uname}　日付: ${dateStr}　工数: ${hours}h\n` +
+      (projectLabel ? `プロジェクト: ${projectLabel}\n` : '') +
+      `\n${body}\n`;
+
+    const result = await createGoogleDocInFolder({
+      title: fileTitle,
+      folderId,
+      shareRole: 'editor',
+      initialText,
+    });
+    docId = result.docId;
+    url = result.url;
+  }
+
+  // Supabase: DailyReports row
+  const now = isoDate(new Date());
+  const id = String(r?.id || `dr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`);
   await sbUpsert(
     'dailyreports',
     {
+      ...(r || {}),
       id,
       date: dateStr,
       userId,
-      hours: Number(r?.hours || 0),
-      projectId: r?.projectId || null,
-      body: r?.body || '',
-      tasks: r?.tasks || '',
+      hours,
+      projectId: projectId || null,
+      body,
+      tasks: String(r?.tasks || ''),
       docId,
       docUrl: url,
-      updatedAt: nowIso,
-      createdAt: r?.createdAt || nowIso,
+      updatedAt: now,
+      createdAt: String(r?.createdAt || now),
     },
     'id'
   );

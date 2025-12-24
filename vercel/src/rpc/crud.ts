@@ -1,4 +1,10 @@
 import { sbUpsert, sbSelectOneById, sbDelete } from '../supabase/rest';
+import {
+  rpcCreateDailyReportDoc,
+  rpcCreateMinuteDoc,
+  rpcCreateProjectDoc,
+  rpcCreateTaskDoc,
+} from './docs';
 
 function isoDate(d: Date): string {
   return d.toISOString().split('T')[0]; // YYYY-MM-DD for text columns
@@ -22,10 +28,9 @@ export async function rpcUpsertProject(p: any) {
   // Auto-create doc if needed and docId is missing
   if (saved && !saved.docId) {
     try {
-      const { rpcCreateProjectDoc } = await import('./docs');
-      const { docId, url } = await rpcCreateProjectDoc(saved.id);
-      saved.docId = docId;
-      saved.docUrl = url;
+      const created = await rpcCreateProjectDoc(saved.id);
+      if ((created as any)?.docId) saved.docId = (created as any).docId;
+      if ((created as any)?.url) saved.docUrl = (created as any).url;
     } catch (e) {
       console.error('Failed to create project doc:', e);
       // Continue without doc
@@ -48,10 +53,9 @@ export async function rpcUpsertTask(t: any) {
   // Auto-create doc if needed and docId is missing
   if (saved && !saved.docId && saved.type !== 'recurring') {
     try {
-      const { rpcCreateTaskDoc } = await import('./docs');
-      const { docId, url } = await rpcCreateTaskDoc(saved.id);
-      saved.docId = docId;
-      saved.docUrl = url;
+      const created = await rpcCreateTaskDoc(saved.id);
+      if ((created as any)?.docId) saved.docId = (created as any).docId;
+      if ((created as any)?.url) saved.docUrl = (created as any).url;
     } catch (e) {
       console.error('Failed to create task doc:', e);
       // Continue without doc
@@ -120,7 +124,6 @@ export async function rpcUpsertMinute(m: any) {
   // If no docId, create doc first
   if (!m.docId) {
     try {
-      const { rpcCreateMinuteDoc } = await import('./docs');
       const result = await rpcCreateMinuteDoc(m);
       return result; // Already saved in createMinuteDoc
     } catch (e) {
@@ -144,7 +147,6 @@ export async function rpcUpsertDailyReport(r: any) {
   // If no docId, create doc first
   if (!r.docId) {
     try {
-      const { rpcCreateDailyReportDoc } = await import('./docs');
       const result = await rpcCreateDailyReportDoc(r);
       return result; // Already saved in createDailyReportDoc
     } catch (e) {

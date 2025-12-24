@@ -2,14 +2,18 @@ import type { drive_v3, docs_v1 } from 'googleapis';
 import { createRequire } from 'module';
 import { loadGoogleEnv } from './env';
 
-const require = createRequire(import.meta.url);
+// Works in both CommonJS and ESM runtimes.
+// - In CJS: `require` exists.
+// - In ESM: use createRequire with a stable base path.
+const localRequire: NodeRequire =
+  typeof require === 'function' ? (require as unknown as NodeRequire) : createRequire(process.cwd() + '/');
 
 let cachedGoogle: any | null = null;
 
 function getGoogleModule(): any {
   if (cachedGoogle) return cachedGoogle;
   // Lazy-load to avoid import-time crashes for non-Docs RPCs (e.g., getAllData on app load).
-  const mod = require('googleapis');
+  const mod = localRequire('googleapis');
   cachedGoogle = mod?.google ?? mod;
   return cachedGoogle;
 }

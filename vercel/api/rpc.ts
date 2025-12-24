@@ -108,7 +108,7 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   ping: rpcPing,
 
   // CRUD operations
-  async upsertProject(...args: any[]): Promise<any> {
+  async upsertProject(...args: any[]) {
     const saved = await rpcUpsertProject(args[0]);
     if (saved && saved.id && !saved.docId) {
       // Best-effort: create project doc automatically for newly-created projects.
@@ -121,7 +121,7 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     }
     return saved;
   },
-  async upsertTask(...args: any[]): Promise<any> {
+  async upsertTask(...args: any[]) {
     const saved = await rpcUpsertTask(args[0]);
     if (saved && saved.id && !saved.docId) {
       // Best-effort: create task doc automatically for newly-created tasks.

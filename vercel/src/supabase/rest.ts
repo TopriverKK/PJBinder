@@ -68,3 +68,11 @@ export async function sbUpsert(table: string, row: Record<string, any>, onConfli
   });
   return Array.isArray(rows) ? rows[0] ?? null : rows;
 }
+
+export async function sbDelete(table: string, id: string) {
+  await sbFetch(`${encodeURIComponent(table)}?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: headers({ Prefer: 'return=minimal' }),
+  });
+  return { ok: true };
+}

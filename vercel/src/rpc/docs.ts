@@ -39,7 +39,7 @@ export async function rpcAppendDocWithMemo(docId: string, memoText: string) {
 
 export async function rpcCreateProjectDoc(projectId: string) {
   const pid = String(projectId);
-  const p = await sbSelectOneById('Projects', pid);
+  const p = await sbSelectOneById('projects', pid);
   if (!p) throw new Error(`Project not found: ${pid}`);
 
   const env = loadGoogleEnv();
@@ -62,18 +62,18 @@ export async function rpcCreateProjectDoc(projectId: string) {
     initialText,
   });
 
-  await sbUpsert('Projects', { id: pid, docId }, 'id');
-  const updated = await sbSelectOneById('Projects', pid);
+  await sbUpsert('projects', { id: pid, docId }, 'id');
+  const updated = await sbSelectOneById('projects', pid);
 
   return { ok: true, project: updated, url };
 }
 
 export async function rpcCreateTaskDoc(taskId: string) {
   const tid = String(taskId);
-  const t = await sbSelectOneById('Tasks', tid);
+  const t = await sbSelectOneById('tasks', tid);
   if (!t) throw new Error(`Task not found: ${tid}`);
 
-  const proj = t.projectId ? await sbSelectOneById('Projects', String(t.projectId)) : null;
+  const proj = t.projectId ? await sbSelectOneById('projects', String(t.projectId)) : null;
 
   const env = loadGoogleEnv();
   const base = env.projectDocsFolderId || env.baseFolderId;
@@ -99,7 +99,7 @@ export async function rpcCreateTaskDoc(taskId: string) {
     initialText,
   });
 
-  await sbUpsert('Tasks', { id: tid, docId }, 'id');
+  await sbUpsert('tasks', { id: tid, docId }, 'id');
 
   return { docId, url };
 }
@@ -135,7 +135,7 @@ export async function rpcCreateMinuteDoc(input: any) {
   const id = crypto.randomUUID();
   const nowIso = new Date().toISOString();
   await sbUpsert(
-    'Minutes',
+    'minutes',
     {
       id,
       date: input.date,
@@ -164,7 +164,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
   // ユーザー名（無ければ userId）
   let uname = userId;
   try {
-    const u = await sbSelectOneById('Users', userId);
+    const u = await sbSelectOneById('users', userId);
     if (u) uname = u.name || u.email || userId;
   } catch {
     // ignore
@@ -192,7 +192,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
   // Supabase: DailyReports row (最小)
   const id = String(r?.id || `dr_${crypto.randomUUID().slice(0, 8)}`);
   await sbUpsert(
-    'DailyReports',
+    'dailyreports',
     {
       id,
       date: dateStr,

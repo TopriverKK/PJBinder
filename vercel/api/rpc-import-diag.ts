@@ -16,6 +16,15 @@ async function probe(spec: string): Promise<ImportResult> {
   }
 }
 
+async function probeImport(spec: string, importer: () => Promise<any>): Promise<ImportResult> {
+  try {
+    const m: any = await importer();
+    return { ok: true, spec, keys: Object.keys(m || {}).sort() };
+  } catch (e) {
+    return { ok: false, spec, error: errToString(e) };
+  }
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
     res.statusCode = 405;
@@ -24,17 +33,19 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  // NOTE: These are the exact specifiers used by api/rpc.ts.
-  const specs = [
-    '../src/rpc/data.js',
-    '../src/rpc/crud.js',
-    '../src/rpc/docs.js',
-    '../src/rpc/attendance.js',
-    '../src/supabase/selectAll.js',
-    '../src/supabase/rest.js',
-  ];
-
-  const results = await Promise.all(specs.map((s) => probe(s)));
+  // NOTE:
+  // Vercel serverless functions are file-traced/bundled per route.
+  // If we only call import(spec) with a dynamic spec string, those modules may
+  // not be included in the bundle. Keep these as explicit import() calls so the
+  // tracer can include the files.
+  const results = await Promise.all([
+    probeImport('../src/rpc/data.js', () => import('../src/rpc/data.js')),
+    probeImport('../src/rpc/crud.js', () => import('../src/rpc/crud.js')),
+    probeImport('../src/rpc/docs.js', () => import('../src/rpc/docs.js')),
+    probeImport('../src/rpc/attendance.js', () => import('../src/rpc/attendance.js')),
+    probeImport('../src/supabase/selectAll.js', () => import('../src/supabase/selectAll.js')),
+    probeImport('../src/supabase/rest.js', () => import('../src/supabase/rest.js')),
+  ]);
 
   res.statusCode = results.every((r) => r.ok) ? 200 : 500;
   res.setHeader('content-type', 'application/json; charset=utf-8');

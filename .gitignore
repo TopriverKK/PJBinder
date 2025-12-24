@@ -8,6 +8,10 @@ vercel/.smoke-dist/
 # Service account keys (never commit)
 *.json
 !appscript.json
+!vercel.json
+!vercel/package.json
+!vercel/package-lock.json
+!vercel/tsconfig.json
 
 # OS
 .DS_Store

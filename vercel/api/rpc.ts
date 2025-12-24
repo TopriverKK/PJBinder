@@ -71,6 +71,17 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
 };
 
 export default async function handler(req: any, res: any) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 200;
+    res.end();
+    return;
+  }
+
   if (req.method !== 'POST') {
     res.statusCode = 405;
     const body: RpcResponse = { ok: false, error: 'Method Not Allowed' };
@@ -101,12 +112,16 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    console.log(`[RPC] Calling ${name} with args:`, JSON.stringify(args));
     const result = await fn(...args);
+    console.log(`[RPC] ${name} succeeded`);
     res.statusCode = 200;
     const out: RpcResponse = { ok: true, result };
     res.setHeader('content-type', 'application/json; charset=utf-8');
     res.end(JSON.stringify(out));
   } catch (e) {
+    console.error(`[RPC] ${name} failed:`, e);
+    console.error('Stack:', e instanceof Error ? e.stack : 'no stack');
     res.statusCode = 500;
     const out: RpcResponse = { ok: false, error: errorMessage(e) };
     res.setHeader('content-type', 'application/json; charset=utf-8');

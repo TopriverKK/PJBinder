@@ -3,16 +3,30 @@ type SupabaseEnv = {
   serviceRoleKey: string;
 };
 
-function req(name: string): string {
+function req(name: string, fallbackNames?: string[]): string {
   const v = process.env[name];
-  if (!v || !String(v).trim()) throw new Error(`Missing env: ${name}`);
-  return String(v).trim();
+  if (v && String(v).trim()) {
+    return String(v).trim();
+  }
+  
+  // Try fallback names
+  if (fallbackNames) {
+    for (const fallback of fallbackNames) {
+      const fv = process.env[fallback];
+      if (fv && String(fv).trim()) {
+        console.log(`Using fallback env: ${fallback} for ${name}`);
+        return String(fv).trim();
+      }
+    }
+  }
+  
+  throw new Error(`Missing env: ${name}`);
 }
 
 function getEnv(): SupabaseEnv {
   return {
-    url: req('SUPABASE_URL').replace(/\/+$/, ''),
-    serviceRoleKey: req('SUPABASE_SERVICE_ROLE_KEY'),
+    url: req('SUPABASE_URL', ['NEXT_PUBLIC_SUPABASE_URL']).replace(/\/+$/, ''),
+    serviceRoleKey: req('SUPABASE_SERVICE_ROLE_KEY', ['SUPABASE_KEY']),
   };
 }
 

@@ -228,6 +228,32 @@
   .age-7  { box-shadow: inset 0 0 0 2px rgba(249,115,22,.5); }   /* 7日超 橙 */
   .age-14 { box-shadow: inset 0 0 0 2px rgba(239,68,68,.6); }    /* 14日超 赤 */
 
+  /* === Attendance UI (look recreation) === */
+  #att-cards{ display:flex; flex-direction:column; gap:6px; }
+  .att-card{ padding: 8px 12px; border-radius: 10px; box-shadow: 0 1px 3px rgba(17, 24, 39, 0.04); }
+  .att-card .body{ padding: 0; }
+  .att-card-top{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .att-avatar{ width:28px; height:28px; border-radius:50%; background:#cbd5e1; flex: 0 0 auto; }
+  .att-name{ font-weight:700; font-size:14px; line-height:1.2; }
+  .att-role{ color:#6b7280; font-size:12px; line-height:1.2; }
+  .att-status-pill{ margin-left:auto; padding:3px 8px; border-radius:999px; font-weight:700; font-size:12px; border:1px solid rgba(17,24,39,.08); background: rgba(255,255,255,.7); }
+  .att-status-pill.tone-green{ background:#dcfce7; color:#166534; border-color: rgba(22,101,52,.25); }
+  .att-status-pill.tone-yellow{ background:#fef3c7; color:#92400e; border-color: rgba(146,64,14,.25); }
+  .att-status-pill.tone-red{ background:#fee2e2; color:#991b1b; border-color: rgba(153,27,27,.25); }
+  .att-status-pill.tone-gray{ background:#e5e7eb; color:#374151; border-color: rgba(55,65,81,.20); }
+
+  .att-card.card-state-working-office{ border-left: 6px solid #16a34a; background: #d1fae5; }
+  .att-card.card-state-working-remote{ border-left: 6px solid #075985; background: #e0f2fe; }
+  .att-card.card-state-event{ border-left: 6px solid #f59e0b; background: #fef3c7; }
+  .att-card.card-state-done{ border-left: 6px solid #9ca3af; background: #e5e7eb; }
+  .att-card.card-state-not-clocked{ border-left: 6px solid #ef4444; background: #fee2e2; }
+
+  .att-card.card-state-working-office .row,
+  .att-card.card-state-working-remote .row,
+  .att-card.card-state-event .row,
+  .att-card.card-state-done .row,
+  .att-card.card-state-not-clocked .row{ background: rgba(255,255,255,.6); border-radius: 10px; padding: 8px; margin-bottom: 6px; }
+
   /* 透かしより前面に出す対象を追加（header だけでなく toolbar も） */
   header, #global-toolbar, .container { position: relative; z-index: 1; }
 
@@ -1038,7 +1064,7 @@ button.link:hover { opacity: .8; }
       <h2>ユーザー一覧</h2>
       <div class="body list">
         <table id="userTable">
-          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th></th></tr></thead>
+          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>勤怠に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -1223,13 +1249,26 @@ button.link:hover { opacity: .8; }
 </section>
 
 <section class="page" id="page-attendance">
+  <div class="tabs" style="margin-bottom:8px;">
+    <div class="tab active" id="att-view-tab-dashboard" onclick="setAttendanceView('dashboard')">ダッシュボード</div>
+    <div class="tab" id="att-view-tab-summary" onclick="setAttendanceView('summary')">サマリ（月/週）</div>
+  </div>
   <div class="grid">
-    <div class="card">
+    <div class="card" data-att-view="dashboard">
       <h2>勤怠（今日） <span class="muted" id="att-today-label"></span></h2>
       <div class="body">
         <div class="toolbar" style="justify-content:space-between;">
           <div class="toolbar">
             <button class="secondary" onclick="refreshAttendance()">更新</button>
+            <label class="muted" style="display:flex; gap:6px; align-items:center; user-select:none;">
+              <input type="checkbox" id="att_auto_refresh" /> 自動更新
+            </label>
+            <select id="att_auto_interval" class="secondary" style="max-width:140px;">
+              <option value="10">10s</option>
+              <option value="60">60s</option>
+              <option value="120" selected>120s</option>
+              <option value="300">300s</option>
+            </select>
             <span class="muted" id="att-status"></span>
           </div>
           <div class="muted" style="font-size:12px;">打刻はサーバ時刻で記録</div>
@@ -1238,7 +1277,7 @@ button.link:hover { opacity: .8; }
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" data-att-view="dashboard">
       <h2>勤怠設定（休日/個人ICS）</h2>
       <div class="body">
         <div class="row">
@@ -1251,14 +1290,14 @@ button.link:hover { opacity: .8; }
         <hr/>
         <div class="muted" style="margin-bottom:6px;">ユーザーごとの設定</div>
         <table id="att-user-settings">
-          <thead><tr><th>ユーザー</th><th>従業員番号</th><th>個人カレンダー(ICS)</th></tr></thead>
+          <thead><tr><th>ユーザー</th><th>勤怠に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th></tr></thead>
           <tbody></tbody>
         </table>
         <div class="muted" style="margin-top:6px;">個人ICSは /api/ics 経由で取得します（Google系ホストのみ許可）。</div>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" data-att-view="summary">
       <h2>月次CSV / 閲覧（freee集計）</h2>
       <div class="body">
         <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
@@ -1270,6 +1309,19 @@ button.link:hover { opacity: .8; }
         <div class="body list" style="padding:0; margin-top:8px;">
           <table id="att-month-table">
             <thead><tr><th>日付</th><th>ユーザー</th><th>状態</th><th>出勤</th><th>退勤</th><th>勤務(概算)</th><th>プロジェクト/タスク</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-att-view="summary">
+      <h2>週次サマリ</h2>
+      <div class="body">
+        <div class="muted" id="att-week-summary" style="margin-top:6px;"></div>
+        <div class="body list" style="padding:0; margin-top:8px;">
+          <table id="att-week-table">
+            <thead><tr><th>週(開始)</th><th>週(終了)</th><th>ユーザー</th><th>勤務日数</th><th>勤務(概算)</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -1421,10 +1473,70 @@ function newerVersionPrefer(clientV, serverV){
 }
 
 // --- Navigation ---
-function goto(page) {
+function updateRouteParams(next, { replace=false } = {}){
+  try{
+    const url = new URL(window.location.href);
+    Object.entries(next||{}).forEach(([k,v])=>{
+      if (v === null || v === undefined || v === '') url.searchParams.delete(k);
+      else url.searchParams.set(String(k), String(v));
+    });
+    const qs = url.searchParams.toString();
+    const nextUrl = url.pathname + (qs ? ('?'+qs) : '') + url.hash;
+    if (replace) history.replaceState({}, '', nextUrl);
+    else history.pushState({}, '', nextUrl);
+  }catch(_){ }
+}
+
+function readRouteParams(){
+  const p = new URLSearchParams(location.search || '');
+  const page = String(p.get('page') || '').trim();
+  const view = String(p.get('view') || '').trim();
+  const tab = String(p.get('tab') || '').trim();
+  return { page, view, tab };
+}
+
+function applyRouteFromUrl(){
+  const { page, view, tab } = readRouteParams();
+  if (tab) {
+    try { switchTab(tab); } catch(_){ }
+  }
+  if (page === 'attendance') {
+    ATT_VIEW = (view === 'summary') ? 'summary' : 'dashboard';
+  }
+  if (page) {
+    goto(page, { skipRoute:true });
+  }
+  if (PAGE === 'attendance') {
+    applyAttendanceViewUi();
+    if (ATT_VIEW === 'summary') {
+      try { loadAttendanceMonth?.(); } catch(_){ }
+    }
+  }
+}
+
+window.addEventListener('popstate', ()=>{ try{ applyRouteFromUrl(); }catch(_){ } });
+
+function goto(page, opts) {
+  opts = opts || {};
   // 正規化（shareds→shared）
   const aliases = { shareds:'shared' };
   page = aliases[page] || page;
+
+  // Attendance auto-refresh must stop when leaving attendance.
+  try {
+    if (PAGE === 'attendance' && page !== 'attendance') {
+      stopAttendanceAutoRefresh({ uncheck:true, reason:'navigate' });
+    }
+  } catch(_){ }
+
+  // URL: query param deep-link
+  if (!opts.skipRoute) {
+    if (page === 'attendance') {
+      updateRouteParams({ page:'attendance', view: (ATT_VIEW||'dashboard'), tab: ACTIVE_TAB }, { replace:false });
+    } else {
+      updateRouteParams({ page, view: null, tab: ACTIVE_TAB }, { replace:false });
+    }
+  }
 
   const pages = ['dashboard','minutes','daily','attendance','users','vault','budget','subs','ledger','projects','debug','shared'];
   pages.forEach(p => {
@@ -1441,8 +1553,13 @@ function goto(page) {
   PAGE = page;
   try { renderAll(); } catch (e) {}
   if (page === 'attendance') {
+    applyAttendanceViewUi();
     try { loadAttendanceSettings?.(); } catch (e) {}
-    try { refreshAttendance?.(); } catch (e) {}
+    if (ATT_VIEW === 'dashboard') {
+      try { refreshAttendance?.(); } catch (e) {}
+    } else {
+      try { loadAttendanceMonth?.(); } catch (e) {}
+    }
   }
 }
 
@@ -1791,6 +1908,104 @@ const ATT = {
   currentEventsByUser: {},
 };
 
+let ATT_VIEW = 'dashboard'; // 'dashboard' | 'summary'
+
+let ATT_AUTO_REFRESH_ENABLED = false;
+let ATT_AUTO_REFRESH_INTERVAL_MS = 120000; // default 120s
+let ATT_AUTO_REFRESH_TIMER = null;
+
+function isAttendanceAutoRefreshEligible(){
+  return (PAGE === 'attendance' && ATT_VIEW === 'dashboard');
+}
+
+function setAttendanceAutoRefreshUi(enabled){
+  const cb = document.getElementById('att_auto_refresh');
+  if (cb) cb.checked = !!enabled;
+}
+
+function readAttendanceAutoRefreshIntervalFromUi(){
+  const sel = document.getElementById('att_auto_interval');
+  const v = sel ? Number(sel.value) : NaN;
+  if (!Number.isFinite(v) || v <= 0) return;
+  ATT_AUTO_REFRESH_INTERVAL_MS = v * 1000;
+}
+
+function applyAttendanceAutoRefreshIntervalToUi(){
+  const sel = document.getElementById('att_auto_interval');
+  if (!sel) return;
+  const sec = Math.round((ATT_AUTO_REFRESH_INTERVAL_MS||120000) / 1000);
+  sel.value = String(sec);
+}
+
+function startAttendanceAutoRefresh(){
+  ATT_AUTO_REFRESH_ENABLED = true;
+  readAttendanceAutoRefreshIntervalFromUi();
+  setAttendanceAutoRefreshUi(true);
+
+  if (ATT_AUTO_REFRESH_TIMER) {
+    clearInterval(ATT_AUTO_REFRESH_TIMER);
+    ATT_AUTO_REFRESH_TIMER = null;
+  }
+
+  // Immediate refresh on start (best-effort)
+  try { if (isAttendanceAutoRefreshEligible()) refreshAttendance?.(); } catch(_){ }
+
+  ATT_AUTO_REFRESH_TIMER = setInterval(async ()=>{
+    try {
+      if (!ATT_AUTO_REFRESH_ENABLED) {
+        stopAttendanceAutoRefresh({ uncheck:false, reason:'disabled' });
+        return;
+      }
+      if (!isAttendanceAutoRefreshEligible()) {
+        stopAttendanceAutoRefresh({ uncheck:true, reason:'not-eligible' });
+        return;
+      }
+      await refreshAttendance?.();
+    } catch(_){ }
+  }, ATT_AUTO_REFRESH_INTERVAL_MS);
+}
+
+function stopAttendanceAutoRefresh({ uncheck=false, reason='' } = {}){
+  ATT_AUTO_REFRESH_ENABLED = false;
+  if (ATT_AUTO_REFRESH_TIMER) {
+    clearInterval(ATT_AUTO_REFRESH_TIMER);
+    ATT_AUTO_REFRESH_TIMER = null;
+  }
+  if (uncheck) setAttendanceAutoRefreshUi(false);
+}
+
+function applyAttendanceViewUi(){
+  const d = document.getElementById('att-view-tab-dashboard');
+  const s = document.getElementById('att-view-tab-summary');
+  if (d) d.classList.toggle('active', ATT_VIEW === 'dashboard');
+  if (s) s.classList.toggle('active', ATT_VIEW === 'summary');
+  document.querySelectorAll('#page-attendance [data-att-view]').forEach(el=>{
+    const v = el.getAttribute('data-att-view');
+    el.style.display = (v === ATT_VIEW) ? '' : 'none';
+  });
+}
+
+function setAttendanceView(view, opts){
+  opts = opts || {};
+  ATT_VIEW = (String(view) === 'summary') ? 'summary' : 'dashboard';
+  applyAttendanceViewUi();
+
+  // If user leaves dashboard view, stop auto-refresh.
+  if (ATT_VIEW !== 'dashboard') {
+    try { stopAttendanceAutoRefresh({ uncheck:true, reason:'view-change' }); } catch(_){ }
+  }
+  if (!opts.skipRoute) {
+    updateRouteParams({ page:'attendance', view: ATT_VIEW, tab: ACTIVE_TAB }, { replace:false });
+  }
+  if (PAGE === 'attendance') {
+    if (ATT_VIEW === 'dashboard') {
+      try { refreshAttendance?.(); } catch(_){ }
+    } else {
+      try { loadAttendanceMonth?.(); } catch(_){ }
+    }
+  }
+}
+
 const fixedBreakMinutes = 90;
 const defaultHolidayIcs = 'https://www.google.com/calendar/ical/ja.japanese%23holiday%40group.v.calendar.google.com/public/basic.ics';
 
@@ -1974,7 +2189,7 @@ async function refreshAttendance(){
     document.getElementById('att-status').textContent = `取得: ${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`;
     renderAttendancePage();
     // calendar events are best-effort and only when attendance page is open
-    if (PAGE === 'attendance') {
+    if (PAGE === 'attendance' && ATT_VIEW === 'dashboard') {
       await refreshAttendanceCalendars();
       renderAttendancePage();
     }
@@ -2039,6 +2254,19 @@ function isUnsetUser(u){
   return !name;
 }
 
+function isAttendanceVisibleUser(u){
+  // Default: visible. Allow explicit false to hide.
+  if (!u || typeof u !== 'object') return true;
+  if (Object.prototype.hasOwnProperty.call(u, 'attendanceVisible')) {
+    return (u.attendanceVisible !== false);
+  }
+  // Backward/alternate field name safety.
+  if (Object.prototype.hasOwnProperty.call(u, 'showAttendance')) {
+    return (u.showAttendance !== false);
+  }
+  return true;
+}
+
 function renderAttendanceUserSettings(){
   const tb = document.querySelector('#att-user-settings tbody');
   if(!tb) return;
@@ -2046,8 +2274,10 @@ function renderAttendanceUserSettings(){
   safeArr(DATA.users).filter(u=>!isUnsetUser(u)).forEach(u=>{
     const tr = document.createElement('tr');
     const display = escapeHtml(u.name||u.email||u.id||'');
+    const checked = isAttendanceVisibleUser(u) ? 'checked' : '';
     tr.innerHTML = `
       <td>${display}</td>
+      <td style="text-align:center;"><input type="checkbox" data-uid="${escapeHtml(u.id)}" data-field="attendanceVisible" ${checked}/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="employeeNumber" value="${escapeHtml(u.employeeNumber||'')}" placeholder="12345"/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="calendarUrl" value="${escapeHtml(u.calendarUrl||'')}" placeholder="https://calendar.google.com/.../basic.ics"/></td>
     `;
@@ -2059,8 +2289,12 @@ function renderAttendanceUserSettings(){
     inp.addEventListener('change', ()=>{
       const uid = inp.getAttribute('data-uid');
       const field = inp.getAttribute('data-field');
-      const value = inp.value;
       if(!uid || !field) return;
+
+      let value = null;
+      if (inp.type === 'checkbox') value = !!inp.checked;
+      else value = inp.value;
+
       const patch = { id: uid };
       patch[field] = value;
       gsr().withSuccessHandler(row=>{ patchRow('users', row); rerenderAfter('users'); toast('ユーザー設定を保存しました', true); })
@@ -2072,6 +2306,7 @@ function renderAttendanceUserSettings(){
 
 function renderAttendancePage(){
   if (PAGE !== 'attendance') return;
+  if (ATT_VIEW !== 'dashboard') return;
   const label = document.getElementById('att-today-label');
   if(label) label.textContent = todayStr();
 
@@ -2081,7 +2316,7 @@ function renderAttendancePage(){
   if(!wrap) return;
   wrap.innerHTML = '';
 
-  const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u));
+  const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u));
   users.forEach(u=>{
     const uid = u.id;
     const row = attFindRowForUser(uid) || { user_id: uid, status:'not-clocked', location:'office', breaks:[], clock_in:'', clock_out:'', notes:'', project_id:'', task_id:'' };
@@ -2094,9 +2329,30 @@ function renderAttendancePage(){
     const currentEvent = (ATT.currentEventsByUser && ATT.currentEventsByUser[uid]) || null;
     const nextEvent = (ATT.nextEventsByUser && ATT.nextEventsByUser[uid]) || null;
 
+    const avatarHue = (function(){
+      // deterministic hue from id
+      const s = String(uid||'');
+      let h = 0;
+      for (let i=0;i<s.length;i++) h = (h*31 + s.charCodeAt(i)) % 360;
+      return h;
+    })();
+    const tone = (function(){
+      if(status==='working') return 'green';
+      if(status==='break' || status==='out') return 'yellow';
+      if(status==='done') return 'gray';
+      return 'red';
+    })();
+    const stateClass = (function(){
+      if(status==='done') return 'card-state-done';
+      if(status==='not-clocked') return 'card-state-not-clocked';
+      if(status==='out' || status==='break') return 'card-state-event';
+      if(status==='working' && location==='remote') return 'card-state-working-remote';
+      if(status==='working' && location==='office') return 'card-state-working-office';
+      return 'card-state-not-clocked';
+    })();
+
     const card = document.createElement('div');
-    card.className = 'card';
-    card.style.marginTop = '10px';
+    card.className = `card att-card ${stateClass}`;
     const projId = String(row.project_id||'');
     const taskId = String(row.task_id||'');
 
@@ -2113,8 +2369,15 @@ function renderAttendancePage(){
     const taskName = taskId ? (tasks.find(t=>String(t.id)===taskId)?.title || taskId) : '';
 
     card.innerHTML = `
-      <h2 style="padding:0; margin:0 0 8px 0;">${escapeHtml(u.name||u.email||u.id)} <span class="pill" style="margin-left:6px;">${escapeHtml(attStatusLabel(status))}</span></h2>
-      <div class="body" style="padding:0;">
+      <div class="att-card-top">
+        <div class="att-avatar" style="background: hsl(${avatarHue} 70% 45%);"></div>
+        <div>
+          <div class="att-name">${escapeHtml(u.name||u.email||u.id)}</div>
+          <div class="att-role">${escapeHtml(u.role||'')}</div>
+        </div>
+        <div class="att-status-pill tone-${tone}">${escapeHtml(attStatusLabel(status))}</div>
+      </div>
+      <div class="body">
         <div class="row">
           <div>
             <label>勤務場所</label>
@@ -2234,7 +2497,7 @@ function renderAttendancePage(){
 }
 
 async function refreshAttendanceCalendars(){
-  const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u));
+  const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u));
   const nextMap = {};
   const currentMap = {};
   await Promise.all(users.map(async u=>{
@@ -2258,6 +2521,7 @@ async function loadAttendanceMonth(){
     const rows = await gas('getAttendanceMonth', month);
     ATT.monthRows = Array.isArray(rows) ? rows : [];
     renderAttendanceMonthTable(month);
+    renderAttendanceWeekTable(month);
     toast('月次データを読み込みました', true);
   }catch(e){
     console.error(e);
@@ -2297,6 +2561,72 @@ function renderAttendanceMonthTable(month){
   const summary = document.getElementById('att-month-summary');
   if(summary){
     summary.textContent = `${month} / 記録 ${rows.length}件`;
+  }
+}
+
+function mondayStart(dateKey){
+  const d = new Date(`${dateKey}T00:00:00`);
+  const dow = d.getDay(); // 0 Sun
+  const diff = (dow + 6) % 7; // Mon=0
+  d.setDate(d.getDate() - diff);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function addDaysKey(dateKey, add){
+  const d = new Date(`${dateKey}T00:00:00`);
+  d.setDate(d.getDate() + Number(add||0));
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function renderAttendanceWeekTable(month){
+  const tb = document.querySelector('#att-week-table tbody');
+  if(!tb) return;
+  tb.innerHTML = '';
+
+  const rows = safeArr(ATT.monthRows).slice();
+  const groups = new Map(); // key -> {weekStart, weekEnd, userId, days, minutes}
+  rows.forEach(r=>{
+    const dateKey = String(r.work_date||'');
+    if(!dateKey || dateKey.slice(0,7)!==String(month||'')) return;
+    const uid = String(r.user_id||r.user||'');
+    if(!uid) return;
+    const worked = (r.clock_in && r.clock_out) ? Math.max(0, minutesBetweenIso(r.clock_in, r.clock_out) - fixedBreakMinutes) : 0;
+    if(worked<=0) return;
+    const ws = mondayStart(dateKey);
+    const we = addDaysKey(ws, 6);
+    const key = `${ws}|${uid}`;
+    const prev = groups.get(key) || { weekStart: ws, weekEnd: we, userId: uid, days: 0, minutes: 0 };
+    prev.days += 1;
+    prev.minutes += worked;
+    groups.set(key, prev);
+  });
+
+  const list = Array.from(groups.values()).sort((a,b)=>{
+    if(a.weekStart!==b.weekStart) return String(a.weekStart).localeCompare(String(b.weekStart));
+    return nameByUserId(a.userId).localeCompare(nameByUserId(b.userId));
+  });
+
+  list.forEach(g=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(g.weekStart)}</td>
+      <td>${escapeHtml(g.weekEnd)}</td>
+      <td>${escapeHtml(nameByUserId(g.userId) || g.userId)}</td>
+      <td>${escapeHtml(String(g.days))}</td>
+      <td>${escapeHtml(minutesToLabel(Math.round(g.minutes)))}</td>
+    `;
+    tb.appendChild(tr);
+  });
+
+  const summary = document.getElementById('att-week-summary');
+  if(summary){
+    summary.textContent = `${month} / 週次 ${list.length}件`;
   }
 }
 
@@ -2418,7 +2748,7 @@ async function exportFreeeAttendanceCsv(){
       if(isScheduledWorkday(toDateKey(d), holidaySet, companySet)) scheduledWorkdayCount += 1;
     }
 
-    const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u));
+    const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u));
     // Group attendance by user
     const byUser = {};
     safeArr(ATT.monthRows).forEach(r=>{
@@ -2512,10 +2842,36 @@ window.addEventListener('load', ()=>{
     const mi = document.getElementById('att_month');
     if(mi && !mi.value) mi.value = todayStr().slice(0,7);
     loadAttendanceSettings();
-    // Poll day state every 10s while on attendance page
-    setInterval(()=>{ if(PAGE==='attendance') refreshAttendance(); }, 10000);
-    // Refresh calendars every minute while on attendance page
-    setInterval(()=>{ if(PAGE==='attendance') refreshAttendanceCalendars().then(()=>renderAttendancePage()).catch(()=>{}); }, 60000);
+
+    // Auto-refresh UI (opt-in)
+    try {
+      applyAttendanceAutoRefreshIntervalToUi();
+
+      const cb = document.getElementById('att_auto_refresh');
+      const sel = document.getElementById('att_auto_interval');
+
+      if (sel) sel.addEventListener('change', ()=>{
+        readAttendanceAutoRefreshIntervalFromUi();
+        if (ATT_AUTO_REFRESH_ENABLED) startAttendanceAutoRefresh();
+      });
+
+      if (cb) cb.addEventListener('change', ()=>{
+        if (cb.checked) {
+          startAttendanceAutoRefresh();
+        } else {
+          stopAttendanceAutoRefresh({ uncheck:false, reason:'unchecked' });
+        }
+      });
+
+      document.addEventListener('visibilitychange', ()=>{
+        if (document.hidden) {
+          stopAttendanceAutoRefresh({ uncheck:true, reason:'hidden' });
+        }
+      });
+      window.addEventListener('beforeunload', ()=>{
+        stopAttendanceAutoRefresh({ uncheck:false, reason:'unload' });
+      });
+    } catch(_){ }
   }catch(_){ }
 });
 
@@ -2539,6 +2895,7 @@ function switchTab(tab) {
     const gc=document.getElementById('gantt-container'); if(gc) gc.innerHTML='';
   }
   updateHashFromState();
+  try { updateRouteParams({ tab: ACTIVE_TAB }, { replace:true }); } catch(_){ }
 }
 
 function updateHashFromState(){
@@ -3182,9 +3539,37 @@ function renderUsers() {
   tb.innerHTML='';
   safeArr(DATA.users).forEach(u=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(u.name||'')}</td><td>${escapeHtml(u.email||'')}</td><td>${escapeHtml(u.role||'')}</td><td>${escapeHtml(u.department||'')}</td>
-      <td><button class="secondary" onclick="delUser('${u.id}')">削除</button></td>`;
+    const checked = isAttendanceVisibleUser(u) ? 'checked' : '';
+    tr.innerHTML = `
+      <td>${escapeHtml(u.name||'')}</td>
+      <td>${escapeHtml(u.email||'')}</td>
+      <td>${escapeHtml(u.role||'')}</td>
+      <td>${escapeHtml(u.department||'')}</td>
+      <td style="text-align:center;"><input type="checkbox" data-uid="${escapeHtml(u.id)}" data-field="attendanceVisible" ${checked}/></td>
+      <td><input data-uid="${escapeHtml(u.id)}" data-field="employeeNumber" value="${escapeHtml(u.employeeNumber||'')}" placeholder="12345"/></td>
+      <td><input data-uid="${escapeHtml(u.id)}" data-field="calendarUrl" value="${escapeHtml(u.calendarUrl||'')}" placeholder="https://calendar.google.com/.../basic.ics"/></td>
+      <td><button class="secondary" onclick="delUser('${u.id}')">削除</button></td>
+    `;
     tb.appendChild(tr);
+  });
+
+  // Save user settings on change.
+  tb.querySelectorAll('input[data-uid]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const uid = inp.getAttribute('data-uid');
+      const field = inp.getAttribute('data-field');
+      if(!uid || !field) return;
+
+      let value = null;
+      if (inp.type === 'checkbox') value = !!inp.checked;
+      else value = inp.value;
+
+      const patch = { id: uid };
+      patch[field] = value;
+      gsr().withSuccessHandler(row=>{ patchRow('users', row); rerenderAfter('users'); toast('ユーザー設定を保存しました', true); })
+          .withFailureHandler(e=>{ toast('ユーザー設定保存に失敗: '+(e && e.message ? e.message : e), false); })
+          .upsertUser(patch);
+    }, { once:false });
   });
 }
 function delUser(id) { gsr().withSuccessHandler(()=>{ dropRow('users', id); rerenderAfter('users'); }).deleteUser(id); }
@@ -4167,6 +4552,7 @@ function bindRruleUI(){
 
   loadFiltersFromLS();  // まずローカル保存を読む
   applyHash();          // URL指定があれば上書き
+  try { applyRouteFromUrl(); } catch(_){ }
   // 既存指定（LS/ハッシュ）が無ければ「完了以外」を初期値に
   if (!FILTERS.status && !OVERDUE) {
     FILTERS.status = 'notdone';

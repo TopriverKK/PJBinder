@@ -5,6 +5,7 @@ import {
   copyDocTemplate,
   ensureFolderPath,
   getLogoDataUrl,
+  prependDocText,
   replaceDocWithMemo,
   setDocLinkShare,
 } from '../google/driveDocs';
@@ -124,7 +125,8 @@ export async function rpcCreateMinuteDoc(input: any) {
   const ym = `${yyyy}年${mm}月`;
   const folderId = await ensureFolderPath(base, ['議事録', ym]);
 
-  const fileTitle = `${dateFormatted}_${input.title}`;
+  const meetingKey = `${dateFormatted}_${input.title}`;
+  const fileTitle = meetingKey;
   
   // Get template ID from settings
   const templateId = await getSetting('MINUTES_TEMPLATE_ID');
@@ -140,10 +142,10 @@ export async function rpcCreateMinuteDoc(input: any) {
       folderId,
       shareRole: 'editor',
       replacements: {
-        '【会議名】': input.title,
+        '【会議名】': meetingKey,
         '【日付】': dateStr,
         '【プロジェクト】': input.projectId || '-',
-        '【タスク】': String(input.taskIds || '') || '-',
+        '【タスク】': String(input.taskIds || input.taskId || '') || '-',
         '【参加者】': input.attendees || '-',
       },
     });
@@ -168,6 +170,16 @@ export async function rpcCreateMinuteDoc(input: any) {
     docId = result.docId;
     url = result.url;
   }
+
+  // Ensure selected info is present even if the template has no placeholders.
+  const metaLines: string[] = [];
+  metaLines.push(`会議名: ${meetingKey}`);
+  metaLines.push(`日付: ${dateStr}`);
+  if (input.projectId) metaLines.push(`プロジェクト: ${input.projectId}`);
+  const taskCsv = String(input.taskIds || input.taskId || '').trim();
+  if (taskCsv) metaLines.push(`タスク: ${taskCsv}`);
+  if (input.attendees) metaLines.push(`参加者: ${input.attendees}`);
+  await prependDocText(docId, metaLines.join('\n'));
 
   // Supabase: Minutes row
   const id = randomUUID();

@@ -22,6 +22,16 @@ import {
   rpcDeleteDailyReport,
   rpcDeleteShared,
 } from '../src/rpc/crud';
+import {
+  rpcAppendDocWithMemo,
+  rpcCreateDailyReportDoc,
+  rpcCreateMinuteDoc,
+  rpcCreateProjectDoc,
+  rpcCreateTaskDoc,
+  rpcGetLogoDataUrl,
+  rpcReplaceDocWithMemo,
+  rpcSetDocLinkShare,
+} from '../src/rpc/docs';
 
 type RpcRequestBody = {
   name?: unknown;
@@ -44,8 +54,32 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   ping: rpcPing,
 
   // CRUD operations
-  upsertProject: rpcUpsertProject,
-  upsertTask: rpcUpsertTask,
+  async upsertProject(...args: any[]) {
+    const saved = await rpcUpsertProject(...args);
+    if (saved && saved.id && !saved.docId) {
+      // Best-effort: create project doc automatically for newly-created projects.
+      try {
+        const r = await rpcCreateProjectDoc(String(saved.id));
+        return (r as any)?.project ?? saved;
+      } catch {
+        return saved;
+      }
+    }
+    return saved;
+  },
+  async upsertTask(...args: any[]) {
+    const saved = await rpcUpsertTask(...args);
+    if (saved && saved.id && !saved.docId) {
+      // Best-effort: create task doc automatically for newly-created tasks.
+      try {
+        const r = await rpcCreateTaskDoc(String(saved.id));
+        return (r as any) ?? saved;
+      } catch {
+        return saved;
+      }
+    }
+    return saved;
+  },
   upsertSubscription: rpcUpsertSubscription,
   upsertLedgerEntry: rpcUpsertLedgerEntry,
   upsertUser: rpcUpsertUser,
@@ -67,40 +101,15 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   deleteDailyReport: rpcDeleteDailyReport,
   deleteShared: rpcDeleteShared,
 
-  // Docs  // Docs
-  // (lazy import to avoid loading googleapis on every cold start)
-  async getLogoDataUrl() {
-    const m = await import('../src/rpc/docs');
-    return (m as any).rpcGetLogoDataUrl();
-  },
-  async setDocLinkShare(...args: any[]) {
-    const m = await import('../src/rpc/docs');
-    return (m as any).rpcSetDocLinkShare(...args);
-  },
-  async replaceDocWithMemo(...args: any[]) {
-    const m = await import('../src/rpc/docs');
-    return (m as any).rpcReplaceDocWithMemo(...args);
-  },
-  async appendDocWithMemo(...args: any[]) {
-    const m = await import('../src/rpc/docs');
-    return (m as any).rpcAppendDocWithMemo(...args);
-  },
-  async createProjectDoc(...args: any[]) {
-    const m = await import('../src/rpc/docs');
-    return (m as any).rpcCreateProjectDoc(...args);
-  },
-  async createTaskDoc(...args: any[]) {
-    const m = await import('../src/rpc/docs');
-    return (m as any).rpcCreateTaskDoc(...args);
-  },
-  async createMinuteDoc(...args: any[]) {
-    const m = await import('../src/rpc/docs');
-    return (m as any).rpcCreateMinuteDoc(...args);
-  },
-  async createDailyReportDoc(...args: any[]) {
-    const m = await import('../src/rpc/docs');
-    return (m as any).rpcCreateDailyReportDoc(...args);
-  },
+  // Docs
+  getLogoDataUrl: rpcGetLogoDataUrl,
+  setDocLinkShare: rpcSetDocLinkShare,
+  replaceDocWithMemo: rpcReplaceDocWithMemo,
+  appendDocWithMemo: rpcAppendDocWithMemo,
+  createProjectDoc: rpcCreateProjectDoc,
+  createTaskDoc: rpcCreateTaskDoc,
+  createMinuteDoc: rpcCreateMinuteDoc,
+  createDailyReportDoc: rpcCreateDailyReportDoc,
 
   // Minimal stubs so the copied UI can boot on Vercel.
 

@@ -158,6 +158,28 @@ export async function createGoogleDocInFolder(opts: {
   return { docId, url };
 }
 
+export async function prependDocText(docId: string, text: string) {
+  const { docs } = getGoogleClients();
+  const t = String(text || '');
+  if (!t.trim()) return true;
+
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: {
+      requests: [
+        {
+          insertText: {
+            location: { index: 1 },
+            text: `${t}\n`,
+          },
+        },
+      ],
+    },
+  });
+
+  return true;
+}
+
 /**
  * Copy a Google Doc template to a new document
  */

@@ -1,24 +1,4 @@
-import {
-  rpcDeleteCredential,
-  rpcDeleteLedgerPlan,
-  rpcDeleteMinute,
-  rpcDeleteShared,
-  rpcDeleteSubscription,
-  rpcDeleteTask,
-  rpcDeleteUser,
-  rpcGetAllData,
-  rpcPing,
-  rpcUpsertAttachments,
-  rpcUpsertCredential,
-  rpcUpsertDailyReport,
-  rpcUpsertLedgerEntry,
-  rpcUpsertLedgerPlan,
-  rpcUpsertProject,
-  rpcUpsertShared,
-  rpcUpsertSubscription,
-  rpcUpsertTask,
-  rpcUpsertUser,
-} from '../src/rpc/data';
+import { rpcGetAllData, rpcPing } from '../src/rpc/data';
 
 type RpcRequestBody = {
   name?: unknown;
@@ -40,27 +20,7 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   getAllDataPlain: rpcGetAllData,
   ping: rpcPing,
 
-  // Mutations (Supabase)
-  upsertProject: rpcUpsertProject,
-  upsertTask: rpcUpsertTask,
-  upsertUser: rpcUpsertUser,
-  upsertCredential: rpcUpsertCredential,
-  upsertSubscription: rpcUpsertSubscription,
-  upsertLedgerEntry: rpcUpsertLedgerEntry,
-  upsertLedgerPlan: rpcUpsertLedgerPlan,
-  upsertDailyReport: rpcUpsertDailyReport,
-  upsertShared: rpcUpsertShared,
-  upsertAttachments: rpcUpsertAttachments,
-
-  deleteUser: rpcDeleteUser,
-  deleteTask: rpcDeleteTask,
-  deleteMinute: rpcDeleteMinute,
-  deleteSubscription: rpcDeleteSubscription,
-  deleteLedgerPlan: rpcDeleteLedgerPlan,
-  deleteCredential: rpcDeleteCredential,
-  deleteShared: rpcDeleteShared,
-
-  // CRUD operations (lazy import)
+  // CRUD operations (lazy import to reduce cold start time)
   async upsertProject(...args: any[]) {
     const m = await import('../src/rpc/crud');
     return m.rpcUpsertProject(...args);
@@ -96,6 +56,14 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   async upsertDailyReport(...args: any[]) {
     const m = await import('../src/rpc/crud');
     return m.rpcUpsertDailyReport(...args);
+  },
+  async upsertShared(...args: any[]) {
+    const m = await import('../src/rpc/crud');
+    return m.rpcUpsertShared(...args);
+  },
+  async upsertAttachments(...args: any[]) {
+    const m = await import('../src/rpc/crud');
+    return m.rpcUpsertAttachments(...args);
   },
   
   async deleteProject(...args: any[]) {
@@ -134,8 +102,12 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const m = await import('../src/rpc/crud');
     return m.rpcDeleteDailyReport(...args);
   },
+  async deleteShared(...args: any[]) {
+    const m = await import('../src/rpc/crud');
+    return m.rpcDeleteShared(...args);
+  },
 
-  // Docs
+  // Docs  // Docs
   // (lazy import to avoid loading googleapis on every cold start)
   async getLogoDataUrl() {
     const m = await import('../src/rpc/docs');

@@ -16,7 +16,7 @@ export type AllData = {
 };
 
 export async function rpcGetAllData(): Promise<AllData> {
-  // Table names follow the existing Supabase schema used by GAS.
+  // Table names are all lowercase in Supabase
   const [
     users,
     projects,
@@ -30,17 +30,16 @@ export async function rpcGetAllData(): Promise<AllData> {
     dailyReports,
     shareds,
   ] = await Promise.all([
-    sbSelectAllSafe('Users'),
-    sbSelectAllSafe('Projects'),
-    sbSelectAllSafe('Tasks'),
-    sbSelectAllSafe('Subscriptions'),
-    sbSelectAllSafe('Ledger'),
-    sbSelectAllSafe('LedgerPlans'),
-    sbSelectAllSafe('Credentials'),
-    sbSelectAllSafe('Attachments'),
-    sbSelectAllSafe('Minutes'),
-    sbSelectAllSafe('DailyReports'),
-    // shareds はlowercaseの可能性が高い
+    sbSelectAllSafe('users'),
+    sbSelectAllSafe('projects'),
+    sbSelectAllSafe('tasks'),
+    sbSelectAllSafe('subscriptions'),
+    sbSelectAllSafe('ledger'),
+    sbSelectAllSafe('ledgerplans'),
+    sbSelectAllSafe('credentials'),
+    sbSelectAllSafe('attachments'),
+    sbSelectAllSafe('minutes'),
+    sbSelectAllSafe('dailyreports'),
     sbSelectAllSafe('shareds'),
   ]);
 

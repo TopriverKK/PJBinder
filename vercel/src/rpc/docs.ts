@@ -2,12 +2,14 @@ import { loadGoogleEnv } from '../google/env';
 import {
   appendDocWithMemo,
   createGoogleDocInFolder,
+  copyDocTemplate,
   ensureFolderPath,
   getLogoDataUrl,
   replaceDocWithMemo,
   setDocLinkShare,
 } from '../google/driveDocs';
 import { sbSelectOneById, sbUpsert } from '../supabase/rest';
+import { getSetting } from '../supabase/settings';
 import { randomUUID } from 'crypto';
 
 function sanitizeName(s: string) {
@@ -112,25 +114,60 @@ export async function rpcCreateMinuteDoc(input: any) {
   const base = env.minutesFolderId || env.baseFolderId;
   if (!base) throw new Error('Missing env: GOOGLE_MINUTES_FOLDER_ID (or GOOGLE_BASE_FOLDER_ID)');
 
-  const dt = new Date(String(input.date));
-  const ym = `${dt.getFullYear()}年${String(dt.getMonth() + 1).padStart(2, '0')}月`;
+  const dateStr = String(input.date);
+  const dt = new Date(dateStr);
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const dateFormatted = `${yyyy}_${mm}_${dd}`;
+  
+  const ym = `${yyyy}年${mm}月`;
   const folderId = await ensureFolderPath(base, ['議事録', ym]);
 
-  const title = `議事録: ${input.title}`;
-  const initialText =
-    `${title}\n` +
-    `日付: ${input.date}　プロジェクト: ${input.projectId || '-'}　タスク: ${String(input.taskIds || '') || '-'}\n` +
-    `参加者: ${input.attendees || '-'}\n` +
-    `\n――――\n` +
-    `■ アクションアイテム\n` +
-    `■ 議題 / メモ\n`;
+  const fileTitle = `${dateFormatted}_${input.title}`;
+  
+  // Get template ID from settings
+  const templateId = await getSetting('MINUTES_TEMPLATE_ID');
+  
+  let docId: string;
+  let url: string;
+  
+  if (templateId) {
+    // Use template
+    const result = await copyDocTemplate({
+      templateId,
+      title: fileTitle,
+      folderId,
+      shareRole: 'editor',
+      replacements: {
+        '【会議名】': input.title,
+        '【日付】': dateStr,
+        '【プロジェクト】': input.projectId || '-',
+        '【タスク】': String(input.taskIds || '') || '-',
+        '【参加者】': input.attendees || '-',
+      },
+    });
+    docId = result.docId;
+    url = result.url;
+  } else {
+    // Fallback: create from scratch
+    const initialText =
+      `議事録: ${input.title}\n` +
+      `日付: ${dateStr}　プロジェクト: ${input.projectId || '-'}　タスク: ${String(input.taskIds || '') || '-'}\n` +
+      `参加者: ${input.attendees || '-'}\n` +
+      `\n――――\n` +
+      `■ アクションアイテム\n` +
+      `■ 議題 / メモ\n`;
 
-  const { docId, url } = await createGoogleDocInFolder({
-    title,
-    folderId,
-    shareRole: 'editor',
-    initialText,
-  });
+    const result = await createGoogleDocInFolder({
+      title: fileTitle,
+      folderId,
+      shareRole: 'editor',
+      initialText,
+    });
+    docId = result.docId;
+    url = result.url;
+  }
 
   // Supabase: Minutes row
   const id = randomUUID();
@@ -139,24 +176,52 @@ export async function rpcCreateMinuteDoc(input: any) {
     'minutes',
     {
       id,
-      date: input.date,
+      date: dateStr,
       title: input.title,
-      projectId: input.projectId || null,
-      attendees: input.attendees || null,
-      docId,
-      docUrl: url,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-    },
-    'id'
-  );
+  
+  // Get template ID from settings
+  const templateId = await getSetting('DAILY_TEMPLATE_ID');
+  
+  let docId: string;
+  let url: string;
+  
+  if (templateId) {
+    // Use template
+    const result = await copyDocTemplate({
+      templateId,
+      title: fileTitle,
+      folderId,
+      shareRole: 'editor',
+      replacements: {
+        '【日付】': dateStr,
+        '【ユーザー名】': uname,
+        '【工数】': String(Number(r?.hours || 0)),
+        '【プロジェクト】': r?.projectId || '-',
+        '【本文】': String(r?.body || ''),
+      },
+    });
+    docId = result.docId;
+    url = result.url;
+  } else {
+    // Fallback: create from scratch
+    const titleLine = `日報 ${dateStr} / ${uname}`;
+    const initialText =
+      `${titleLine}\n` +
+      `ユーザー: ${uname}　日付: ${dateStr}　工数: ${Number(r?.hours || 0)}h\n` +
+      (r?.projectId ? `プロジェクト: ${r.projectId}\n` : '') +
+      `\n${String(r?.body || '')}\n`;
 
-  return { docId, url, id };
-}
+    const result = await createGoogleDocInFolder({
+      title: fileTitle,
+      folderId,
+      shareRole: 'editor',
+      initialText,
+    });
+    docId = result.docId;
+    url = result.url;
+  }
 
-export async function rpcCreateDailyReportDoc(r: any) {
-  const dateStr = String(r?.date || todayYMD());
-  const userId = String(r?.userId || '');
+  // Supabase: DailyReports row '');
   if (!userId) throw new Error('userId は必須です');
 
   const env = loadGoogleEnv();

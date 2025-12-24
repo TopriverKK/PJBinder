@@ -1,44 +1,30 @@
-import { rpcGetAllData, rpcPing } from '../src/rpc/data.js';
-import {
-  rpcUpsertProject,
-  rpcUpsertTask,
-  rpcUpsertSubscription,
-  rpcUpsertLedgerEntry,
-  rpcUpsertUser,
-  rpcUpsertLedgerPlan,
-  rpcUpsertCredential,
-  rpcUpsertMinute,
-  rpcUpsertDailyReport,
-  rpcUpsertShared,
-  rpcUpsertAttachments,
-  rpcDeleteProject,
-  rpcDeleteTask,
-  rpcDeleteSubscription,
-  rpcDeleteLedgerEntry,
-  rpcDeleteUser,
-  rpcDeleteLedgerPlan,
-  rpcDeleteCredential,
-  rpcDeleteMinute,
-  rpcDeleteDailyReport,
-  rpcDeleteShared,
-} from '../src/rpc/crud.js';
-import {
-  rpcAppendDocWithMemo,
-  rpcCreateDailyReportDoc,
-  rpcCreateMinuteDoc,
-  rpcCreateProjectDoc,
-  rpcCreateTaskDoc,
-  rpcGetLogoDataUrl,
-  rpcReplaceDocWithMemo,
-  rpcSetDocLinkShare,
-} from '../src/rpc/docs.js';
-import {
-  rpcGetAttendanceDay,
-  rpcGetAttendanceMonth,
-  rpcGetAttendanceSettings,
-  rpcPatchAttendance,
-  rpcSetAttendanceSettings,
-} from '../src/rpc/attendance.js';
+// IMPORTANT:
+// Do not import app modules at top-level.
+// If any optional module (e.g., Google/Docs) fails to load, Vercel will return
+// FUNCTION_INVOCATION_FAILED and ALL RPCs break. We lazy-load per RPC instead.
+
+type DataMod = typeof import('../src/rpc/data.js');
+type CrudMod = typeof import('../src/rpc/crud.js');
+type DocsMod = typeof import('../src/rpc/docs.js');
+type AttendanceMod = typeof import('../src/rpc/attendance.js');
+
+let _dataMod: Promise<DataMod> | null = null;
+let _crudMod: Promise<CrudMod> | null = null;
+let _docsMod: Promise<DocsMod> | null = null;
+let _attendanceMod: Promise<AttendanceMod> | null = null;
+
+function getDataMod(): Promise<DataMod> {
+  return (_dataMod ||= import('../src/rpc/data.js'));
+}
+function getCrudMod(): Promise<CrudMod> {
+  return (_crudMod ||= import('../src/rpc/crud.js'));
+}
+function getDocsMod(): Promise<DocsMod> {
+  return (_docsMod ||= import('../src/rpc/docs.js'));
+}
+function getAttendanceMod(): Promise<AttendanceMod> {
+  return (_attendanceMod ||= import('../src/rpc/attendance.js'));
+}
 
 type RpcRequestBody = {
   name?: unknown;
@@ -110,17 +96,28 @@ function errorMessage(e: unknown): string {
 
 const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   // Data
-  getAllData: rpcGetAllData,
-  getAllDataPlain: rpcGetAllData,
-  ping: rpcPing,
+  async getAllData() {
+    const m = await getDataMod();
+    return await m.rpcGetAllData();
+  },
+  async getAllDataPlain() {
+    const m = await getDataMod();
+    return await m.rpcGetAllData();
+  },
+  async ping() {
+    const m = await getDataMod();
+    return await m.rpcPing();
+  },
 
   // CRUD operations
   async upsertProject(...args: any[]) {
-    const saved = await rpcUpsertProject(args[0]);
+    const crud = await getCrudMod();
+    const saved = await crud.rpcUpsertProject(args[0]);
     if (saved && saved.id && !saved.docId) {
       // Best-effort: create project doc automatically for newly-created projects.
       try {
-        const r = await rpcCreateProjectDoc(String(saved.id));
+        const docs = await getDocsMod();
+        const r = await docs.rpcCreateProjectDoc(String(saved.id));
         return (r as any)?.project ?? saved;
       } catch {
         return saved;
@@ -129,11 +126,13 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     return saved;
   },
   async upsertTask(...args: any[]) {
-    const saved = await rpcUpsertTask(args[0]);
+    const crud = await getCrudMod();
+    const saved = await crud.rpcUpsertTask(args[0]);
     if (saved && saved.id && !saved.docId) {
       // Best-effort: create task doc automatically for newly-created tasks.
       try {
-        const r = await rpcCreateTaskDoc(String(saved.id));
+        const docs = await getDocsMod();
+        const r = await docs.rpcCreateTaskDoc(String(saved.id));
         return (r as any) ?? saved;
       } catch {
         return saved;
@@ -141,43 +140,145 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     }
     return saved;
   },
-  upsertSubscription: rpcUpsertSubscription,
-  upsertLedgerEntry: rpcUpsertLedgerEntry,
-  upsertUser: rpcUpsertUser,
-  upsertLedgerPlan: rpcUpsertLedgerPlan,
-  upsertCredential: rpcUpsertCredential,
-  upsertMinute: rpcUpsertMinute,
-  upsertDailyReport: rpcUpsertDailyReport,
-  upsertShared: rpcUpsertShared,
-  upsertAttachments: rpcUpsertAttachments,
+  async upsertSubscription(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertSubscription(args[0]);
+  },
+  async upsertLedgerEntry(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertLedgerEntry(args[0]);
+  },
+  async upsertUser(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertUser(args[0]);
+  },
+  async upsertLedgerPlan(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertLedgerPlan(args[0]);
+  },
+  async upsertCredential(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertCredential(args[0]);
+  },
+  async upsertMinute(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertMinute(args[0]);
+  },
+  async upsertDailyReport(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertDailyReport(args[0]);
+  },
+  async upsertShared(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertShared(args[0]);
+  },
+  async upsertAttachments(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertAttachments(args[0], args[1], args[2]);
+  },
   
-  deleteProject: rpcDeleteProject,
-  deleteTask: rpcDeleteTask,
-  deleteSubscription: rpcDeleteSubscription,
-  deleteLedgerEntry: rpcDeleteLedgerEntry,
-  deleteUser: rpcDeleteUser,
-  deleteLedgerPlan: rpcDeleteLedgerPlan,
-  deleteCredential: rpcDeleteCredential,
-  deleteMinute: rpcDeleteMinute,
-  deleteDailyReport: rpcDeleteDailyReport,
-  deleteShared: rpcDeleteShared,
+  async deleteProject(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteProject(String(args[0]));
+  },
+  async deleteTask(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteTask(String(args[0]));
+  },
+  async deleteSubscription(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteSubscription(String(args[0]));
+  },
+  async deleteLedgerEntry(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteLedgerEntry(String(args[0]));
+  },
+  async deleteUser(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteUser(String(args[0]));
+  },
+  async deleteLedgerPlan(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteLedgerPlan(String(args[0]));
+  },
+  async deleteCredential(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteCredential(String(args[0]));
+  },
+  async deleteMinute(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteMinute(String(args[0]));
+  },
+  async deleteDailyReport(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteDailyReport(String(args[0]));
+  },
+  async deleteShared(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteShared(String(args[0]));
+  },
 
   // Docs
-  getLogoDataUrl: rpcGetLogoDataUrl,
-  setDocLinkShare: rpcSetDocLinkShare,
-  replaceDocWithMemo: rpcReplaceDocWithMemo,
-  appendDocWithMemo: rpcAppendDocWithMemo,
-  createProjectDoc: rpcCreateProjectDoc,
-  createTaskDoc: rpcCreateTaskDoc,
-  createMinuteDoc: rpcCreateMinuteDoc,
-  createDailyReportDoc: rpcCreateDailyReportDoc,
+  async getLogoDataUrl() {
+    // Logo is optional; never let it break app boot.
+    try {
+      const docs = await getDocsMod();
+      return await docs.rpcGetLogoDataUrl();
+    } catch (e) {
+      console.warn('[RPC] getLogoDataUrl failed (ignored):', e);
+      return null;
+    }
+  },
+  async setDocLinkShare(...args: any[]) {
+    const docs = await getDocsMod();
+    return await docs.rpcSetDocLinkShare(String(args[0]), args[1]);
+  },
+  async replaceDocWithMemo(...args: any[]) {
+    const docs = await getDocsMod();
+    return await docs.rpcReplaceDocWithMemo(String(args[0]), String(args[1] ?? ''));
+  },
+  async appendDocWithMemo(...args: any[]) {
+    const docs = await getDocsMod();
+    return await docs.rpcAppendDocWithMemo(String(args[0]), String(args[1] ?? ''));
+  },
+  async createProjectDoc(...args: any[]) {
+    const docs = await getDocsMod();
+    return await docs.rpcCreateProjectDoc(String(args[0]));
+  },
+  async createTaskDoc(...args: any[]) {
+    const docs = await getDocsMod();
+    return await docs.rpcCreateTaskDoc(String(args[0]));
+  },
+  async createMinuteDoc(...args: any[]) {
+    const docs = await getDocsMod();
+    return await docs.rpcCreateMinuteDoc(String(args[0]));
+  },
+  async createDailyReportDoc(...args: any[]) {
+    const docs = await getDocsMod();
+    return await docs.rpcCreateDailyReportDoc(String(args[0]));
+  },
 
   // Attendance
-  getAttendanceDay: rpcGetAttendanceDay,
-  getAttendanceMonth: rpcGetAttendanceMonth,
-  patchAttendance: rpcPatchAttendance,
-  getAttendanceSettings: rpcGetAttendanceSettings,
-  setAttendanceSettings: rpcSetAttendanceSettings,
+  async getAttendanceDay(...args: any[]) {
+    const att = await getAttendanceMod();
+    return await att.rpcGetAttendanceDay(args[0]);
+  },
+  async getAttendanceMonth(...args: any[]) {
+    const att = await getAttendanceMod();
+    return await att.rpcGetAttendanceMonth(args[0]);
+  },
+  async patchAttendance(...args: any[]) {
+    const att = await getAttendanceMod();
+    return await att.rpcPatchAttendance(args[0], args[1], args[2]);
+  },
+  async getAttendanceSettings() {
+    const att = await getAttendanceMod();
+    return await att.rpcGetAttendanceSettings();
+  },
+  async setAttendanceSettings(...args: any[]) {
+    const att = await getAttendanceMod();
+    return await att.rpcSetAttendanceSettings(args[0]);
+  },
 
   // Minimal stubs so the copied UI can boot on Vercel.
 

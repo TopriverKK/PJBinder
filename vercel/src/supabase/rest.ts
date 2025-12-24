@@ -3,6 +3,9 @@ type SupabaseEnv = {
   serviceRoleKey: string;
 };
 
+// Cache environment variables to avoid repeated reads
+let cachedEnv: SupabaseEnv | null = null;
+
 function req(name: string, fallbackNames?: string[]): string {
   const v = process.env[name];
   if (v && String(v).trim()) {
@@ -24,10 +27,14 @@ function req(name: string, fallbackNames?: string[]): string {
 }
 
 function getEnv(): SupabaseEnv {
-  return {
+  if (cachedEnv) return cachedEnv;
+  
+  cachedEnv = {
     url: req('SUPABASE_URL', ['NEXT_PUBLIC_SUPABASE_URL']).replace(/\/+$/, ''),
     serviceRoleKey: req('SUPABASE_SERVICE_ROLE_KEY', ['SUPABASE_KEY']),
   };
+  
+  return cachedEnv;
 }
 
 function headers(extra?: Record<string, string>) {

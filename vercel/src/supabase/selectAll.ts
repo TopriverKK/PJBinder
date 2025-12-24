@@ -1,3 +1,6 @@
+// Cache environment variables to avoid repeated reads
+let cachedEnv: { url: string; serviceRoleKey: string } | null = null;
+
 function req(name: string, fallbackNames?: string[]): string {
   const v = process.env[name];
   if (v && String(v).trim()) {
@@ -20,11 +23,14 @@ function req(name: string, fallbackNames?: string[]): string {
 }
 
 function getEnv() {
+  if (cachedEnv) return cachedEnv;
+  
   try {
-    return {
+    cachedEnv = {
       url: req('SUPABASE_URL', ['NEXT_PUBLIC_SUPABASE_URL']).replace(/\/+$/, ''),
       serviceRoleKey: req('SUPABASE_SERVICE_ROLE_KEY', ['SUPABASE_KEY']),
     };
+    return cachedEnv;
   } catch (e) {
     console.error('Environment configuration error:', e);
     throw e;
@@ -39,6 +45,48 @@ function baseHeaders(extra?: Record<string, string>) {
     Accept: 'application/json',
     ...(extra || {}),
   };
+}
+
+// Retry helper with exponential backoff
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  backoff = 1000
+): Promise<Response> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
+      const res = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Retry on 429 (rate limit) or 5xx errors
+      if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+        const delay = backoff * Math.pow(2, attempt - 1);
+        console.warn(`[Supabase] Retry ${attempt}/${retries} after ${delay}ms for ${url}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      return res;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.error(`[Supabase] Request timeout for ${url}`);
+      }
+      if (attempt === retries) throw err;
+      
+      const delay = backoff * Math.pow(2, attempt - 1);
+      console.warn(`[Supabase] Retry ${attempt}/${retries} after ${delay}ms due to error:`, err);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('fetchWithRetry: Max retries exceeded');
 }
 
 export async function sbSelectAll(table: string, query = 'select=*', pageSize = 1000): Promise<any[]> {
@@ -56,7 +104,7 @@ export async function sbSelectAll(table: string, query = 'select=*', pageSize = 
     const fullUrl = `${url}/rest/v1/${path}`;
     
     try {
-      const res = await fetch(fullUrl, {
+      const res = await fetchWithRetry(fullUrl, {
         method: 'GET',
         headers: baseHeaders({
           Range: `${from}-${to}`,

@@ -16,8 +16,41 @@ export type AllData = {
   shareds: any[];
 };
 
+// Batch fetch to limit concurrent requests and avoid connection pool exhaustion
+async function batchFetch<T>(
+  tasks: Array<() => Promise<T>>,
+  batchSize: number
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < tasks.length; i += batchSize) {
+    const batch = tasks.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(fn => fn()));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 export async function rpcGetAllData(): Promise<AllData> {
-  // Table names are all lowercase in Supabase
+  console.log('[rpcGetAllData] Starting data fetch...');
+  
+  // Fetch tables in batches of 3 to avoid overwhelming Supabase connection pool
+  const tableNames = [
+    'users',
+    'projects', 
+    'tasks',
+    'subscriptions',
+    'ledger',
+    'ledgerplans',
+    'credentials',
+    'attachments',
+    'minutes',
+    'dailyreports',
+    'shareds',
+  ];
+  
+  const fetchTasks = tableNames.map(table => () => sbSelectAllSafe(table));
+  const results = await batchFetch(fetchTasks, 3);
+  
   const [
     users,
     projects,
@@ -30,20 +63,10 @@ export async function rpcGetAllData(): Promise<AllData> {
     minutes,
     dailyReports,
     shareds,
-  ] = await Promise.all([
-    sbSelectAllSafe('users'),
-    sbSelectAllSafe('projects'),
-    sbSelectAllSafe('tasks'),
-    sbSelectAllSafe('subscriptions'),
-    sbSelectAllSafe('ledger'),
-    sbSelectAllSafe('ledgerplans'),
-    sbSelectAllSafe('credentials'),
-    sbSelectAllSafe('attachments'),
-    sbSelectAllSafe('minutes'),
-    sbSelectAllSafe('dailyreports'),
-    sbSelectAllSafe('shareds'),
-  ]);
+  ] = results;
 
+  console.log('[rpcGetAllData] Data fetch complete');
+  
   return {
     version: null,
     users,

@@ -39,3 +39,12 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Local tsc emit (do not commit; Vercel builds TS)
+api/**/*.js
+api/**/*.js.map
+scripts/**/*.js
+scripts/**/*.js.map
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts

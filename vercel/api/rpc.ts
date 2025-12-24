@@ -32,6 +32,13 @@ import {
   rpcReplaceDocWithMemo,
   rpcSetDocLinkShare,
 } from '../src/rpc/docs.js';
+import {
+  rpcGetAttendanceDay,
+  rpcGetAttendanceMonth,
+  rpcGetAttendanceSettings,
+  rpcPatchAttendance,
+  rpcSetAttendanceSettings,
+} from '../src/rpc/attendance.js';
 
 type RpcRequestBody = {
   name?: unknown;
@@ -164,6 +171,13 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   createTaskDoc: rpcCreateTaskDoc,
   createMinuteDoc: rpcCreateMinuteDoc,
   createDailyReportDoc: rpcCreateDailyReportDoc,
+
+  // Attendance
+  getAttendanceDay: rpcGetAttendanceDay,
+  getAttendanceMonth: rpcGetAttendanceMonth,
+  patchAttendance: rpcPatchAttendance,
+  getAttendanceSettings: rpcGetAttendanceSettings,
+  setAttendanceSettings: rpcSetAttendanceSettings,
 
   // Minimal stubs so the copied UI can boot on Vercel.
 

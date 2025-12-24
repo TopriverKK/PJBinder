@@ -59,6 +59,12 @@ async function sbFetch(path: string, init?: RequestInit) {
   return text ? JSON.parse(text) : null;
 }
 
+export async function sbSelect(table: string, query: string) {
+  const q = String(query || '').trim();
+  const suffix = q ? `?${q}` : '';
+  return await sbFetch(`${encodeURIComponent(table)}${suffix}`, { method: 'GET' });
+}
+
 export async function sbSelectOneById(table: string, id: string) {
   const rows = await sbFetch(`${encodeURIComponent(table)}?select=*&id=eq.${encodeURIComponent(id)}&limit=1`, {
     method: 'GET',

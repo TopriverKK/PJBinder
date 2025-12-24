@@ -483,6 +483,7 @@ button.link:hover { opacity: .8; }
     <button class="active" id="nav-dashboard" onclick="goto('dashboard')">ダッシュボード</button>
     <button id="nav-minutes" onclick="goto('minutes')">議事録</button>
     <button id="nav-daily"   onclick="goto('daily')">日報</button>
+    <button id="nav-attendance" onclick="goto('attendance')">勤怠</button>
     <button id="nav-shared"  onclick="goto('shared')">共有資料</button>
     <button id="nav-users"   onclick="goto('users')">ユーザー</button>
     <button id="nav-vault"   onclick="goto('vault')">パスワード金庫</button>
@@ -1221,6 +1222,62 @@ button.link:hover { opacity: .8; }
   </div>
 </section>
 
+<section class="page" id="page-attendance">
+  <div class="grid">
+    <div class="card">
+      <h2>勤怠（今日） <span class="muted" id="att-today-label"></span></h2>
+      <div class="body">
+        <div class="toolbar" style="justify-content:space-between;">
+          <div class="toolbar">
+            <button class="secondary" onclick="refreshAttendance()">更新</button>
+            <span class="muted" id="att-status"></span>
+          </div>
+          <div class="muted" style="font-size:12px;">打刻はサーバ時刻で記録</div>
+        </div>
+        <div id="att-cards" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>勤怠設定（休日/個人ICS）</h2>
+      <div class="body">
+        <div class="row">
+          <div><label>祝日ICS URL</label><input id="att_holiday_url" placeholder="https://...ics"/></div>
+          <div><label>会社休日ICS URL（任意）</label><input id="att_company_holiday_url" placeholder="https://...ics"/></div>
+        </div>
+        <div class="toolbar" style="margin-top:8px; justify-content:flex-end;">
+          <button onclick="saveAttendanceSettings()">保存</button>
+        </div>
+        <hr/>
+        <div class="muted" style="margin-bottom:6px;">ユーザーごとの設定</div>
+        <table id="att-user-settings">
+          <thead><tr><th>ユーザー</th><th>従業員番号</th><th>個人カレンダー(ICS)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="muted" style="margin-top:6px;">個人ICSは /api/ics 経由で取得します（Google系ホストのみ許可）。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>月次CSV / 閲覧（freee集計）</h2>
+      <div class="body">
+        <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
+          <input type="month" id="att_month"/>
+          <button onclick="loadAttendanceMonth()">月次読み込み</button>
+          <button class="secondary" onclick="exportFreeeAttendanceCsv()">freee集計CSVダウンロード</button>
+        </div>
+        <div class="muted" id="att-month-summary" style="margin-top:6px;"></div>
+        <div class="body list" style="padding:0; margin-top:8px;">
+          <table id="att-month-table">
+            <thead><tr><th>日付</th><th>ユーザー</th><th>状態</th><th>出勤</th><th>退勤</th><th>勤務(概算)</th><th>プロジェクト/タスク</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 </div>
 
 <script>
@@ -1369,7 +1426,7 @@ function goto(page) {
   const aliases = { shareds:'shared' };
   page = aliases[page] || page;
 
-  const pages = ['dashboard','minutes','daily','users','vault','budget','subs','ledger','projects','debug','shared'];
+  const pages = ['dashboard','minutes','daily','attendance','users','vault','budget','subs','ledger','projects','debug','shared'];
   pages.forEach(p => {
     const pageEl = document.getElementById('page-'+p);
     if (pageEl) pageEl.classList.toggle('active', p===page);
@@ -1383,6 +1440,10 @@ function goto(page) {
   });
   PAGE = page;
   try { renderAll(); } catch (e) {}
+  if (page === 'attendance') {
+    try { loadAttendanceSettings?.(); } catch (e) {}
+    try { refreshAttendance?.(); } catch (e) {}
+  }
 }
 
 // --- Data & Filters ---
@@ -1696,6 +1757,7 @@ function renderAll() {
   renderUsers();
   renderCreds();
   renderProjectsPage?.();
+  renderAttendancePage?.();
   if (ACTIVE_TAB === 'gantt') renderGantt();
 
   // ここを追加（タブ側で早期returnする安全なレンダラ）
@@ -1715,6 +1777,747 @@ function todayStr(){
   const day = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
+
+// =============================
+// Attendance (Vercel)
+// =============================
+const ATT = {
+  dayRows: [],
+  monthRows: [],
+  settings: { holidayUrl: '', companyHolidayUrl: '' },
+  holidayDates: new Set(),
+  companyHolidayDates: new Set(),
+  nextEventsByUser: {},
+  currentEventsByUser: {},
+};
+
+const fixedBreakMinutes = 90;
+const defaultHolidayIcs = 'https://www.google.com/calendar/ical/ja.japanese%23holiday%40group.v.calendar.google.com/public/basic.ics';
+
+function attStatusLabel(s){
+  return ({'not-clocked':'未打刻', working:'出勤中', break:'休憩中', out:'外出中', done:'退勤済'})[String(s||'not-clocked')] || String(s||'');
+}
+function attLocLabel(l){
+  return ({office:'オフィス', remote:'テレワーク', out:'外出'})[String(l||'office')] || String(l||'');
+}
+function attFormatTime(iso){
+  if(!iso) return '--:--';
+  try{ return new Date(iso).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',hour12:false}); }catch(_){ return '--:--'; }
+}
+function minutesBetweenIso(startIso, endIso){
+  if(!startIso) return 0;
+  const end = endIso ? new Date(endIso) : new Date();
+  const start = new Date(startIso);
+  const ms = end.getTime() - start.getTime();
+  return Math.max(0, Math.round(ms / 60000));
+}
+function minutesToLabel(mins){
+  const h = Math.floor(mins/60);
+  const m = mins%60;
+  return `${h}時間${m}分`;
+}
+
+function normalizeUrl(url){ return String(url||'').trim().startsWith('http') ? String(url||'').trim() : `https://${String(url||'').trim()}`; }
+function buildIcsProxyUrl(targetUrl){ return `/api/ics?url=${encodeURIComponent(targetUrl)}`; }
+function canonicalizeIcsUrl(raw){
+  const normalized = normalizeUrl(String(raw||'').trim());
+  try{
+    const u = new URL(normalized);
+    if (u.pathname.includes('/calendar/embed')){
+      const src = u.searchParams.get('src');
+      if(src){ return `https://calendar.google.com/calendar/ical/${encodeURIComponent(src)}/public/basic.ics`; }
+    }
+  }catch(_){ }
+  return normalized;
+}
+
+function parseIcsDate(raw){
+  if(!raw) return undefined;
+  if (/^\d{8}$/.test(raw)){
+    return new Date(`${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}T00:00:00`);
+  }
+  const m = String(raw).match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
+  if (m){
+    const [,y,mo,d,hh,mm,ss,z] = m;
+    if(z){ return new Date(Date.UTC(Number(y), Number(mo)-1, Number(d), Number(hh), Number(mm), Number(ss))); }
+    return new Date(`${y}-${mo}-${d}T${hh}:${mm}:${ss}`);
+  }
+  const parsed = Date.parse(raw);
+  if (isNaN(parsed)) return undefined;
+  return new Date(parsed);
+}
+
+function pickNextAndCurrentEventFromIcs(text){
+  const now = new Date();
+  const blocks = String(text||'').split('BEGIN:VEVENT').slice(1);
+  let next = null;
+  let current = null;
+  blocks.forEach(block=>{
+    const lines = String(block||'').split(/\r?\n/);
+    const findLine = key => lines.find(l=>String(l||'').startsWith(key));
+    const dtStartLine = findLine('DTSTART');
+    if(!dtStartLine) return;
+    const rawStart = String(dtStartLine).split(':').slice(1).join(':');
+    const startDate = parseIcsDate(rawStart);
+    if(!startDate || isNaN(startDate.getTime())) return;
+    const dtEndLine = findLine('DTEND');
+    const rawEnd = dtEndLine ? String(dtEndLine).split(':').slice(1).join(':') : '';
+    const endDate = rawEnd ? parseIcsDate(rawEnd) : undefined;
+    const summaryLine = findLine('SUMMARY');
+    const summary = summaryLine ? String(summaryLine).split(':').slice(1).join(':') : undefined;
+    const locationLine = findLine('LOCATION');
+    const location = locationLine ? String(locationLine).split(':').slice(1).join(':') : undefined;
+    const startIso = startDate.toISOString();
+    const endIso = (endDate && !isNaN(endDate.getTime())) ? endDate.toISOString() : undefined;
+
+    if (startDate <= now && (!endDate || endDate >= now)){
+      const candidate = { start:startIso, end:endIso, summary, location };
+      if(!current || new Date(candidate.start) < new Date(current.start)) current = candidate;
+      return;
+    }
+    if (startDate > now){
+      const candidate = { start:startIso, end:endIso, summary, location };
+      if(!next || new Date(candidate.start) < new Date(next.start)) next = candidate;
+    }
+  });
+  return { next, current };
+}
+
+const _icsCache = new Map(); // url -> {text, ts}
+async function fetchIcsText(url){
+  const raw = String(url||'').trim();
+  if(!raw) throw new Error('Empty calendar URL');
+  const target = canonicalizeIcsUrl(raw);
+  const cached = _icsCache.get(target);
+  const TTL = 5*60*1000;
+  if(cached && (Date.now()-cached.ts) < TTL) return cached.text;
+
+  const candidates = [ buildIcsProxyUrl(target), target ];
+  let lastErr = null;
+  for (let i=0;i<candidates.length;i++){
+    const endpoint = candidates[i];
+    try{
+      const controller = new AbortController();
+      const tid = setTimeout(()=>controller.abort(), 10000);
+      const res = await fetch(endpoint, { signal: controller.signal });
+      clearTimeout(tid);
+      if(!res.ok) throw new Error(`ICS fetch failed: ${res.status}`);
+      const text = await res.text();
+      if(!String(text||'').trim()) throw new Error('ICS empty response');
+      _icsCache.set(target, {text, ts: Date.now()});
+      return text;
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('ICS fetch failed');
+}
+
+function parseHolidayDatesFromIcs(text){
+  const toLocalDateKey = d => {
+    const y=d.getFullYear();
+    const m=String(d.getMonth()+1).padStart(2,'0');
+    const day=String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  };
+  const addDateRange = (start, endExclusive) => {
+    const out=[];
+    const cursor = new Date(start);
+    cursor.setHours(0,0,0,0);
+    const end = new Date(endExclusive);
+    end.setHours(0,0,0,0);
+    while(cursor < end){ out.push(toLocalDateKey(cursor)); cursor.setDate(cursor.getDate()+1); }
+    return out;
+  };
+
+  const result = new Set();
+  const blocks = String(text||'').split('BEGIN:VEVENT').slice(1);
+  for (const block of blocks){
+    const lines = String(block||'').split(/\r?\n/);
+    const findLine = prefix => lines.find(l=>String(l||'').startsWith(prefix));
+    const dtStartLine = findLine('DTSTART');
+    if(!dtStartLine) continue;
+    const startRaw = String(dtStartLine).split(':').slice(1).join(':');
+    const startDate = parseIcsDate(startRaw);
+    if(!startDate || isNaN(startDate.getTime())) continue;
+    const dtEndLine = findLine('DTEND');
+    const endRaw = dtEndLine ? String(dtEndLine).split(':').slice(1).join(':') : '';
+    const endDate = endRaw ? parseIcsDate(endRaw) : undefined;
+    const isAllDayStart = /^\d{8}$/.test(startRaw);
+    const isAllDayEnd = /^\d{8}$/.test(endRaw);
+    if(isAllDayStart && endDate && isAllDayEnd){
+      for (const k of addDateRange(startDate, endDate)) result.add(k);
+      continue;
+    }
+    result.add(toLocalDateKey(startDate));
+  }
+  return result;
+}
+
+const _holidayCache = new Map(); // url -> {dates:Set, ts}
+async function loadHolidaySet(url){
+  const raw = String(url||'').trim();
+  if(!raw) return new Set();
+  const target = canonicalizeIcsUrl(raw);
+  const cached = _holidayCache.get(target);
+  const TTL = 24*60*60*1000;
+  if(cached && (Date.now()-cached.ts) < TTL) return cached.dates;
+  const text = await fetchIcsText(target);
+  const dates = parseHolidayDatesFromIcs(text);
+  _holidayCache.set(target, {dates, ts: Date.now()});
+  return dates;
+}
+
+async function refreshAttendance(){
+  try{
+    const d = todayStr();
+    const rows = await gas('getAttendanceDay', d);
+    ATT.dayRows = Array.isArray(rows) ? rows : [];
+    document.getElementById('att-status').textContent = `取得: ${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`;
+    renderAttendancePage();
+    // calendar events are best-effort and only when attendance page is open
+    if (PAGE === 'attendance') {
+      await refreshAttendanceCalendars();
+      renderAttendancePage();
+    }
+  }catch(e){
+    console.error(e);
+    document.getElementById('att-status').textContent = '取得エラー';
+    toast('勤怠の取得に失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+async function loadAttendanceSettings(){
+  try{
+    const s = await gas('getAttendanceSettings');
+    ATT.settings = s || { holidayUrl:'', companyHolidayUrl:'' };
+    if (!ATT.settings.holidayUrl) ATT.settings.holidayUrl = defaultHolidayIcs;
+    const hu = document.getElementById('att_holiday_url');
+    const cu = document.getElementById('att_company_holiday_url');
+    if(hu) hu.value = ATT.settings.holidayUrl || '';
+    if(cu) cu.value = ATT.settings.companyHolidayUrl || '';
+  }catch(e){
+    console.error(e);
+    toast('勤怠設定の取得に失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+async function saveAttendanceSettings(){
+  const hu = (document.getElementById('att_holiday_url')||{}).value || '';
+  const cu = (document.getElementById('att_company_holiday_url')||{}).value || '';
+  try{
+    await gas('setAttendanceSettings', { holidayUrl: String(hu||'').trim(), companyHolidayUrl: String(cu||'').trim() });
+    await loadAttendanceSettings();
+    toast('勤怠設定を保存しました', true);
+  }catch(e){
+    console.error(e);
+    toast('勤怠設定の保存に失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+function attFindRowForUser(userId){
+  return (Array.isArray(ATT.dayRows)?ATT.dayRows:[]).find(r => String(r.user_id||r.user||'') === String(userId));
+}
+
+async function patchAttendance(userId, action){
+  const date = todayStr();
+  try{
+    const saved = await gas('patchAttendance', userId, date, action);
+    // merge into ATT.dayRows
+    const arr = Array.isArray(ATT.dayRows) ? ATT.dayRows.slice() : [];
+    const idx = arr.findIndex(r => String(r.user_id||r.user||'') === String(userId));
+    if (idx >= 0) arr[idx] = saved;
+    else arr.push(saved);
+    ATT.dayRows = arr;
+    renderAttendancePage();
+  }catch(e){
+    console.error(e);
+    toast('勤怠更新に失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+function isUnsetUser(u){
+  const name = String((u && (u.name||u.email||u.id))||'').trim();
+  return !name;
+}
+
+function renderAttendanceUserSettings(){
+  const tb = document.querySelector('#att-user-settings tbody');
+  if(!tb) return;
+  tb.innerHTML = '';
+  safeArr(DATA.users).filter(u=>!isUnsetUser(u)).forEach(u=>{
+    const tr = document.createElement('tr');
+    const display = escapeHtml(u.name||u.email||u.id||'');
+    tr.innerHTML = `
+      <td>${display}</td>
+      <td><input data-uid="${escapeHtml(u.id)}" data-field="employeeNumber" value="${escapeHtml(u.employeeNumber||'')}" placeholder="12345"/></td>
+      <td><input data-uid="${escapeHtml(u.id)}" data-field="calendarUrl" value="${escapeHtml(u.calendarUrl||'')}" placeholder="https://calendar.google.com/.../basic.ics"/></td>
+    `;
+    tb.appendChild(tr);
+  });
+
+  // Attach one-time listeners (idempotent by replacing tbody)
+  tb.querySelectorAll('input[data-uid]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const uid = inp.getAttribute('data-uid');
+      const field = inp.getAttribute('data-field');
+      const value = inp.value;
+      if(!uid || !field) return;
+      const patch = { id: uid };
+      patch[field] = value;
+      gsr().withSuccessHandler(row=>{ patchRow('users', row); rerenderAfter('users'); toast('ユーザー設定を保存しました', true); })
+          .withFailureHandler(e=>{ toast('ユーザー設定保存に失敗: '+(e && e.message ? e.message : e), false); })
+          .upsertUser(patch);
+    }, { once:false });
+  });
+}
+
+function renderAttendancePage(){
+  if (PAGE !== 'attendance') return;
+  const label = document.getElementById('att-today-label');
+  if(label) label.textContent = todayStr();
+
+  renderAttendanceUserSettings();
+
+  const wrap = document.getElementById('att-cards');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+
+  const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u));
+  users.forEach(u=>{
+    const uid = u.id;
+    const row = attFindRowForUser(uid) || { user_id: uid, status:'not-clocked', location:'office', breaks:[], clock_in:'', clock_out:'', notes:'', project_id:'', task_id:'' };
+    const status = String(row.status||'not-clocked');
+    const location = String(row.location||'office');
+    const clockIn = row.clock_in || '';
+    const clockOut = row.clock_out || '';
+    const worked = (clockIn ? Math.max(0, minutesBetweenIso(clockIn, clockOut) - fixedBreakMinutes) : 0);
+
+    const currentEvent = (ATT.currentEventsByUser && ATT.currentEventsByUser[uid]) || null;
+    const nextEvent = (ATT.nextEventsByUser && ATT.nextEventsByUser[uid]) || null;
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.marginTop = '10px';
+    const projId = String(row.project_id||'');
+    const taskId = String(row.task_id||'');
+
+    const projOptions = ['<option value="">（未指定）</option>']
+      .concat(safeArr(DATA.projects).filter(p=>String(p.status||'active')!=='archived')
+        .map(p=>`<option value="${escapeHtml(p.id)}" ${String(p.id)===projId?'selected':''}>${escapeHtml(p.name||p.id)}</option>`));
+
+    const tasks = safeArr(DATA.tasks);
+    const taskFiltered = projId ? tasks.filter(t=>String(t.projectId||'')===projId) : tasks;
+    const taskOptions = ['<option value="">（未指定）</option>']
+      .concat(taskFiltered.map(t=>`<option value="${escapeHtml(t.id)}" ${String(t.id)===taskId?'selected':''}>${escapeHtml(t.title||t.id)}</option>`));
+
+    const projName = projId ? (safeArr(DATA.projects).find(p=>String(p.id)===projId)?.name || projId) : '';
+    const taskName = taskId ? (tasks.find(t=>String(t.id)===taskId)?.title || taskId) : '';
+
+    card.innerHTML = `
+      <h2 style="padding:0; margin:0 0 8px 0;">${escapeHtml(u.name||u.email||u.id)} <span class="pill" style="margin-left:6px;">${escapeHtml(attStatusLabel(status))}</span></h2>
+      <div class="body" style="padding:0;">
+        <div class="row">
+          <div>
+            <label>勤務場所</label>
+            <select data-att-uid="${escapeHtml(uid)}" data-att-field="location">
+              <option value="office" ${location==='office'?'selected':''}>オフィス</option>
+              <option value="remote" ${location==='remote'?'selected':''}>テレワーク</option>
+              <option value="out" ${location==='out'?'selected':''}>外出</option>
+            </select>
+          </div>
+          <div>
+            <label>出勤/退勤</label>
+            <div class="toolbar">
+              <span class="muted">出勤 ${escapeHtml(attFormatTime(clockIn))}</span>
+              <span class="muted">退勤 ${escapeHtml(attFormatTime(clockOut))}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>プロジェクト</label>
+            <select data-att-uid="${escapeHtml(uid)}" data-att-field="project">${projOptions.join('')}</select>
+          </div>
+          <div>
+            <label>タスク</label>
+            <select data-att-uid="${escapeHtml(uid)}" data-att-field="task">${taskOptions.join('')}</select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>操作</label>
+            <div class="toolbar" style="flex-wrap:wrap;">
+              <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="clockIn">出勤</button>
+              <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleBreak">休憩</button>
+              <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleOut">外出</button>
+              <button data-att-uid="${escapeHtml(uid)}" data-att-action="clockOut">退勤</button>
+            </div>
+          </div>
+          <div>
+            <label>勤務(概算)</label>
+            <div class="muted">${escapeHtml(minutesToLabel(worked))}（freee集計は休憩1h30m固定）</div>
+            <div class="muted" style="font-size:12px;">${projName && taskName ? escapeHtml(projName+' / '+taskName) : (projName ? escapeHtml(projName) : (taskName?escapeHtml(taskName):''))}</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>メモ</label>
+            <input data-att-uid="${escapeHtml(uid)}" data-att-field="notes" value="${escapeHtml(row.notes||'')}" placeholder="任意"/>
+          </div>
+          <div>
+            <label>カレンダー（次/現在）</label>
+            <div class="muted" style="font-size:12px;">
+              ${currentEvent ? `今: ${escapeHtml(currentEvent.summary||'(予定)')} ${escapeHtml(attFormatTime(currentEvent.start))}` : '今: -'}<br/>
+              ${nextEvent ? `次: ${escapeHtml(nextEvent.summary||'(予定)')} ${escapeHtml(attFormatTime(nextEvent.start))}` : '次: -'}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Wire events
+    card.querySelectorAll('button[data-att-action]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const action = btn.getAttribute('data-att-action');
+        if(action==='clockIn'){
+          patchAttendance(uid, { type:'clockIn' });
+        }else if(action==='clockOut'){
+          patchAttendance(uid, { type:'clockOut' });
+        }else if(action==='toggleBreak'){
+          patchAttendance(uid, { type:'toggleBreak' });
+        }else if(action==='toggleOut'){
+          patchAttendance(uid, { type:'toggleOut' });
+        }
+      });
+    });
+    card.querySelectorAll('select[data-att-field="location"]').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        patchAttendance(uid, { type:'setLocation', location: sel.value });
+      });
+    });
+    const projSel = card.querySelector('select[data-att-field="project"]');
+    const taskSel = card.querySelector('select[data-att-field="task"]');
+    if(projSel){
+      projSel.addEventListener('change', ()=>{
+        // when project changes, clear task selection
+        const pid = projSel.value || '';
+        if(taskSel) taskSel.value = '';
+        patchAttendance(uid, { type:'setProjectTask', projectId: pid, taskId: '' });
+        // re-render to filter task options
+        setTimeout(()=>{ renderAttendancePage(); }, 0);
+      });
+    }
+    if(taskSel){
+      taskSel.addEventListener('change', ()=>{
+        const pid = projSel ? (projSel.value||'') : '';
+        const tid = taskSel.value || '';
+        patchAttendance(uid, { type:'setProjectTask', projectId: pid, taskId: tid });
+      });
+    }
+    const notesInp = card.querySelector('input[data-att-field="notes"]');
+    if(notesInp){
+      let t=null;
+      notesInp.addEventListener('input', ()=>{
+        if(t) clearTimeout(t);
+        t = setTimeout(()=>{ patchAttendance(uid, { type:'setNotes', notes: notesInp.value }); }, 600);
+      });
+    }
+
+    wrap.appendChild(card);
+  });
+
+  // init month picker default
+  const mi = document.getElementById('att_month');
+  if(mi && !mi.value){ mi.value = todayStr().slice(0,7); }
+}
+
+async function refreshAttendanceCalendars(){
+  const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u));
+  const nextMap = {};
+  const currentMap = {};
+  await Promise.all(users.map(async u=>{
+    const url = String(u.calendarUrl||'').trim();
+    if(!url){ nextMap[u.id]=null; currentMap[u.id]=null; return; }
+    try{
+      const text = await fetchIcsText(url);
+      const r = pickNextAndCurrentEventFromIcs(text);
+      nextMap[u.id] = r.next;
+      currentMap[u.id] = r.current;
+    }catch(_){ nextMap[u.id]=null; currentMap[u.id]=null; }
+  }));
+  ATT.nextEventsByUser = nextMap;
+  ATT.currentEventsByUser = currentMap;
+}
+
+async function loadAttendanceMonth(){
+  const mi = document.getElementById('att_month');
+  const month = mi && mi.value ? mi.value : todayStr().slice(0,7);
+  try{
+    const rows = await gas('getAttendanceMonth', month);
+    ATT.monthRows = Array.isArray(rows) ? rows : [];
+    renderAttendanceMonthTable(month);
+    toast('月次データを読み込みました', true);
+  }catch(e){
+    console.error(e);
+    toast('月次データの取得に失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+function renderAttendanceMonthTable(month){
+  const tb = document.querySelector('#att-month-table tbody');
+  if(!tb) return;
+  tb.innerHTML='';
+  const rows = safeArr(ATT.monthRows).slice().sort((a,b)=>{
+    const da = String(a.work_date||'');
+    const db = String(b.work_date||'');
+    if(da!==db) return da.localeCompare(db);
+    return String(a.user_id||'').localeCompare(String(b.user_id||''));
+  });
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    const uid = String(r.user_id||r.user||'');
+    const uname = nameByUserId(uid);
+    const worked = (r.clock_in && r.clock_out) ? Math.max(0, minutesBetweenIso(r.clock_in, r.clock_out) - fixedBreakMinutes) : 0;
+    const projName = r.project_id ? (safeArr(DATA.projects).find(p=>String(p.id)===String(r.project_id))?.name || r.project_id) : '';
+    const taskName = r.task_id ? (safeArr(DATA.tasks).find(t=>String(t.id)===String(r.task_id))?.title || r.task_id) : '';
+    const pt = projName && taskName ? `${projName} / ${taskName}` : (projName || taskName || '');
+    tr.innerHTML = `
+      <td>${escapeHtml(r.work_date||'')}</td>
+      <td>${escapeHtml(uname||uid)}</td>
+      <td>${escapeHtml(attStatusLabel(r.status||''))}</td>
+      <td>${escapeHtml(attFormatTime(r.clock_in))}</td>
+      <td>${escapeHtml(attFormatTime(r.clock_out))}</td>
+      <td>${escapeHtml(worked?minutesToLabel(worked):'')}</td>
+      <td>${escapeHtml(pt)}</td>
+    `;
+    tb.appendChild(tr);
+  });
+  const summary = document.getElementById('att-month-summary');
+  if(summary){
+    summary.textContent = `${month} / 記録 ${rows.length}件`;
+  }
+}
+
+function overlapMinutes(aStart, aEnd, bStart, bEnd){
+  const start = Math.max(aStart.getTime(), bStart.getTime());
+  const end = Math.min(aEnd.getTime(), bEnd.getTime());
+  if(end <= start) return 0;
+  return (end-start)/60000;
+}
+function subtractInterval(interval, cut){
+  const s=interval[0], e=interval[1];
+  const cs=cut[0], ce=cut[1];
+  if(ce<=s || cs>=e) return [interval];
+  const out=[];
+  const leftEnd = new Date(Math.min(cs.getTime(), e.getTime()));
+  if(leftEnd > s) out.push([s, leftEnd]);
+  const rightStart = new Date(Math.max(ce.getTime(), s.getTime()));
+  if(e > rightStart) out.push([rightStart, e]);
+  return out;
+}
+function computeWorkIntervals(att){
+  if(!att.clock_in) return [];
+  const start = new Date(att.clock_in);
+  const end = new Date(att.clock_out || new Date().toISOString());
+  if(!(end > start)) return [];
+  let intervals=[[start,end]];
+  const br = Array.isArray(att.breaks) ? att.breaks : [];
+  for (const b of br){
+    if(!b || !b.start) continue;
+    const bStart = new Date(b.start);
+    const bEnd = new Date(b.end || new Date().toISOString());
+    if(!(bEnd > bStart)) continue;
+    intervals = intervals.flatMap(iv => subtractInterval(iv, [bStart, bEnd]));
+    if(intervals.length===0) break;
+  }
+  return intervals.filter(iv=>iv[1]>iv[0]);
+}
+function computeNightMinutes(att){
+  const intervals = computeWorkIntervals(att);
+  let total=0;
+  for (const iv of intervals){
+    const start=iv[0], end=iv[1];
+    const cursor = new Date(start);
+    cursor.setHours(0,0,0,0);
+    while(cursor < end){
+      const dayStart = new Date(cursor);
+      const nextDayStart = new Date(dayStart); nextDayStart.setDate(nextDayStart.getDate()+1);
+      const night1Start = new Date(dayStart); night1Start.setHours(0,0,0,0);
+      const night1End = new Date(dayStart); night1End.setHours(5,0,0,0);
+      const night2Start = new Date(dayStart); night2Start.setHours(22,0,0,0);
+      const night2End = new Date(nextDayStart);
+      total += overlapMinutes(start, end, night1Start, night1End);
+      total += overlapMinutes(start, end, night2Start, night2End);
+      cursor.setDate(cursor.getDate()+1);
+      cursor.setHours(0,0,0,0);
+    }
+  }
+  return Math.round(total);
+}
+
+function isScheduledWorkday(dateKey, holidaySet, companyHolidaySet){
+  const date = new Date(`${dateKey}T00:00:00`);
+  const dow = date.getDay();
+  if(dow===0 || dow===6) return false;
+  if(holidaySet && holidaySet.has(dateKey)) return false;
+  if(companyHolidaySet && companyHolidaySet.has(dateKey)) return false;
+  return true;
+}
+
+async function exportFreeeAttendanceCsv(){
+  const mi = document.getElementById('att_month');
+  const month = mi && mi.value ? mi.value : todayStr().slice(0,7);
+
+  // Ensure month data loaded
+  if(!Array.isArray(ATT.monthRows) || !ATT.monthRows.length || String(ATT.monthRows[0].work_date||'').slice(0,7)!==month){
+    await loadAttendanceMonth();
+  }
+
+  try{
+    // Settings & holiday feeds
+    if(!ATT.settings || !ATT.settings.holidayUrl){ await loadAttendanceSettings(); }
+    const holidayUrl = (ATT.settings && ATT.settings.holidayUrl) ? ATT.settings.holidayUrl : defaultHolidayIcs;
+    const companyHolidayUrl = (ATT.settings && ATT.settings.companyHolidayUrl) ? ATT.settings.companyHolidayUrl : '';
+    const [holidaySet, companySet] = await Promise.all([
+      loadHolidaySet(holidayUrl),
+      companyHolidayUrl ? loadHolidaySet(companyHolidayUrl) : Promise.resolve(new Set()),
+    ]);
+    ATT.holidayDates = holidaySet;
+    ATT.companyHolidayDates = companySet;
+
+    const freeeHeaders = [
+      '従業員番号','氏名','所定労働時間（分）','法定内残業時間（分）','時間外労働時間（分）','所定休日労働時間（分）','深夜労働時間（分）','法定休日労働時間（分）','総労働時間（分）','総労働日数','所定労働出勤日数','所定休日出勤日数','法定休日出勤日数','遅刻時間（分）','早退時間（分）','欠勤日数','遅刻日数','早退日数','有休取得日数','集計開始日','集計終了日','みなし外の法定内残業時間（分）','みなし外の時間外労働時間（分）','不足時間（分）'
+    ];
+    const csvEscape = (value) => {
+      const raw = (value===null||value===undefined) ? '' : String(value);
+      if(raw.includes('"') || raw.includes(',') || raw.includes('\n') || raw.includes('\r')) return '"'+raw.replaceAll('"','""')+'"';
+      return raw;
+    };
+
+    const monthStart = new Date(`${month}-01T00:00:00`);
+    const monthEnd = new Date(monthStart);
+    monthEnd.setMonth(monthEnd.getMonth()+1);
+    monthEnd.setDate(0);
+    monthEnd.setHours(0,0,0,0);
+
+    const toDateKey = (d) => {
+      const y=d.getFullYear();
+      const m=String(d.getMonth()+1).padStart(2,'0');
+      const day=String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    };
+    const formatYmdSlash = (dateKey) => {
+      const parts = dateKey.split('-').map(v=>Number(v));
+      return `${parts[0]}/${parts[1]}/${parts[2]}`;
+    };
+
+    let scheduledWorkdayCount = 0;
+    for(let d=new Date(monthStart); d<=monthEnd; d.setDate(d.getDate()+1)){
+      if(isScheduledWorkday(toDateKey(d), holidaySet, companySet)) scheduledWorkdayCount += 1;
+    }
+
+    const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u));
+    // Group attendance by user
+    const byUser = {};
+    safeArr(ATT.monthRows).forEach(r=>{
+      const uid = String(r.user_id||r.user||'');
+      if(!uid) return;
+      if(!byUser[uid]) byUser[uid] = [];
+      byUser[uid].push(r);
+    });
+
+    const lines = users.map(u=>{
+      const uid = String(u.id);
+      const items = (byUser[uid]||[]).slice().sort((a,b)=>String(a.work_date||'').localeCompare(String(b.work_date||'')));
+      const workedByDay = new Map();
+      items.forEach(att=>{
+        const dateKey = String(att.work_date||'');
+        if(!dateKey) return;
+        const workedMinutes = (att.clock_in && att.clock_out) ? Math.max(0, minutesBetweenIso(att.clock_in, att.clock_out) - fixedBreakMinutes) : 0;
+        const nightMinutes = computeNightMinutes(att);
+        const prev = workedByDay.get(dateKey);
+        if(!prev) workedByDay.set(dateKey, { workedMinutes, nightMinutes });
+        else workedByDay.set(dateKey, { workedMinutes: prev.workedMinutes + workedMinutes, nightMinutes: prev.nightMinutes + nightMinutes });
+      });
+
+      let totalWorkMinutes=0;
+      let totalNightMinutes=0;
+      let totalWorkDays=0;
+      let scheduledWorkAttendanceDays=0;
+      let prescribedHolidayAttendanceDays=0;
+      let legalHolidayAttendanceDays=0;
+
+      for (const [dateKey, day] of workedByDay.entries()){
+        if(day.workedMinutes <= 0) continue;
+        totalWorkMinutes += day.workedMinutes;
+        totalNightMinutes += day.nightMinutes;
+        totalWorkDays += 1;
+        const date = new Date(`${dateKey}T00:00:00`);
+        const dow = date.getDay();
+        const scheduled = isScheduledWorkday(dateKey, holidaySet, companySet);
+        if(scheduled) scheduledWorkAttendanceDays += 1;
+        else if(dow===0) legalHolidayAttendanceDays += 1;
+        else prescribedHolidayAttendanceDays += 1;
+      }
+
+      const scheduledWorkMinutes = (540 - fixedBreakMinutes) * scheduledWorkdayCount;
+      const overtimeMinutes = Math.max(0, totalWorkMinutes - scheduledWorkMinutes);
+      const shortageMinutes = Math.max(0, scheduledWorkMinutes - totalWorkMinutes);
+
+      const startKey = toDateKey(monthStart);
+      const endKey = toDateKey(monthEnd);
+
+      const row = [
+        u.employeeNumber || '',
+        (u.name||u.email||u.id),
+        scheduledWorkMinutes,
+        '',
+        overtimeMinutes,
+        '',
+        totalNightMinutes,
+        '',
+        totalWorkMinutes,
+        totalWorkDays,
+        scheduledWorkAttendanceDays,
+        prescribedHolidayAttendanceDays,
+        legalHolidayAttendanceDays,
+        '', '', '', '', '', '',
+        formatYmdSlash(startKey),
+        formatYmdSlash(endKey),
+        '', '',
+        shortageMinutes,
+      ];
+      return row.map(v=>csvEscape(v)).join(',');
+    });
+
+    const csv = [freeeHeaders.map(h=>csvEscape(h)).join(','), ...lines].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `freee-attendance-${month}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    console.error(e);
+    toast('freee CSV出力に失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+// Attendance init hooks (load settings, poll only on attendance page)
+window.addEventListener('load', ()=>{
+  try{
+    const mi = document.getElementById('att_month');
+    if(mi && !mi.value) mi.value = todayStr().slice(0,7);
+    loadAttendanceSettings();
+    // Poll day state every 10s while on attendance page
+    setInterval(()=>{ if(PAGE==='attendance') refreshAttendance(); }, 10000);
+    // Refresh calendars every minute while on attendance page
+    setInterval(()=>{ if(PAGE==='attendance') refreshAttendanceCalendars().then(()=>renderAttendancePage()).catch(()=>{}); }, 60000);
+  }catch(_){ }
+});
 
 
 // 既存の switchTab 内のガント描画呼び出しを修正

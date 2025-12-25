@@ -550,6 +550,7 @@ button.link:hover { opacity: .8; }
     <button class="active" id="nav-dashboard" onclick="goto('dashboard')">ダッシュボード</button>
     <button id="nav-minutes" onclick="goto('minutes')">議事録</button>
     <button id="nav-daily"   onclick="goto('daily')">日報</button>
+    <button id="nav-weekly"  onclick="goto('weekly')">週次</button>
     <button id="nav-attendance" onclick="goto('attendance')">勤怠</button>
     <button id="nav-shared"  onclick="goto('shared')">共有資料</button>
     <button id="nav-users"   onclick="goto('users')">ユーザー</button>
@@ -1289,6 +1290,30 @@ button.link:hover { opacity: .8; }
   </div>
 </section>
 
+<section class="page" id="page-weekly">
+  <div class="grid">
+    <div class="card">
+      <h2>週次進捗</h2>
+      <div class="body">
+        <div class="toolbar" style="justify-content:space-between; flex-wrap:wrap;">
+          <div class="toolbar" style="gap:6px; flex-wrap:wrap;">
+            <button class="secondary" onclick="shiftWeekly(-7)">←前週</button>
+            <input id="wk_start" type="date" />
+            <button class="secondary" onclick="shiftWeekly(7)">次週→</button>
+            <button onclick="loadWeekly()">更新</button>
+          </div>
+          <div class="muted" id="weekly-range" style="font-size:12px;"></div>
+        </div>
+        <div class="muted" style="margin-top:6px; font-size:12px;">未完了タスクを見ながら、課題/実施事項を保存できます。</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>メンバー別</h2>
+      <div class="body" id="weekly-users"></div>
+    </div>
+  </div>
+</section>
+
 <section class="page" id="page-attendance">
   <div class="tabs" style="margin-bottom:8px;">
     <div class="tab active" id="att-view-tab-dashboard" onclick="setAttendanceView('dashboard')">ダッシュボード</div>
@@ -1626,7 +1651,7 @@ function goto(page, opts) {
     }
   }
 
-  const pages = ['dashboard','minutes','daily','attendance','users','vault','budget','subs','ledger','projects','debug','shared'];
+  const pages = ['dashboard','minutes','daily','weekly','attendance','users','vault','budget','subs','ledger','projects','debug','shared'];
   pages.forEach(p => {
     const pageEl = document.getElementById('page-'+p);
     if (pageEl) pageEl.classList.toggle('active', p===page);
@@ -1978,8 +2003,181 @@ function renderAll() {
   renderLedgerPage();
   renderMinutesPage();
   renderDailyPage();
+  renderWeeklyPage();
 
   // メモの自動伸縮
+  attachDefaultMemoEditors();
+}
+
+// =============================
+// Weekly progress
+// =============================
+let WEEKLY = {
+  weekStart: '',
+  rows: [],
+};
+
+function fmtYMDLocal(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function weekStartMonday(d){
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const delta = (x.getDay() + 6) % 7; // Mon=0 ... Sun=6
+  x.setDate(x.getDate() - delta);
+  return x;
+}
+
+function ensureWeeklyStartInput(){
+  const inp = el('wk_start');
+  if (!inp) return;
+  if (inp.value) return;
+  inp.value = fmtYMDLocal(weekStartMonday(new Date()));
+}
+
+function shiftWeekly(days){
+  const inp = el('wk_start');
+  if (!inp) return;
+  const base = parseYMDLocal(inp.value) || weekStartMonday(new Date());
+  inp.value = fmtYMDLocal(addDays(base, Number(days)||0));
+  loadWeekly();
+}
+
+function weeklyRowByUserId(uid){
+  return safeArr(WEEKLY.rows).find(r => String(r.userId||'') === String(uid));
+}
+
+async function loadWeekly(){
+  return guardRun('weekly_load', async ()=>{
+    ensureWeeklyStartInput();
+    const ws = String(el('wk_start')?.value||'').trim();
+    if(!ws){ alert('週開始日を指定してください'); return; }
+
+    Busy.push();
+    try{
+      const rows = await gas('getWeeklyReports', ws);
+      WEEKLY.weekStart = ws;
+      WEEKLY.rows = Array.isArray(rows) ? rows : [];
+    }finally{
+      Busy.pop();
+    }
+    renderWeeklyPage();
+  });
+}
+
+async function saveWeeklyForUser(userId){
+  return guardRun('weekly_save_' + String(userId||''), async ()=>{
+    ensureWeeklyStartInput();
+    const ws = String(el('wk_start')?.value||'').trim();
+    if(!ws){ alert('週開始日を指定してください'); return; }
+    const uid = String(userId||'').trim();
+    if(!uid){ alert('userId が不正です'); return; }
+
+    const issuesEl = el('wk_issues_'+uid);
+    const doneEl = el('wk_done_'+uid);
+    const issues = issuesEl ? String(issuesEl.value||'') : '';
+    const done = doneEl ? String(doneEl.value||'') : '';
+
+    Busy.push();
+    try{
+      const saved = await gas('upsertWeeklyReport', { weekStart: ws, userId: uid, issues, done });
+      // local cache update
+      const next = Array.isArray(WEEKLY.rows) ? WEEKLY.rows.slice() : [];
+      const idx = next.findIndex(r => String(r.userId||'')===uid && String(r.weekStart||'')===ws);
+      if (idx >= 0) next[idx] = saved;
+      else next.push(saved);
+      WEEKLY.weekStart = ws;
+      WEEKLY.rows = next;
+    }finally{
+      Busy.pop();
+    }
+  });
+}
+
+function renderWeeklyPage(){
+  if (PAGE !== 'weekly') return;
+  ensureWeeklyStartInput();
+
+  const ws = String(el('wk_start')?.value||'').trim();
+  const range = el('weekly-range');
+  try{
+    const d0 = parseYMDLocal(ws) || weekStartMonday(new Date());
+    const d6 = addDays(d0, 6);
+    if (range) range.textContent = `${fmtYMDLocal(d0)} 〜 ${fmtYMDLocal(d6)}`;
+  }catch(_){ if (range) range.textContent = ''; }
+
+  // 初回だけ自動ロード
+  if (ws && WEEKLY.weekStart !== ws) {
+    loadWeekly();
+    return;
+  }
+
+  const cont = el('weekly-users');
+  if (!cont) return;
+
+  const users = safeArr(DATA.users).slice().sort((a,b)=>{
+    const an = String(a.name||a.email||a.id||'');
+    const bn = String(b.name||b.email||b.id||'');
+    return an.localeCompare(bn);
+  });
+
+  const html = users.map(u=>{
+    const uid = String(u.id||'').trim();
+    const uname = escapeHtml(u.name||u.email||u.id||'(unknown)');
+
+    const openTasks = safeArr(DATA.tasks)
+      .filter(t => String(t.status||'').toLowerCase() !== 'done')
+      .filter(t => String(t.assignees||'').split(',').map(s=>s.trim()).filter(Boolean).includes(uid));
+
+    const taskLines = openTasks
+      .slice()
+      .sort((a,b)=>String(a.dueDate||'9999-12-31').localeCompare(String(b.dueDate||'9999-12-31')))
+      .slice(0, 30)
+      .map(t=>{
+        const pj = nameByProjectId(t.projectId||'') || '';
+        const due = t.dueDate ? ` [${escapeHtml(t.dueDate)}]` : '';
+        return `<div style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">• ${escapeHtml(pj)} / ${escapeHtml(t.title||'')}${due}</div>`;
+      }).join('') || '<div class="muted" style="font-size:12px;">未完了タスクなし</div>';
+
+    const projNames = Array.from(new Set(openTasks.map(t=>nameByProjectId(t.projectId||'')).filter(Boolean)))
+      .slice(0, 10)
+      .map(s=>escapeHtml(s))
+      .join(' / ');
+
+    const row = weeklyRowByUserId(uid) || {};
+    const issues = escapeHtml(String(row.issues||''));
+    const done = escapeHtml(String(row.done||''));
+
+    return `
+      <div class="card see-through" style="padding:10px; margin-bottom:10px;">
+        <div style="display:flex; gap:8px; justify-content:space-between; align-items:baseline;">
+          <div style="font-weight:700;">${uname}</div>
+          <div class="muted" style="font-size:12px;">未完了タスク: ${openTasks.length}</div>
+        </div>
+        ${projNames ? `<div class="muted" style="font-size:12px; margin-top:4px;">PJ: ${projNames}</div>` : ''}
+        <div style="margin-top:6px; max-height:110px; overflow:auto;">${taskLines}</div>
+
+        <div class="row" style="margin-top:10px; align-items:flex-start;">
+          <div style="flex:1; min-width:260px;">
+            <label>課題（やること）</label>
+            <textarea id="wk_issues_${uid}" class="memo-edit" rows="3">${issues}</textarea>
+          </div>
+          <div style="flex:1; min-width:260px;">
+            <label>実施事項（やったこと）</label>
+            <textarea id="wk_done_${uid}" class="memo-edit" rows="3">${done}</textarea>
+          </div>
+        </div>
+        <div class="toolbar" style="justify-content:flex-end; margin-top:8px;">
+          <button onclick="saveWeeklyForUser('${uid}')">保存</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  cont.innerHTML = html || '<div class="muted">ユーザーがありません</div>';
   attachDefaultMemoEditors();
 }
 

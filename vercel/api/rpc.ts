@@ -7,11 +7,13 @@ type DataMod = typeof import('../src/rpc/data.js');
 type CrudMod = typeof import('../src/rpc/crud.js');
 type DocsMod = typeof import('../src/rpc/docs.js');
 type AttendanceMod = typeof import('../src/rpc/attendance.js');
+type WeeklyMod = typeof import('../src/rpc/weekly.js');
 
 let _dataMod: Promise<DataMod> | null = null;
 let _crudMod: Promise<CrudMod> | null = null;
 let _docsMod: Promise<DocsMod> | null = null;
 let _attendanceMod: Promise<AttendanceMod> | null = null;
+let _weeklyMod: Promise<WeeklyMod> | null = null;
 
 function getDataMod(): Promise<DataMod> {
   return (_dataMod ||= import('../src/rpc/data.js'));
@@ -24,6 +26,9 @@ function getDocsMod(): Promise<DocsMod> {
 }
 function getAttendanceMod(): Promise<AttendanceMod> {
   return (_attendanceMod ||= import('../src/rpc/attendance.js'));
+}
+function getWeeklyMod(): Promise<WeeklyMod> {
+  return (_weeklyMod ||= import('../src/rpc/weekly.js'));
 }
 
 type RpcRequestBody = {
@@ -107,6 +112,16 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   async ping() {
     const m = await getDataMod();
     return await m.rpcPing();
+  },
+
+  // Weekly progress
+  async getWeeklyReports(...args: any[]) {
+    const m = await getWeeklyMod();
+    return await m.rpcGetWeeklyReports(args[0]);
+  },
+  async upsertWeeklyReport(...args: any[]) {
+    const m = await getWeeklyMod();
+    return await m.rpcUpsertWeeklyReport(args[0]);
   },
 
   // CRUD operations

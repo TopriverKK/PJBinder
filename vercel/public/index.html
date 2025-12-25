@@ -120,7 +120,16 @@
   .muted { color:var(--muted); }
   .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .list { max-height: 600px; overflow:auto; }
-  .tabs { display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:8px; position:relative; z-index: 55; }
+  .tabs {
+    display:flex;
+    gap:8px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:8px;
+    position: sticky;
+    top: calc(var(--header-h) + var(--toolbar-h));
+    z-index: 58;
+    background: var(--bg);
+  }
   .tab { padding:8px 12px; border-radius:10px 10px 0 0; background:#e5e7eb; cursor:pointer; }
   .tab.active { background:var(--card); border:1px solid var(--border); border-bottom:1px solid var(--card); }
 
@@ -3200,8 +3209,8 @@ function renderTasksTable() {
     tr.dataset.id = r.id;
 
     const docBadges = [
-      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📄Doc</span>` : '',
-      pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄Doc</span>` : ''
+      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📄タスクDoc</span>` : '',
+      pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄PJDoc</span>` : ''
     ].join('');
 
     // ★ ここで先にテーマ色を計算する
@@ -3608,13 +3617,7 @@ function renderProjects() {
       ? '<button class="secondary mini" style="margin-left:6px;" data-tip="タスク一覧/状況を表示します" onclick="toggleProjectTaskList(\''+r.id+'\', this)">一覧</button>'
       : '';
 
-    const isProjectsPage = (function(){
-      try{
-        const sec = document.getElementById('page-projects');
-        return !!(sec && sec.classList && sec.classList.contains('active'));
-      }catch(_){ return false; }
-    })();
-    const hardBtn = isProjectsPage
+    const hardBtn = (String(PAGE||'') === 'projects')
       ? ' <button class="secondary" data-tip="このプロジェクトと関連タスク/添付URLを完全削除します（元に戻せません）。" onclick="deleteProjectHard(\''+r.id+'\')">完全削除</button>'
       : '';
 
@@ -6329,10 +6332,22 @@ async function fetchDocsMarkdown(name){
     const url = '/docs/' + encodeURIComponent(fileName);
     const resp = await fetch(url, { method:'GET' });
     if (resp.ok) {
-      // Force UTF-8 decode regardless of server headers (prevents mojibake).
+      // Docs may be Shift_JIS; pick the decode with fewer replacement chars.
       try{
         const buf = await resp.arrayBuffer();
-        return new TextDecoder('utf-8').decode(buf);
+        const countReplacement = (s)=>{
+          try { return (String(s||'').match(/\uFFFD|�/g) || []).length; } catch(_){ return 0; }
+        };
+        const tryDecode = (enc)=>{
+          try { return new TextDecoder(enc).decode(buf); } catch(_){ return null; }
+        };
+        const utf8 = tryDecode('utf-8');
+        const sjis = tryDecode('shift_jis');
+        const utf8Score = utf8 == null ? 1e9 : countReplacement(utf8);
+        const sjisScore = sjis == null ? 1e9 : countReplacement(sjis);
+        if (sjis != null && sjisScore <= utf8Score) return sjis;
+        if (utf8 != null) return utf8;
+        return await resp.text();
       }catch(_){
         return await resp.text();
       }

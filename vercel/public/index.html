@@ -3073,7 +3073,9 @@ function renderAttendancePage(){
 
     const breakBtnLabel = status==='break' ? '休憩戻り' : '休憩';
     const outBtnLabel = status==='out' ? '外出戻り' : '外出';
-    const canClockIn = (status==='not-clocked' || status==='done');
+    // Allow re-pressing clock-in buttons to switch location while working.
+    // Keep disabled during break/out to avoid surprising state changes.
+    const canClockIn = (status==='not-clocked' || status==='done' || status==='working');
     const clockOutBtnLabel = status==='done' ? '退勤取消' : '退勤';
 
     card.innerHTML = `

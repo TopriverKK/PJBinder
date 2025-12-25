@@ -84,14 +84,23 @@ async function selectOpenWorklog(userId: string, date: string): Promise<Attendan
   return r ? (r as AttendanceWorklogRow) : null;
 }
 
-async function closeOpenWorklogIfAny(userId: string, date: string, endAtIso: string) {
-  const open = await selectOpenWorklog(userId, date);
-  if (!open || !open.id) return;
-  await sbUpsert(
-    'attendance_worklogs',
-    { id: open.id, end_at: endAtIso },
-    'id'
-  );
+async function selectOpenWorklogs(userId: string, date: string): Promise<AttendanceWorklogRow[]> {
+  // end_at=is.null for open segment
+  const query = `select=*&user_id=eq.${encodeURIComponent(userId)}`
+    + `&work_date=eq.${encodeURIComponent(date)}`
+    + `&end_at=is.null&order=start_at.desc`;
+  const rows = await sbSelectAllSafe('attendance_worklogs', query);
+  return Array.isArray(rows) ? (rows as AttendanceWorklogRow[]) : [];
+}
+
+async function closeOpenWorklogsIfAny(userId: string, date: string, endAtIso: string) {
+  const opens = await selectOpenWorklogs(userId, date);
+  if (!opens.length) return;
+  // Close all open segments defensively (prevents double-counting).
+  for (const open of opens) {
+    if (!open || !open.id) continue;
+    await sbUpsert('attendance_worklogs', { id: open.id, end_at: endAtIso }, 'id');
+  }
 }
 
 async function openWorklog(userId: string, date: string, startAtIso: string, projectId: string, taskId: string, source: string) {
@@ -134,28 +143,38 @@ async function syncWorklogsForPatch(
   // - active -> active + unchanged : ensure an open segment exists (self-heal)
 
   if (beforeActive && !afterActive) {
-    await closeOpenWorklogIfAny(userId, date, now);
+    await closeOpenWorklogsIfAny(userId, date, now);
     return;
   }
 
   if (!beforeActive && afterActive) {
     // Defensive: if an open segment exists due to previous failure, close it first.
-    await closeOpenWorklogIfAny(userId, date, now);
+    await closeOpenWorklogsIfAny(userId, date, now);
     await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
     return;
   }
 
   if (beforeActive && afterActive) {
     if (changed) {
-      await closeOpenWorklogIfAny(userId, date, now);
+      await closeOpenWorklogsIfAny(userId, date, now);
       await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
       return;
     }
 
-    // Self-heal: if somehow there is no open segment, open one.
-    const open = await selectOpenWorklog(userId, date);
-    if (!open) {
+    // Self-heal: ensure exactly one open segment and it matches current project/task.
+    const opens = await selectOpenWorklogs(userId, date);
+    if (opens.length !== 1) {
+      await closeOpenWorklogsIfAny(userId, date, now);
       await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+      return;
+    }
+    const open = opens[0];
+    const openProjectId = normId(open.project_id);
+    const openTaskId = normId(open.task_id);
+    if (openProjectId !== afterProjectId || openTaskId !== afterTaskId) {
+      await closeOpenWorklogsIfAny(userId, date, now);
+      await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+      return;
     }
   }
 }

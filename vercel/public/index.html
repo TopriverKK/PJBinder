@@ -2914,8 +2914,24 @@ function bindDashboardTabs(){
 
 // タブ切替（list/board/gantt）
 function switchTab(tab) {
+  // 旧GAS版の挙動に寄せて、
+  // 1) 表示切替
+  // 2) 必要な再描画（list/board/gantt）
+  // 3) 状態保存（hash / query）
+  // を確実に実行する。
+
   tab = (tab === 'board' || tab === 'gantt') ? tab : 'list';
   ACTIVE_TAB = tab;
+
+  // もしダッシュボード以外から呼ばれたら、見えるページへ移動してから切替
+  // （ショートカット/URL反映などの導線で「切替したのに見えない」を防ぐ）
+  try {
+    if (typeof PAGE === 'string' && PAGE !== 'dashboard') {
+      try { gotoDashboardTab?.(tab); } catch(_){ }
+      // gotoDashboardTab 内で再度 switchTab されるのでここで終了
+      return;
+    }
+  } catch(_){ }
 
   const tl = document.getElementById('tab-list');
   const tb = document.getElementById('tab-board');
@@ -2932,17 +2948,27 @@ function switchTab(tab) {
   if (vg) vg.style.display = (tab==='gantt') ? '' : 'none';
 
   try {
-    // board/list でも軽い再描画にしておく（内部で ACTIVE_TAB を見て最適化される前提）
-    renderKanban?.();
-    if (tab==='gantt') renderGantt?.(true);
+    // list: 一覧を確実に更新
+    if (tab === 'list') {
+      try { renderTasksTable?.(); } catch(_){ }
+    }
+
+    // board: カンバンを確実に更新
+    // 旧GAS版同様、タブ切替時に必ず再描画して整合を取る
+    try { renderKanban?.(); } catch(_){ }
+
+    // gantt: 選択時に必ず今日始まりデフォルトへ
+    if (tab === 'gantt') {
+      try { renderGantt?.(true); } catch(_){ }
+    }
   } catch(_){ }
 
-  if (tab!=='gantt'){
+  if (tab !== 'gantt'){
     const gc = document.getElementById('gantt-container');
-    if (gc) gc.innerHTML='';
+    if (gc) gc.innerHTML = '';
   }
 
-  try { updateHashFromState?.(); } catch(_){ }
+  try { updateHashFromState(); } catch(_){ }
   try { updateRouteParams?.({ tab: ACTIVE_TAB }, { replace:true }); } catch(_){ }
 }
 
@@ -4647,6 +4673,7 @@ function bindRruleUI(){
   loadFiltersFromLS();  // まずローカル保存を読む
   applyHash();          // URL指定があれば上書き
   try { applyRouteFromUrl(); } catch(_){ }
+  try { bindDashboardTabs?.(); } catch(_){ }
   // 既存指定（LS/ハッシュ）が無ければ「完了以外」を初期値に
   if (!FILTERS.status && !OVERDUE) {
     FILTERS.status = 'notdone';

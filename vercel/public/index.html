@@ -1346,7 +1346,7 @@ button.link:hover { opacity: .8; }
         <div class="toolbar" style="flex-direction:column; align-items:stretch; gap:6px;">
           <div class="toolbar wk-scopebar">
             <button class="secondary" onclick="shiftWeekly(-7)">←前週</button>
-            <input id="wk_start" type="date" />
+            <input id="wk_start"  style="width:120px;" type="date" />
             <button class="secondary" onclick="shiftWeekly(7)">次週→</button>
             <button onclick="loadWeekly()">更新</button>
 
@@ -1361,8 +1361,6 @@ button.link:hover { opacity: .8; }
             </label>
           </div>
         </div>
-        <div class="muted" id="weekly-range" style="font-size:12px;"></div>
-        <div class="muted" style="margin-top:6px; font-size:12px;">未完了タスクを見ながら、課題/実施事項を保存できます。</div>
       </div>
     </div>
     <div class="card">
@@ -2954,9 +2952,27 @@ function renderAttendancePage(){
         .map(p=>`<option value="${escapeHtml(p.id)}" ${String(p.id)===projId?'selected':''}>${escapeHtml(p.name||p.id)}</option>`));
 
     const tasks = safeArr(DATA.tasks);
-    const taskFiltered = projId ? tasks.filter(t=>String(t.projectId||'')===projId) : tasks;
+    const taskFiltered = (projId ? tasks.filter(t=>String(t.projectId||'')===projId) : tasks)
+      // Exclude completed tasks from selection.
+      // If the currently selected task is already completed, keep it visible (disabled)
+      // so the UI doesn't lose the current value.
+      .filter(t=>{
+        const tid = String(t.id||'');
+        const st = String(t.status||'').toLowerCase();
+        if (tid && tid === taskId) return true;
+        return st !== 'done';
+      });
+
     const taskOptions = ['<option value="">（未指定）</option>']
-      .concat(taskFiltered.map(t=>`<option value="${escapeHtml(t.id)}" ${String(t.id)===taskId?'selected':''}>${escapeHtml(t.title||t.id)}</option>`));
+      .concat(taskFiltered.map(t=>{
+        const tid = String(t.id||'');
+        const st = String(t.status||'').toLowerCase();
+        const isSelected = (tid === taskId);
+        const isDoneSelected = isSelected && st === 'done';
+        const title = String(t.title||t.id||'');
+        const label = isDoneSelected ? `${title}（完了）` : title;
+        return `<option value="${escapeHtml(t.id)}" ${isSelected?'selected':''} ${isDoneSelected?'disabled':''}>${escapeHtml(label)}</option>`;
+      }));
 
     const projName = projId ? (safeArr(DATA.projects).find(p=>String(p.id)===projId)?.name || projId) : '';
     const taskName = taskId ? (tasks.find(t=>String(t.id)===taskId)?.title || taskId) : '';

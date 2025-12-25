@@ -6,6 +6,9 @@
 <base target="_top">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>PJバインダー</title>
+<!-- Markdown + Mermaid (usage docs) -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 <style>
     /* ページ全体の横スクロールは殺して、横スクロールは各エリアで */
   html, body { overflow-x: hidden; }
@@ -112,9 +115,20 @@
   .muted { color:var(--muted); }
   .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .list { max-height: 600px; overflow:auto; }
-  .tabs { display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+  .tabs { display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:8px; position:relative; z-index: 26; }
   .tab { padding:8px 12px; border-radius:10px 10px 0 0; background:#e5e7eb; cursor:pointer; }
   .tab.active { background:var(--card); border:1px solid var(--border); border-bottom:1px solid var(--card); }
+
+  /* ===== Usage docs (Markdown) ===== */
+  .md-docs-nav{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px 0; }
+  .md-docs-nav button{ padding:6px 10px; border-radius: 8px; }
+  .md-docs-nav button.active{ background: var(--accent); color: #fff; border-color: transparent; }
+  .md-docs{ line-height: 1.75; }
+  .md-docs h1, .md-docs h2, .md-docs h3{ margin: 0.8em 0 0.35em; }
+  .md-docs pre{ overflow:auto; padding:10px; background: rgba(0,0,0,.04); border-radius: 10px; }
+  .md-docs code{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  .md-docs table{ border-collapse: collapse; width:100%; }
+  .md-docs th, .md-docs td{ border:1px solid var(--border); padding:6px 8px; }
   .kanban { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; min-height: 380px; }
   .col { background:#f9fafb; border:1px solid var(--border); border-radius:12px; padding:8px; min-height:320px; }
   .col h3 { font-size:13px; margin:0 0 8px 0; display:flex; justify-content:space-between; align-items:center; }
@@ -153,7 +167,7 @@
 
 
   /* Docsバッジ */
-  .doc-badge{ margin-left:4px; cursor:pointer; opacity:.9; }
+  .doc-badge{ margin-left:4px; cursor:pointer; opacity:.9; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border:1px solid var(--border); border-radius:999px; background:var(--card); font-size:12px; line-height:1.2; white-space:nowrap; }
   .doc-badge:hover{ opacity:1; transform: translateY(-1px); }
 
   /* ツールボタンの詰め */
@@ -516,7 +530,7 @@ button.link:hover { opacity: .8; }
   <div class="muted" id="debug-snapshot" style="display:none"></div>
   <div class="toolbar">
     <button class="secondary" onclick="refresh()">最新化</button>
-    <button class="secondary" id="nav-help"    onclick="openAppUsageGuide()">使い方</button>
+    <button class="secondary" id="nav-help"    onclick="openUsageGuide('BEGINNER')">使い方</button>
   </div>
   <nav>
     <button class="active" id="nav-dashboard" onclick="goto('dashboard')">ダッシュボード</button>
@@ -3112,16 +3126,16 @@ function renderTasksTable() {
     const tDocUrl = getTaskDocUrl(r.id);
     const pDocUrl = getProjectDocUrl(r.projectId||'');
     const docsBtns = [
-      tDocUrl ? `<button class="secondary" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">Task Docs</button>` : '',
-      pDocUrl ? `<button class="secondary" data-tip="プロジェクト共通のドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">Proj Docs</button>` : ''
+      tDocUrl ? `<button class="secondary" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📄タスクDoc</button>` : '',
+      pDocUrl ? `<button class="secondary" data-tip="プロジェクト共通のドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄PJ Doc</button>` : ''
     ].filter(Boolean).join(' ');
 
     const tr = document.createElement('tr');
     tr.dataset.id = r.id;
 
     const docBadges = [
-      tDocUrl ? `<span class="doc-badge" title="Task Doc" onclick="openTaskDocById('${r.id}')">📄</span>` : '',
-      pDocUrl ? `<span class="doc-badge" title="Project Doc" onclick="openProjectDocById('${r.projectId||''}')">📄</span>` : ''
+      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📄Doc</span>` : '',
+      pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄Doc</span>` : ''
     ].join('');
 
     // ★ ここで先にテーマ色を計算する
@@ -3502,7 +3516,7 @@ function renderProjects() {
     const pDocUrl = getProjectDocUrl(r.id);
 
     const attBtn = '<button class="secondary" data-tip="添付URL一覧を開きます。"  onclick="toggleAttachmentList(\'project\',\''+r.id+'\', this)">添付URL</button>';
-    const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" style="font-size: 14px;color:blue;" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">【Docを開く】</span>' : '';
+    const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">📄Doc</span>' : '';
 
     const tr = document.createElement('tr');
 
@@ -4202,7 +4216,7 @@ function renderGantt(forceDefaults){
     const ownerName = nameByUserId(proj?.ownerUserId || '');
     const pDocUrl = getProjectDocUrl(pid);
     const docBadgeP = pDocUrl
-      ? `<span class="doc-badge" title="Project Doc" onclick="openProjectDocById('${pid}')">📄</span>`
+      ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${pid}')">📄Doc</span>`
       : '';
     const attNP = countAttachments('project', pid);
     const attBadgeP = attNP
@@ -4243,7 +4257,7 @@ function renderGantt(forceDefaults){
       // renderGantt 内、各タスクのラベル生成箇所を置き換え
       // 置換前：labelHtml.push(`<div ...>${escapeHtml(proj?.name || '(未割当)')} / <span class="muted">${title}</span></div>`);
       const tDocUrl = getTaskDocUrl(t.id);
-      const docBadge = tDocUrl ? `<span class="doc-badge" title="Task Doc" onclick="openTaskDocById('${t.id}')">📄</span>` : '';
+      const docBadge = tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">📄Doc</span>` : '';
       const attN = countAttachments('task', t.id);
 
       const attBadge = attN ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">📎${attN}</span>` : '';
@@ -5184,7 +5198,7 @@ function toggleProjectTasks(projectId, anchor){
       const tDoc = getTaskDocUrl(t.id);
       const attN = countAttachments('task', t.id);
       const att = attN ? ` <span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">📎${attN}</span>` : '';
-      const doc = tDoc ? ` <span class="doc-badge" title="Task Doc" onclick="openTaskDocById('${t.id}')">📄</span>` : '';
+      const doc = tDoc ? ` <span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">📄Doc</span>` : '';
       return `<div style="padding:2px 0;">
         <span class="pill" style="margin-right:6px;">${labelStatus(st)}</span>
         <span class="pill prio-badge ${pr==='高'?'prio-high':pr==='中'?'prio-mid':pr==='低'?'prio-low':''}" style="margin-right:6px;">${escapeHtml(pr)}</span>
@@ -5229,8 +5243,8 @@ function renderProjectsPage(){
 
   for (const r of rows){
     const pDocUrl = getProjectDocUrl(r.id);
-    const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" onclick="openProjectDocById('${r.id}')">📄</span>` : '';
-    const docBtn  = pDocUrl ? `<button class="secondary" onclick="openProjectDocById('${r.id}')">Proj Docs</button>` : '';
+    const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄Doc</span>` : '';
+    const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJ Doc</button>` : '';
     const attN    = countProjectAttachmentsDeep(r.id);
     const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を開きます。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">📎${attN}</span>` : '';
 
@@ -6228,35 +6242,95 @@ document.addEventListener('keydown', (e)=>{
 
 // 既存の「右フライアウト」をモーダルへ差し替え（互換フック）
 function openFlyoutCompat(title, html){ openModal(title, html); }
-function openUsageGuide(){
-  const html = `
-    <div style="line-height:1.8;">
-      <h3 style="margin:.2em 0;">このアプリの基本モデル</h3>
-      <ul style="margin:.4em 0 1em 1.2em;">
-        <li><b>プロジェクト</b>は最上位の単位です。必要に応じて親子の階層化ができます。</li>
-        <li><b>タスク</b>はプロジェクトの<b>子要素</b>です（必ずいずれかのプロジェクトに属します）。</li>
-      </ul>
+async function fetchDocsMarkdown(name){
+  const url = '/api/docs?name=' + encodeURIComponent(String(name||''));
+  const resp = await fetch(url, { method:'GET' });
+  const raw = await resp.text().catch(()=> '');
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+  if (!resp.ok || !data || data.ok !== true) {
+    const msg = (data && data.error) ? data.error : (raw || ('HTTP '+resp.status));
+    throw new Error(msg);
+  }
+  return String(data.markdown || '');
+}
 
-      <h3 style="margin:.6em 0 .2em;">Googleドキュメント連携</h3>
-      <ul style="margin:.4em 0 1em 1.2em;">
-        <li>プロジェクト／タスクごとに<b>Googleドキュメントを自動作成</b>できます（「Docsを開く」から作成・アクセス）。</li>
-        <li>作成されたドキュメントのURLは各行に保持され、一覧・カンバン・ガントでも📄バッジから開けます。</li>
-      </ul>
+function mdToHtml(md){
+  try{
+    if (window.marked && typeof window.marked.parse === 'function') {
+      return window.marked.parse(String(md||''), { gfm:true, breaks:true });
+    }
+  }catch(_){ }
+  return '<pre>' + escapeHtml(String(md||'')) + '</pre>';
+}
 
-      <h3 style="margin:.6em 0 .2em;">添付URL（Drive/外部URL）</h3>
-      <ul style="margin:.4em 0 1em 1.2em;">
-        <li>プロジェクト／タスク／議事録に<b>Driveファイルや任意URL</b>を添付できます（📎ボタン）。</li>
-        <li>同一プロジェクト配下のタスク／議事録の添付は、プロジェクトの添付カウントに合算表示されます。</li>
-      </ul>
+function renderMermaidIn(container){
+  try{
+    if (!window.mermaid) return;
+    try { window.mermaid.initialize({ startOnLoad:false }); } catch(_){ }
 
-      <h3 style="margin:.6em 0 .2em;">小ワザ</h3>
-      <ul style="margin:.4em 0 0 1.2em;">
-        <li>タスクはカンバンのドラッグ＆ドロップで<b>状態</b>（未着手/進行中/保留/完了）を変更できます。</li>
-        <li>タスク行の<b>メモ欄はダブルクリック</b>で編集できます（Ctrl/⌘+Enterで保存）。</li>
-        <li>ガントでは📄/📎バッジからドキュメントや添付にすぐ飛べます。</li>
-      </ul>
-    </div>`;
-  openModal('使い方', html);
+    // Convert fenced ```mermaid blocks (marked emits code.language-mermaid)
+    const codes = container.querySelectorAll('pre > code.language-mermaid, pre > code.mermaid');
+    codes.forEach(code => {
+      const pre = code.parentElement;
+      if (!pre) return;
+      const div = document.createElement('div');
+      div.className = 'mermaid';
+      div.textContent = code.textContent || '';
+      pre.replaceWith(div);
+    });
+
+    // Render
+    const nodes = container.querySelectorAll('.mermaid');
+    if (nodes && nodes.length) {
+      window.mermaid.run({ nodes });
+    }
+  }catch(e){
+    console.error(e);
+  }
+}
+
+async function loadUsageDocsInto(modalRoot, name){
+  const host = modalRoot.querySelector('#usage-docs-host');
+  if (!host) return;
+  host.innerHTML = '<div class="muted">読み込み中...</div>';
+  try{
+    const md = await fetchDocsMarkdown(name);
+    host.innerHTML = '<div class="md-docs">' + mdToHtml(md) + '</div>';
+    renderMermaidIn(host);
+    // ensure top scroll
+    try { host.scrollTop = 0; } catch(_){ }
+  }catch(e){
+    const msg = (e && e.message) ? e.message : String(e);
+    host.innerHTML = '<div class="muted">表示に失敗しました: ' + escapeHtml(msg) + '</div>';
+  }
+}
+
+function openUsageGuide(initial){
+  const first = (String(initial||'').toUpperCase()==='USER_GUIDE') ? 'USER_GUIDE' : 'BEGINNER';
+  const body = `
+    <div class="md-docs-nav">
+      <button id="btn-usage-beginner" class="secondary">初使用者向け（BEGINNER）</button>
+      <button id="btn-usage-user" class="secondary">使用者向け（USER_GUIDE）</button>
+      <button id="btn-usage-spec" class="secondary">仕様書（SPEC）</button>
+    </div>
+    <div id="usage-docs-host" style="max-height:65vh; overflow:auto;"></div>
+  `;
+  openModal('使い方', body, (modalRoot)=>{
+    const b0 = modalRoot.querySelector('#btn-usage-beginner');
+    const b1 = modalRoot.querySelector('#btn-usage-user');
+    const b2 = modalRoot.querySelector('#btn-usage-spec');
+    function setActive(name){
+      if (b0) b0.classList.toggle('active', name==='BEGINNER');
+      if (b1) b1.classList.toggle('active', name==='USER_GUIDE');
+      if (b2) b2.classList.toggle('active', name==='SPEC');
+    }
+    if (b0) b0.addEventListener('click', ()=>{ setActive('BEGINNER'); loadUsageDocsInto(modalRoot, 'BEGINNER'); });
+    if (b1) b1.addEventListener('click', ()=>{ setActive('USER_GUIDE'); loadUsageDocsInto(modalRoot, 'USER_GUIDE'); });
+    if (b2) b2.addEventListener('click', ()=>{ setActive('SPEC'); loadUsageDocsInto(modalRoot, 'SPEC'); });
+    setActive(first);
+    loadUsageDocsInto(modalRoot, first);
+  });
 }
 // 現在のクイック追加の入力欄をそのまま使い、モーダルに「複製」して表示する。
 // 保存時は既存の addProject / addTask をそのまま呼ぶ。
@@ -6582,9 +6656,8 @@ function saveTaskFromModal(id){
 function editProject(id){ showProjectModal(id); }
 function editTask(id){ showTaskModal(id); }
 function openAppUsageGuide() {
-    google.script.run
-      .withSuccessHandler(html => openModal('使い方', html))
-      .getUsageGuideHtml();
+  // Vercel/static版は、docs/*.md を表示する（Mermaid対応）
+  try { openUsageGuide('BEGINNER'); } catch(_){ }
   }
 (() => {
   const OFFSET_X = 12;   // マウスから右へ

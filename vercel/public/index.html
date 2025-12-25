@@ -1682,7 +1682,7 @@ function goto(page, opts) {
   // Attendance auto-refresh must stop when leaving attendance.
   try {
     if (PAGE === 'attendance' && page !== 'attendance') {
-      stopAttendanceAutoRefresh({ uncheck:true, reason:'navigate' });
+      pauseAttendanceAutoRefresh({ reason:'navigate' });
     }
   } catch(_){ }
 
@@ -1727,6 +1727,7 @@ function goto(page, opts) {
     try { loadAttendanceSettings?.(); } catch (e) {}
     if (ATT_VIEW === 'dashboard') {
       try { refreshAttendance?.(); } catch (e) {}
+      try { if (ATT_AUTO_REFRESH_ENABLED) startAttendanceAutoRefresh?.(); } catch(_){ }
     } else {
       try { loadAttendanceMonth?.(); } catch (e) {}
     }
@@ -2547,12 +2548,14 @@ const ATT = {
   holidayDates: new Set(),
   companyHolidayDates: new Set(),
   nextEventsByUser: {},
+  next2EventsByUser: {},
   currentEventsByUser: {},
 };
 
 let ATT_VIEW = 'dashboard'; // 'dashboard' | 'summary'
 
-let ATT_AUTO_REFRESH_ENABLED = false;
+// Default ON (can be turned off by the user)
+let ATT_AUTO_REFRESH_ENABLED = true;
 let ATT_AUTO_REFRESH_INTERVAL_MS = 120000; // default 120s
 let ATT_AUTO_REFRESH_TIMER = null;
 
@@ -2589,8 +2592,11 @@ function startAttendanceAutoRefresh(){
     ATT_AUTO_REFRESH_TIMER = null;
   }
 
+  // If not eligible, keep enabled/UI but do not start a timer.
+  if (!isAttendanceAutoRefreshEligible()) return;
+
   // Immediate refresh on start (best-effort)
-  try { if (isAttendanceAutoRefreshEligible()) refreshAttendance?.(); } catch(_){ }
+  try { refreshAttendance?.(); } catch(_){ }
 
   ATT_AUTO_REFRESH_TIMER = setInterval(async ()=>{
     try {
@@ -2599,7 +2605,7 @@ function startAttendanceAutoRefresh(){
         return;
       }
       if (!isAttendanceAutoRefreshEligible()) {
-        stopAttendanceAutoRefresh({ uncheck:true, reason:'not-eligible' });
+        pauseAttendanceAutoRefresh({ reason:'not-eligible' });
         return;
       }
       await refreshAttendance?.();
@@ -2607,12 +2613,16 @@ function startAttendanceAutoRefresh(){
   }, ATT_AUTO_REFRESH_INTERVAL_MS);
 }
 
-function stopAttendanceAutoRefresh({ uncheck=false, reason='' } = {}){
-  ATT_AUTO_REFRESH_ENABLED = false;
+function pauseAttendanceAutoRefresh({ reason='' } = {}){
   if (ATT_AUTO_REFRESH_TIMER) {
     clearInterval(ATT_AUTO_REFRESH_TIMER);
     ATT_AUTO_REFRESH_TIMER = null;
   }
+}
+
+function stopAttendanceAutoRefresh({ uncheck=false, reason='' } = {}){
+  ATT_AUTO_REFRESH_ENABLED = false;
+  pauseAttendanceAutoRefresh({ reason });
   if (uncheck) setAttendanceAutoRefreshUi(false);
 }
 
@@ -2639,7 +2649,7 @@ function setAttendanceView(view, opts){
 
   // If user leaves dashboard view, stop auto-refresh.
   if (ATT_VIEW !== 'dashboard') {
-    try { stopAttendanceAutoRefresh({ uncheck:true, reason:'view-change' }); } catch(_){ }
+    try { pauseAttendanceAutoRefresh({ reason:'view-change' }); } catch(_){ }
   }
   if (!opts.skipRoute) {
     updateRouteParams({ page:'attendance', view: ATT_VIEW, tab: null }, { replace:false });
@@ -2647,6 +2657,7 @@ function setAttendanceView(view, opts){
   if (PAGE === 'attendance') {
     if (ATT_VIEW === 'dashboard') {
       try { refreshAttendance?.(); } catch(_){ }
+      try { if (ATT_AUTO_REFRESH_ENABLED) startAttendanceAutoRefresh?.(); } catch(_){ }
     } else {
       try { loadAttendanceMonth?.(); } catch(_){ }
     }
@@ -2717,6 +2728,7 @@ function pickNextAndCurrentEventFromIcs(text){
   const now = new Date();
   const blocks = String(text||'').split('BEGIN:VEVENT').slice(1);
   let next = null;
+  let next2 = null;
   let current = null;
   blocks.forEach(block=>{
     const lines = String(block||'').split(/\r?\n/);
@@ -2743,10 +2755,15 @@ function pickNextAndCurrentEventFromIcs(text){
     }
     if (startDate > now){
       const candidate = { start:startIso, end:endIso, summary, location };
-      if(!next || new Date(candidate.start) < new Date(next.start)) next = candidate;
+      if(!next || new Date(candidate.start) < new Date(next.start)) {
+        next2 = next;
+        next = candidate;
+      } else if(!next2 || new Date(candidate.start) < new Date(next2.start)) {
+        next2 = candidate;
+      }
     }
   });
-  return { next, current };
+  return { next, next2, current };
 }
 
 const _icsCache = new Map(); // url -> {text, ts}
@@ -2990,6 +3007,7 @@ function renderAttendancePage(){
 
     const currentEvent = (ATT.currentEventsByUser && ATT.currentEventsByUser[uid]) || null;
     const nextEvent = (ATT.nextEventsByUser && ATT.nextEventsByUser[uid]) || null;
+    const next2Event = (ATT.next2EventsByUser && ATT.next2EventsByUser[uid]) || null;
 
     const avatarHue = (function(){
       // deterministic hue from id
@@ -3050,6 +3068,7 @@ function renderAttendancePage(){
 
     const curLabel = currentEvent ? `${currentEvent.summary||'(予定)'} ${attFormatMDHM(currentEvent.start)}` : '-';
     const nextLabel = nextEvent ? `${nextEvent.summary||'(予定)'} ${attFormatMDHM(nextEvent.start)}` : '-';
+    const next2Label = next2Event ? `${next2Event.summary||'(予定)'} ${attFormatMDHM(next2Event.start)}` : '-';
     const roleLabel = String(u.role||'').trim();
 
     const breakBtnLabel = status==='break' ? '休憩戻り' : '休憩';
@@ -3093,6 +3112,8 @@ function renderAttendancePage(){
           <span class="att-muted">${escapeHtml(curLabel)}</span>
           <span class="att-k">次の予定:</span>
           <span class="att-muted">${escapeHtml(nextLabel)}</span>
+          <span class="att-k">次の次の予定:</span>
+          <span class="att-muted">${escapeHtml(next2Label)}</span>
           <span class="att-k">メモ:</span>
           <input class="att-ctl" data-att-uid="${escapeHtml(uid)}" data-att-field="notes" value="${escapeHtml(row.notes||'')}" placeholder=""/>
         </div>
@@ -3157,18 +3178,21 @@ function renderAttendancePage(){
 async function refreshAttendanceCalendars(){
   const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u));
   const nextMap = {};
+  const next2Map = {};
   const currentMap = {};
   await Promise.all(users.map(async u=>{
     const url = String(u.calendarUrl||'').trim();
-    if(!url){ nextMap[u.id]=null; currentMap[u.id]=null; return; }
+    if(!url){ nextMap[u.id]=null; next2Map[u.id]=null; currentMap[u.id]=null; return; }
     try{
       const text = await fetchIcsText(url);
       const r = pickNextAndCurrentEventFromIcs(text);
       nextMap[u.id] = r.next;
+      next2Map[u.id] = r.next2;
       currentMap[u.id] = r.current;
-    }catch(_){ nextMap[u.id]=null; currentMap[u.id]=null; }
+    }catch(_){ nextMap[u.id]=null; next2Map[u.id]=null; currentMap[u.id]=null; }
   }));
   ATT.nextEventsByUser = nextMap;
+  ATT.next2EventsByUser = next2Map;
   ATT.currentEventsByUser = currentMap;
 }
 
@@ -3507,9 +3531,12 @@ window.addEventListener('load', ()=>{
     if(mi && !mi.value) mi.value = todayStr().slice(0,7);
     loadAttendanceSettings();
 
-    // Auto-refresh UI (opt-in)
+    // Auto-refresh UI (default ON)
     try {
       applyAttendanceAutoRefreshIntervalToUi();
+
+      // reflect current state
+      setAttendanceAutoRefreshUi(ATT_AUTO_REFRESH_ENABLED);
 
       const cb = document.getElementById('att_auto_refresh');
       const sel = document.getElementById('att_auto_interval');
@@ -3529,12 +3556,17 @@ window.addEventListener('load', ()=>{
 
       document.addEventListener('visibilitychange', ()=>{
         if (document.hidden) {
-          stopAttendanceAutoRefresh({ uncheck:true, reason:'hidden' });
+          pauseAttendanceAutoRefresh({ reason:'hidden' });
+        } else {
+          try { if (ATT_AUTO_REFRESH_ENABLED) startAttendanceAutoRefresh?.(); } catch(_){ }
         }
       });
       window.addEventListener('beforeunload', ()=>{
         stopAttendanceAutoRefresh({ uncheck:false, reason:'unload' });
       });
+
+      // best-effort start (will no-op unless eligible)
+      try { if (ATT_AUTO_REFRESH_ENABLED) startAttendanceAutoRefresh?.(); } catch(_){ }
     } catch(_){ }
   }catch(_){ }
 });

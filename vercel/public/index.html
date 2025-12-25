@@ -2032,6 +2032,10 @@ function attFormatTime(iso){
   if(!iso) return '--:--';
   try{ return new Date(iso).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',hour12:false}); }catch(_){ return '--:--'; }
 }
+function attFormatMDHM(iso){
+  if(!iso) return '--/-- --:--';
+  try{ return new Date(iso).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}); }catch(_){ return '--/-- --:--'; }
+}
 function minutesBetweenIso(startIso, endIso){
   if(!startIso) return 0;
   const end = endIso ? new Date(endIso) : new Date();
@@ -2380,8 +2384,8 @@ function renderAttendancePage(){
     const projName = projId ? (safeArr(DATA.projects).find(p=>String(p.id)===projId)?.name || projId) : '';
     const taskName = taskId ? (tasks.find(t=>String(t.id)===taskId)?.title || taskId) : '';
 
-    const curLabel = currentEvent ? `${currentEvent.summary||'(予定)'} ${attFormatTime(currentEvent.start)}` : '-';
-    const nextLabel = nextEvent ? `${nextEvent.summary||'(予定)'} ${attFormatTime(nextEvent.start)}` : '-';
+    const curLabel = currentEvent ? `${currentEvent.summary||'(予定)'} ${attFormatMDHM(currentEvent.start)}` : '-';
+    const nextLabel = nextEvent ? `${nextEvent.summary||'(予定)'} ${attFormatMDHM(nextEvent.start)}` : '-';
     const roleLabel = String(u.role||'').trim();
 
     card.innerHTML = `
@@ -3443,7 +3447,13 @@ function renderProjects() {
       ? '<button class="secondary mini" style="margin-left:6px;" data-tip="タスク一覧/状況を表示します" onclick="toggleProjectTaskList(\''+r.id+'\', this)">一覧</button>'
       : '';
 
-    const hardBtn = (PAGE === 'projects')
+    const isProjectsPage = (function(){
+      try{
+        const sec = document.getElementById('page-projects');
+        return !!(sec && sec.classList && sec.classList.contains('active'));
+      }catch(_){ return false; }
+    })();
+    const hardBtn = isProjectsPage
       ? ' <button class="secondary" data-tip="このプロジェクトと関連タスク/添付URLを完全削除します（元に戻せません）。" onclick="deleteProjectHard(\''+r.id+'\')">完全削除</button>'
       : '';
 

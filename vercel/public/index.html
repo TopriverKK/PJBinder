@@ -231,14 +231,25 @@
   /* === Attendance UI (look recreation) === */
   /* ダッシュボード表示時はカードリストを全幅にする */
   #page-attendance.att-layout-dashboard .grid{ grid-template-columns: 1fr; }
-  #att-cards{ display:flex; flex-direction:column; gap:6px; }
-  .att-card{ padding: 8px 12px; border-radius: 10px; box-shadow: 0 1px 3px rgba(17, 24, 39, 0.04); }
+  #att-cards{ display:flex; flex-direction:column; gap:4px; }
+  .att-card{ padding: 6px 10px; border-radius: 10px; box-shadow: 0 1px 3px rgba(17, 24, 39, 0.04); }
   .att-card .body{ padding: 0; }
-  .att-card-top{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-  .att-avatar{ width:28px; height:28px; border-radius:50%; background:#cbd5e1; flex: 0 0 auto; }
-  .att-name{ font-weight:700; font-size:14px; line-height:1.2; }
-  .att-role{ color:#6b7280; font-size:12px; line-height:1.2; }
-  .att-status-pill{ margin-left:auto; padding:3px 8px; border-radius:999px; font-weight:700; font-size:12px; border:1px solid rgba(17,24,39,.08); background: rgba(255,255,255,.7); }
+  .att-card-top{ display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+  .att-avatar{ width:22px; height:22px; border-radius:50%; background:#cbd5e1; flex: 0 0 auto; }
+  .att-name{ font-weight:700; font-size:13px; line-height:1.2; }
+  .att-role{ color:#6b7280; font-size:11px; line-height:1.2; }
+  .att-status-pill{ margin-left:auto; padding:2px 6px; border-radius:999px; font-weight:700; font-size:11px; border:1px solid rgba(17,24,39,.08); background: rgba(255,255,255,.7); }
+
+  .att-card .row{ gap:8px; }
+  .att-card label{ font-size:11px; margin-bottom:2px; }
+  .att-card input,
+  .att-card select{
+    padding:6px;
+    font-size:13px;
+    border-radius:8px;
+  }
+  .att-card .toolbar{ gap:6px; }
+  .att-card button{ padding:6px 10px; border-radius:8px; }
   .att-status-pill.tone-green{ background:#dcfce7; color:#166534; border-color: rgba(22,101,52,.25); }
   .att-status-pill.tone-yellow{ background:#fef3c7; color:#92400e; border-color: rgba(146,64,14,.25); }
   .att-status-pill.tone-red{ background:#fee2e2; color:#991b1b; border-color: rgba(153,27,27,.25); }
@@ -254,7 +265,7 @@
   .att-card.card-state-working-remote .row,
   .att-card.card-state-event .row,
   .att-card.card-state-done .row,
-  .att-card.card-state-not-clocked .row{ background: rgba(255,255,255,.6); border-radius: 10px; padding: 8px; margin-bottom: 6px; }
+  .att-card.card-state-not-clocked .row{ background: rgba(255,255,255,.6); border-radius: 10px; padding: 6px; margin-bottom: 4px; }
 
   /* 透かしより前面に出す対象を追加（header だけでなく toolbar も） */
   header, #global-toolbar, .container { position: relative; z-index: 1; }
@@ -2259,6 +2270,19 @@ function isUnsetUser(u){
 function isAttendanceVisibleUser(u){
   // Default: visible. Allow explicit false to hide.
   if (!u || typeof u !== 'object') return true;
+  if (Object.prototype.hasOwnProperty.call(u, 'attendance_visible')) {
+    const v = u.attendance_visible;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v !== 0;
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (!s) return true;
+      if (['false','0','no','off'].includes(s)) return false;
+      if (['true','1','yes','on'].includes(s)) return true;
+      return true;
+    }
+    return v !== false;
+  }
   if (Object.prototype.hasOwnProperty.call(u, 'attendanceVisible')) {
     const v = u.attendanceVisible;
     if (typeof v === 'boolean') return v;

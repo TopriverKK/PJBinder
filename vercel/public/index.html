@@ -1555,6 +1555,9 @@ function applyRouteFromUrl(){
   if (effectivePage === 'dashboard') {
     if (tab) {
       try { switchTab(tab); } catch(_){ }
+      // Legacy: query param `tab` may coexist with hash tab and cause state to be re-applied.
+      // After consuming it once, remove it from the query to keep a single source of truth.
+      try { updateRouteParams({ tab: null }, { replace:true }); } catch(_){ }
     }
   }
 
@@ -1618,7 +1621,8 @@ function goto(page, opts) {
         }
       }catch(_){ }
     } else {
-      updateRouteParams({ page, view: null, tab: ACTIVE_TAB }, { replace:false });
+      // Keep dashboard task tab state in hash only (avoid query/hash double sources of truth).
+      updateRouteParams({ page, view: null, tab: null }, { replace:false });
     }
   }
 
@@ -2093,7 +2097,7 @@ function setAttendanceView(view, opts){
     try { stopAttendanceAutoRefresh({ uncheck:true, reason:'view-change' }); } catch(_){ }
   }
   if (!opts.skipRoute) {
-    updateRouteParams({ page:'attendance', view: ATT_VIEW, tab: ACTIVE_TAB }, { replace:false });
+    updateRouteParams({ page:'attendance', view: ATT_VIEW, tab: null }, { replace:false });
   }
   if (PAGE === 'attendance') {
     if (ATT_VIEW === 'dashboard') {
@@ -3049,7 +3053,15 @@ function switchTab(tab) {
   }
 
   try { updateHashFromState(); } catch(_){ }
-  try { updateRouteParams?.({ tab: ACTIVE_TAB }, { replace:true }); } catch(_){ }
+}
+
+function setHashSilently(hashText){
+  try{
+    const url = new URL(location.href);
+    const h = String(hashText || '').replace(/^#/, '');
+    url.hash = h ? ('#' + h) : '';
+    history.replaceState(history.state || {}, '', url.pathname + url.search + url.hash);
+  }catch(_){ }
 }
 
 function updateHashFromState(){
@@ -3057,7 +3069,8 @@ function updateHashFromState(){
   qs.set('tab', ACTIVE_TAB);
   Object.entries(FILTERS).forEach(([k,v])=>{ if(v) qs.set(k, v); });
   if (OVERDUE) qs.set('overdue','1');
-  location.hash = qs.toString();
+  // Avoid hashchange recursion / history spam; still updates URL for copy/bookmark.
+  setHashSilently(qs.toString());
 }
 
 function applyHash(){

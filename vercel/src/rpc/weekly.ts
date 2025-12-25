@@ -16,6 +16,11 @@ function normalizeUserId(s: any): string {
   return v;
 }
 
+function normalizeProjectId(s: any): string {
+  // Allow empty string as a "general" bucket.
+  return String(s ?? '').trim();
+}
+
 export async function rpcGetWeeklyReports(weekStart: any) {
   const ws = normalizeWeekStart(weekStart);
   const rows = await sbSelect('weeklyreports', `select=*&weekStart=eq.${encodeURIComponent(ws)}&limit=10000`);
@@ -25,6 +30,7 @@ export async function rpcGetWeeklyReports(weekStart: any) {
 export async function rpcUpsertWeeklyReport(input: any) {
   const ws = normalizeWeekStart(input?.weekStart);
   const userId = normalizeUserId(input?.userId);
+  const projectId = normalizeProjectId(input?.projectId);
 
   const issues = input?.issues != null ? String(input.issues) : '';
   const done = input?.done != null ? String(input.done) : '';
@@ -32,11 +38,12 @@ export async function rpcUpsertWeeklyReport(input: any) {
   const row: any = {
     weekStart: ws,
     userId,
+    projectId,
     issues,
     done,
     updatedAt: isoDate(new Date()),
   };
 
-  const saved = await sbUpsert('weeklyreports', row, 'weekStart,userId');
+  const saved = await sbUpsert('weeklyreports', row, 'weekStart,userId,projectId');
   return saved;
 }

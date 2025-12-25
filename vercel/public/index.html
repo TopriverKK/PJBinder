@@ -924,7 +924,7 @@ button.link:hover { opacity: .8; }
           <div class="tabs">
             <div class="tab active" id="tab-list"  onclick="switchTab('list')">タスク一覧</div>
             <div class="tab"          id="tab-board" onclick="switchTab('board')">カンバン</div>
-            <div class="tab"                          onclick="switchTab('gantt')">ガント</div>
+            <div class="tab"          id="tab-gantt" onclick="switchTab('gantt')">ガント</div>
           </div>
 
           <div class="filters sticky see-through">
@@ -2332,7 +2332,19 @@ function renderAttendancePage(){
   if(!wrap) return;
   wrap.innerHTML = '';
 
-  const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u));
+  const users = safeArr(DATA.users)
+    .filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u))
+    .slice()
+    .sort((a,b)=>{
+      const anum = String(a.employeeNumber||'').replace(/\D/g,'');
+      const bnum = String(b.employeeNumber||'').replace(/\D/g,'');
+      const ai = anum ? parseInt(anum,10) : Number.POSITIVE_INFINITY;
+      const bi = bnum ? parseInt(bnum,10) : Number.POSITIVE_INFINITY;
+      if (ai !== bi) return ai - bi;
+      const an = String(a.name||a.email||a.id||'');
+      const bn = String(b.name||b.email||b.id||'');
+      return an.localeCompare(bn, 'ja');
+    });
   users.forEach(u=>{
     const uid = u.id;
     const row = attFindRowForUser(uid) || { user_id: uid, status:'not-clocked', location:'office', breaks:[], clock_in:'', clock_out:'', notes:'', project_id:'', task_id:'' };
@@ -2875,6 +2887,7 @@ function switchTab(tab) {
   ACTIVE_TAB = tab;
   document.getElementById('tab-list').classList.toggle('active', tab==='list');
   document.getElementById('tab-board').classList.toggle('active', tab==='board');
+  const tg = document.getElementById('tab-gantt'); if (tg) tg.classList.toggle('active', tab==='gantt');
   document.getElementById('view-list').style.display  = (tab==='list')  ? '' : 'none';
   document.getElementById('view-board').style.display = (tab==='board') ? '' : 'none';
   const vg = document.getElementById('view-gantt'); if (vg) vg.style.display = (tab==='gantt') ? '' : 'none';

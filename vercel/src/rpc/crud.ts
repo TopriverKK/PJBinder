@@ -166,6 +166,20 @@ export async function rpcUpsertDailyReport(r: any) {
   return Array.isArray(results) ? results[0] : results;
 }
 
+export async function rpcSetTaskStatus(id: string, status: string) {
+  const taskId = String(id || '').trim();
+  const next = String(status || '').trim();
+  if (!taskId) throw new Error('setTaskStatus: id is required');
+  if (!next) throw new Error('setTaskStatus: status is required');
+
+  const allowed = new Set(['todo', 'doing', 'blocked', 'done']);
+  if (!allowed.has(next)) throw new Error(`setTaskStatus: invalid status: ${next}`);
+
+  const patch: any = { id: taskId, status: next, updatedAt: isoDate(new Date()) };
+  const results = await sbUpsert('tasks', patch, 'id');
+  return Array.isArray(results) ? results[0] : results;
+}
+
 // Delete functions
 export async function rpcDeleteProject(id: string) {
   await sbDelete('projects', id);

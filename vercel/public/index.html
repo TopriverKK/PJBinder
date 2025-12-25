@@ -29,6 +29,11 @@
     --bg:#f8fafc; --card:#ffffff; --border:#e5e7eb; --ink:#111827;
     --muted:#6b7280; --accent:#0ea5e9; --pill:#eef2ff; --pill-ink:#3730a3;
     --shadow: 0 1px 2px rgba(0,0,0,.05);
+
+    /* Sticky UI offsets (fallbacks; JS will refine) */
+    --header-h: 56px;
+    --toolbar-h: 0px;
+    --filters-h: 46px;
   }
   select { background-color: #fff; }
   html, body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif; margin:0; background:var(--bg); color:var(--ink); }
@@ -115,7 +120,7 @@
   .muted { color:var(--muted); }
   .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .list { max-height: 600px; overflow:auto; }
-  .tabs { display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:8px; position:relative; z-index: 26; }
+  .tabs { display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:8px; position:relative; z-index: 55; }
   .tab { padding:8px 12px; border-radius:10px 10px 0 0; background:#e5e7eb; cursor:pointer; }
   .tab.active { background:var(--card); border:1px solid var(--border); border-bottom:1px solid var(--card); }
 
@@ -1538,6 +1543,27 @@ function applyRouteFromUrl(){
 
 window.addEventListener('popstate', ()=>{ try{ applyRouteFromUrl(); }catch(_){ } });
 
+function syncStickyOffsets(){
+  try{
+    const root = document.documentElement;
+    const header = document.querySelector('header');
+    const globalToolbar = document.getElementById('global-toolbar');
+    const filters = document.querySelector('#page-dashboard .filters.sticky, #page-dashboard .filters');
+
+    const headerH = header ? Math.round(header.getBoundingClientRect().height) : 56;
+    const toolbarH = (globalToolbar && globalToolbar.offsetParent !== null)
+      ? Math.round(globalToolbar.getBoundingClientRect().height)
+      : 0;
+    const filtersH = (filters && filters.offsetParent !== null)
+      ? Math.round(filters.getBoundingClientRect().height)
+      : 46;
+
+    root.style.setProperty('--header-h', headerH + 'px');
+    root.style.setProperty('--toolbar-h', toolbarH + 'px');
+    root.style.setProperty('--filters-h', filtersH + 'px');
+  }catch(_){ }
+}
+
 function goto(page, opts) {
   opts = opts || {};
   // 正規化（shareds→shared）
@@ -1574,6 +1600,7 @@ function goto(page, opts) {
   });
   PAGE = page;
   try { renderAll(); } catch (e) {}
+  try { setTimeout(syncStickyOffsets, 0); } catch(_){ }
   if (page === 'attendance') {
     applyAttendanceViewUi();
     try { loadAttendanceSettings?.(); } catch (e) {}
@@ -2869,6 +2896,9 @@ window.addEventListener('load', ()=>{
   try{
     // Dashboard task tabs (list/board/gantt) - ensure click handlers are bound.
     try { bindDashboardTabs?.(); } catch(_){ }
+
+    try { syncStickyOffsets(); } catch(_){ }
+    try { window.addEventListener('resize', ()=>{ try { syncStickyOffsets(); } catch(_){ } }); } catch(_){ }
 
     const mi = document.getElementById('att_month');
     if(mi && !mi.value) mi.value = todayStr().slice(0,7);
@@ -6212,7 +6242,7 @@ function submitFlyoutProject(){
   }).upsertProject(p);
 }
 // ======== Center Modal API ========
-function openModal(title, html){
+function openModal(title, html, onOpen){
   const mask = document.getElementById('modal-mask');
   const tt   = document.getElementById('modal-title');
   const ct   = document.getElementById('modal-content');
@@ -6221,6 +6251,14 @@ function openModal(title, html){
   ct.innerHTML = html || '';
   mask.style.display = 'flex';
   document.body.dataset.modalOpen = '1';
+  try{
+    if (typeof onOpen === 'function') {
+      const modalRoot = document.getElementById('modal') || mask;
+      onOpen(modalRoot);
+    }
+  }catch(e){
+    console.error(e);
+  }
 }
 function closeModal(){
   const mask = document.getElementById('modal-mask');
@@ -6243,8 +6281,25 @@ document.addEventListener('keydown', (e)=>{
 // 既存の「右フライアウト」をモーダルへ差し替え（互換フック）
 function openFlyoutCompat(title, html){ openModal(title, html); }
 async function fetchDocsMarkdown(name){
-  const url = '/api/docs?name=' + encodeURIComponent(String(name||''));
-  const resp = await fetch(url, { method:'GET' });
+  const normalized = String(name || '').trim().toUpperCase();
+  const fileName = normalized === 'BEGINNER' ? 'BEGINNER.md'
+    : (normalized === 'USER_GUIDE' || normalized === 'USERGUIDE' || normalized === 'USER-GUIDE') ? 'USER_GUIDE.md'
+    : normalized === 'SPEC' ? 'SPEC.md'
+    : '';
+  if (!fileName) throw new Error('Invalid or missing name');
+
+  // Prefer static docs to avoid server cwd/path differences.
+  try{
+    const url = '/docs/' + encodeURIComponent(fileName);
+    const resp = await fetch(url, { method:'GET' });
+    if (resp.ok) {
+      return await resp.text();
+    }
+  }catch(_){ }
+
+  // Backward-compatible fallback.
+  const apiUrl = '/api/docs?name=' + encodeURIComponent(normalized);
+  const resp = await fetch(apiUrl, { method:'GET' });
   const raw = await resp.text().catch(()=> '');
   let data = null;
   try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }

@@ -45,10 +45,29 @@ export default async function handler(req: any, res: any) {
   const path = await import('node:path');
 
   const fileName = name === 'BEGINNER' ? 'BEGINNER.md' : name === 'USER_GUIDE' ? 'USER_GUIDE.md' : 'SPEC.md';
-  const filePath = path.join(process.cwd(), 'docs', fileName);
+  const candidates = [
+    // original
+    path.join(process.cwd(), 'docs', fileName),
+    // static docs under public (preferred for deploy reliability)
+    path.join(process.cwd(), 'public', 'docs', fileName),
+    // if cwd differs (e.g., running from repo root)
+    path.join(process.cwd(), 'vercel', 'docs', fileName),
+    path.join(process.cwd(), 'vercel', 'public', 'docs', fileName),
+  ];
 
   try {
-    const markdown = await fs.readFile(filePath, 'utf8');
+    let markdown: string | null = null;
+    for (const p of candidates) {
+      try {
+        markdown = await fs.readFile(p, 'utf8');
+        break;
+      } catch (_e) {
+        // keep trying
+      }
+    }
+    if (markdown == null) {
+      throw new Error('not found');
+    }
     sendJson(res, 200, { ok: true, name, markdown });
   } catch (e: any) {
     sendJson(res, 404, { ok: false, error: `Not found: ${fileName}` });

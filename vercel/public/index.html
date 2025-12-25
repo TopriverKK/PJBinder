@@ -1571,6 +1571,14 @@ function goto(page, opts) {
   }
 }
 
+// Navigate to dashboard and select a task tab (list/board/gantt).
+// Used by shortcuts that may be clicked while on another page.
+function gotoDashboardTab(tab){
+  const t = (tab==='board' || tab==='gantt') ? tab : 'list';
+  try{ goto('dashboard'); }catch(_){ }
+  setTimeout(()=>{ try{ switchTab(t); }catch(_){ } }, 0);
+}
+
 // --- Data & Filters ---
 let DATA = {users:[], projects:[], tasks:[], subs:[], ledger:[], ledgerPlans:[], credentials:[], attachments:[], minutes:[], dailyReports:[], shareds:[]};
 let FILTERS = { keyword:'', project:'', assignee:'', from:'', to:'', priority:'', status:'' };
@@ -6758,8 +6766,8 @@ function closestSafe(target, selector){
         <div class="body">
           <div class="toolbar">
             <button class="secondary tooltip-host" data-tip="今日以前が期限で未完了のタスクを抽出">⚡ 遅延だけ</button>
-            <button class="secondary tooltip-host" data-tip="カンバンに切替" onclick="switchTab('board')">📋 カンバン</button>
-            <button class="secondary tooltip-host" data-tip="ガントに切替">📈 ガント</button>
+            <button class="secondary tooltip-host" data-tip="カンバンに切替" onclick="gotoDashboardTab('board')">📋 カンバン</button>
+            <button class="secondary tooltip-host" data-tip="ガントに切替" onclick="gotoDashboardTab('gantt')">📈 ガント</button>
           </div>
           <p class="hint">ヒント: Enterで「タスク作成」を実行できます。</p>
         </div>

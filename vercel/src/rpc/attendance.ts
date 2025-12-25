@@ -17,8 +17,8 @@ type AttendanceRow = {
   work_date?: string; // YYYY-MM-DD
   status?: AttendanceStatus;
   location?: AttendanceLocation;
-  clock_in?: string;
-  clock_out?: string;
+  clock_in?: string | null;
+  clock_out?: string | null;
   breaks?: BreakSpan[];
   notes?: string;
   project_id?: string | null;
@@ -141,16 +141,28 @@ export async function rpcPatchAttendance(userIdRaw: unknown, dateRaw: unknown, a
   switch (action.type) {
     case 'clockIn': {
       if (!row.clock_in) row.clock_in = now;
-      // If already clocked out, keep the clock_out but mark as done.
-      if (row.clock_out) {
-        row.status = 'done';
-      } else {
-        row.status = 'working';
-      }
+      // If already clocked out, cancel the clock-out when clock-in is pressed.
+      // (User likely clicked clock-out by mistake.)
+      if (row.clock_out) row.clock_out = null;
+
       if (action.location) row.location = action.location;
+      const effectiveLocation = (action.location || row.location || 'office') as AttendanceLocation;
+      row.status = effectiveLocation === 'out' ? 'out' : 'working';
       break;
     }
     case 'clockOut': {
+      // Toggle: if already clocked out, treat as cancel.
+      if (row.clock_out) {
+        row.clock_out = null;
+        if (!row.clock_in) {
+          row.status = 'not-clocked';
+        } else {
+          const effectiveLocation = (row.location || 'office') as AttendanceLocation;
+          row.status = effectiveLocation === 'out' ? 'out' : 'working';
+        }
+        break;
+      }
+
       // Close open break if exists
       const breaks = Array.isArray(row.breaks) ? [...row.breaks] : [];
       const last = breaks[breaks.length - 1];

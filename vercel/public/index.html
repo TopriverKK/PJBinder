@@ -2388,6 +2388,11 @@ function renderAttendancePage(){
     const nextLabel = nextEvent ? `${nextEvent.summary||'(予定)'} ${attFormatMDHM(nextEvent.start)}` : '-';
     const roleLabel = String(u.role||'').trim();
 
+    const breakBtnLabel = status==='break' ? '休憩戻り' : '休憩';
+    const outBtnLabel = status==='out' ? '外出戻り' : '外出';
+    const canClockIn = (status==='not-clocked' || status==='done');
+    const clockOutBtnLabel = status==='done' ? '退勤取消' : '退勤';
+
     card.innerHTML = `
       <div class="body">
         <div class="att-line">
@@ -2396,12 +2401,7 @@ function renderAttendancePage(){
             <span class="att-name">${escapeHtml(u.name||u.email||u.id)}</span>
             <span class="att-role">${escapeHtml(roleLabel)}</span>
           </div>
-          <span class="att-k">勤務場所:</span>
-          <select class="att-ctl small" data-att-uid="${escapeHtml(uid)}" data-att-field="location">
-            <option value="office" ${location==='office'?'selected':''}>オフィス</option>
-            <option value="remote" ${location==='remote'?'selected':''}>テレワーク</option>
-            <option value="out" ${location==='out'?'selected':''}>外出</option>
-          </select>
+          <span class="att-k">勤務場所</span><span class="att-v">${escapeHtml(attLocLabel(location))}</span>
           <span class="att-k">出勤</span><span class="att-v">${escapeHtml(attFormatTime(clockIn))}</span>
           <span class="att-k">退勤</span><span class="att-v">${escapeHtml(attFormatTime(clockOut))}</span>
           <span class="att-k">勤務時間</span><span class="att-v">${escapeHtml(minutesToLabel(worked))}</span>
@@ -2415,10 +2415,12 @@ function renderAttendancePage(){
           <select class="att-ctl wide" data-att-uid="${escapeHtml(uid)}" data-att-field="task">${taskOptions.join('')}</select>
           <span class="att-k">操作</span>
           <div class="att-actions">
-            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="clockIn">出勤</button>
-            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleBreak">休憩</button>
-            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleOut">外出</button>
-            <button data-att-uid="${escapeHtml(uid)}" data-att-action="clockOut">退勤</button>
+            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="clockInOffice" ${canClockIn?'':'disabled'}>出勤(オフィス)</button>
+            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="clockInRemote" ${canClockIn?'':'disabled'}>出勤(テレワーク)</button>
+            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="clockInOut" ${canClockIn?'':'disabled'}>出勤(外出)</button>
+            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleBreak">${escapeHtml(breakBtnLabel)}</button>
+            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleOut">${escapeHtml(outBtnLabel)}</button>
+            <button data-att-uid="${escapeHtml(uid)}" data-att-action="clockOut">${escapeHtml(clockOutBtnLabel)}</button>
           </div>
         </div>
 
@@ -2437,8 +2439,12 @@ function renderAttendancePage(){
     card.querySelectorAll('button[data-att-action]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const action = btn.getAttribute('data-att-action');
-        if(action==='clockIn'){
-          patchAttendance(uid, { type:'clockIn' });
+        if(action==='clockInOffice'){
+          patchAttendance(uid, { type:'clockIn', location:'office' });
+        }else if(action==='clockInRemote'){
+          patchAttendance(uid, { type:'clockIn', location:'remote' });
+        }else if(action==='clockInOut'){
+          patchAttendance(uid, { type:'clockIn', location:'out' });
         }else if(action==='clockOut'){
           patchAttendance(uid, { type:'clockOut' });
         }else if(action==='toggleBreak'){
@@ -2446,11 +2452,6 @@ function renderAttendancePage(){
         }else if(action==='toggleOut'){
           patchAttendance(uid, { type:'toggleOut' });
         }
-      });
-    });
-    card.querySelectorAll('select[data-att-field="location"]').forEach(sel=>{
-      sel.addEventListener('change', ()=>{
-        patchAttendance(uid, { type:'setLocation', location: sel.value });
       });
     });
     const projSel = card.querySelector('select[data-att-field="project"]');

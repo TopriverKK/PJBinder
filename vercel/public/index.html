@@ -2206,6 +2206,52 @@ function weeklyWeeksFromCenter(centerWs){
   return [prev, cur, next];
 }
 
+function weeklyUserProjectKey(uid, projectId){
+  return String(uid||'') + '|' + String(projectId||'');
+}
+
+function weeklyComputeHoursMapsForWeek(weekStartYmd){
+  // Uses DATA.dailyReports (hours, date, userId, projectId)
+  // Returns hours for the given week + total hours.
+  const weekMap = {};
+  const totalMap = {};
+  const ws = String(weekStartYmd||'').trim();
+  let we = '';
+  try {
+    const wsD = parseYMDLocal(ws);
+    we = wsD ? fmtYMDLocal(addDays(wsD, 6)) : '';
+  } catch(_){ we=''; }
+
+  const add = (map, key, hours)=>{
+    if (!key) return;
+    map[key] = (map[key] || 0) + (Number(hours) || 0);
+  };
+
+  safeArr(DATA.dailyReports).forEach(r=>{
+    const uid = String(r.userId||'').trim();
+    if (!uid) return;
+    const pid = String(r.projectId||'').trim();
+    const key = weeklyUserProjectKey(uid, pid);
+    const h = Number(r.hours||0) || 0;
+    add(totalMap, key, h);
+
+    const d = String(r.date||'').trim();
+    if (ws && we && d && d >= ws && d <= we) {
+      add(weekMap, key, h);
+    }
+  });
+
+  return { weekMap, totalMap };
+}
+
+function fmtHours(h){
+  const x = Number(h||0);
+  if (!Number.isFinite(x) || x === 0) return '0h';
+  const rounded = Math.round(x * 10) / 10;
+  const s = (Number.isInteger(rounded) ? String(rounded) : String(rounded));
+  return `${s}h`;
+}
+
 function weeklyRangeLabel(ws){
   try{
     const d0 = parseYMDLocal(String(ws||'')) || weekStartMonday(new Date());
@@ -2355,6 +2401,7 @@ function renderWeeklyPage(){
   const users = weeklyApplyFilters(baseUsers);
 
   const headWeeks = Array.isArray(WEEKLY.weeks) && WEEKLY.weeks.length === 3 ? WEEKLY.weeks : weeks;
+  const { weekMap: wkHoursMap, totalMap: totalHoursMap } = weeklyComputeHoursMapsForWeek(headWeeks[1]);
   const thead = `
     <thead>
       <tr>
@@ -2409,6 +2456,7 @@ function renderWeeklyPage(){
 
       const projCell = `
         <div class="wk-proj-name">${escapeHtml(projNameById(pid))}</div>
+        <div class="muted" style="font-size:12px; margin-top:2px;">今週: ${escapeHtml(fmtHours(wkHoursMap[weeklyUserProjectKey(uid, pid)]||0))} / 累計: ${escapeHtml(fmtHours(totalHoursMap[weeklyUserProjectKey(uid, pid)]||0))}</div>
         <div style="margin-top:6px; max-height:120px; overflow:auto;">${taskLines}</div>
       `;
 
@@ -2420,9 +2468,9 @@ function renderWeeklyPage(){
         return `
           <div>
             <label>課題</label>
-            <textarea id="wk_issues_${idp}" class="memo-edit" rows="2">${issues}</textarea>
-            <label style="margin-top:6px;">実施</label>
-            <textarea id="wk_done_${idp}" class="memo-edit" rows="2">${done}</textarea>
+            <textarea id="wk_issues_${idp}" class="memo-edit" rows="4">${issues}</textarea>
+            <label style="margin-top:0px;">実施</label>
+            <textarea id="wk_done_${idp}" class="memo-edit" rows="4">${done}</textarea>
             <div class="toolbar" style="justify-content:flex-end; margin-top:6px;">
               <button onclick="saveWeeklyForUserProjectWeek('${escapeJsSq(uid)}','${escapeJsSq(pid)}','${escapeJsSq(ws)}')">保存</button>
             </div>

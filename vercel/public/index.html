@@ -2853,6 +2853,9 @@ async function exportFreeeAttendanceCsv(){
 // Attendance init hooks (load settings, poll only on attendance page)
 window.addEventListener('load', ()=>{
   try{
+    // Dashboard task tabs (list/board/gantt) - ensure click handlers are bound.
+    try { bindDashboardTabs?.(); } catch(_){ }
+
     const mi = document.getElementById('att_month');
     if(mi && !mi.value) mi.value = todayStr().slice(0,7);
     loadAttendanceSettings();
@@ -2890,27 +2893,57 @@ window.addEventListener('load', ()=>{
 });
 
 
-// 既存の switchTab 内のガント描画呼び出しを修正
+function bindDashboardTabs(){
+  const defs = [
+    ['tab-list','list'],
+    ['tab-board','board'],
+    ['tab-gantt','gantt'],
+  ];
+  defs.forEach(([id, tab])=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    // Avoid duplicate binding in case of multiple init paths.
+    if (el.dataset && el.dataset.boundSwitchTab === '1') return;
+    if (el.dataset) el.dataset.boundSwitchTab = '1';
+    el.addEventListener('click', (e)=>{
+      try { e.preventDefault?.(); } catch(_){ }
+      try { switchTab(tab); } catch(_){ }
+    });
+  });
+}
+
+// タブ切替（list/board/gantt）
 function switchTab(tab) {
+  tab = (tab === 'board' || tab === 'gantt') ? tab : 'list';
   ACTIVE_TAB = tab;
-  document.getElementById('tab-list').classList.toggle('active', tab==='list');
-  document.getElementById('tab-board').classList.toggle('active', tab==='board');
-  const tg = document.getElementById('tab-gantt'); if (tg) tg.classList.toggle('active', tab==='gantt');
-  document.getElementById('view-list').style.display  = (tab==='list')  ? '' : 'none';
-  document.getElementById('view-board').style.display = (tab==='board') ? '' : 'none';
-  const vg = document.getElementById('view-gantt'); if (vg) vg.style.display = (tab==='gantt') ? '' : 'none';
+
+  const tl = document.getElementById('tab-list');
+  const tb = document.getElementById('tab-board');
+  const tg = document.getElementById('tab-gantt');
+  if (tl) tl.classList.toggle('active', tab==='list');
+  if (tb) tb.classList.toggle('active', tab==='board');
+  if (tg) tg.classList.toggle('active', tab==='gantt');
+
+  const vl = document.getElementById('view-list');
+  const vb = document.getElementById('view-board');
+  const vg = document.getElementById('view-gantt');
+  if (vl) vl.style.display = (tab==='list')  ? '' : 'none';
+  if (vb) vb.style.display = (tab==='board') ? '' : 'none';
+  if (vg) vg.style.display = (tab==='gantt') ? '' : 'none';
 
   try {
-    renderKanban();
-    // ▼ここを変更：ガント選択時は「forceDefaults=true」で必ず今日始まりに
-    if (tab==='gantt') renderGantt(true);
-  } catch(_){}
+    // board/list でも軽い再描画にしておく（内部で ACTIVE_TAB を見て最適化される前提）
+    renderKanban?.();
+    if (tab==='gantt') renderGantt?.(true);
+  } catch(_){ }
 
   if (tab!=='gantt'){
-    const gc=document.getElementById('gantt-container'); if(gc) gc.innerHTML='';
+    const gc = document.getElementById('gantt-container');
+    if (gc) gc.innerHTML='';
   }
-  updateHashFromState();
-  try { updateRouteParams({ tab: ACTIVE_TAB }, { replace:true }); } catch(_){ }
+
+  try { updateHashFromState?.(); } catch(_){ }
+  try { updateRouteParams?.({ tab: ACTIVE_TAB }, { replace:true }); } catch(_){ }
 }
 
 function updateHashFromState(){

@@ -2,6 +2,12 @@
 
 `vercel/public/index.html` を静的配信し、`/api/rpc` 経由で Google Drive/Docs API を叩く移行用の足場です。
 
+## ドキュメント
+
+- [初使用者向け](docs/BEGINNER.md)
+- [使用者向け](docs/USER_GUIDE.md)
+- [仕様書（簡易）](docs/SPEC.md)
+
 ## 必須の環境変数
 
 ### Google (Service Account)

@@ -234,22 +234,22 @@
   #att-cards{ display:flex; flex-direction:column; gap:4px; }
   .att-card{ padding: 6px 10px; border-radius: 10px; box-shadow: 0 1px 3px rgba(17, 24, 39, 0.04); }
   .att-card .body{ padding: 0; }
-  .att-card-top{ display:flex; align-items:center; gap:6px; margin-bottom:4px; }
   .att-avatar{ width:22px; height:22px; border-radius:50%; background:#cbd5e1; flex: 0 0 auto; }
-  .att-name{ font-weight:700; font-size:13px; line-height:1.2; }
-  .att-role{ color:#6b7280; font-size:11px; line-height:1.2; }
-  .att-status-pill{ margin-left:auto; padding:2px 6px; border-radius:999px; font-weight:700; font-size:11px; border:1px solid rgba(17,24,39,.08); background: rgba(255,255,255,.7); }
+  .att-name{ font-weight:800; font-size:20px; line-height:1.05; }
+  .att-role{ color:#6b7280; font-size:12px; line-height:1.05; margin-left:8px; }
+  .att-status-pill{ margin-left:auto; padding:2px 6px; border-radius:999px; font-weight:800; font-size:11px; border:1px solid rgba(17,24,39,.08); background: rgba(255,255,255,.7); white-space:nowrap; }
 
-  .att-card .row{ gap:8px; }
-  .att-card label{ font-size:11px; margin-bottom:2px; }
-  .att-card input,
-  .att-card select{
-    padding:6px;
-    font-size:13px;
-    border-radius:8px;
-  }
-  .att-card .toolbar{ gap:6px; }
+  .att-line{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; background: rgba(255,255,255,.6); border-radius: 10px; padding: 6px; }
+  .att-line + .att-line{ margin-top:4px; }
+  .att-k{ color:#374151; font-size:12px; font-weight:700; white-space:nowrap; }
+  .att-v{ color:#111827; font-size:12px; white-space:nowrap; }
+  .att-person{ display:flex; align-items:baseline; gap:0; margin-right:6px; }
+  .att-ctl{ padding:4px 8px; font-size:13px; border-radius:8px; width:auto; min-width: 120px; }
+  .att-ctl.small{ min-width: 0; width: auto; }
+  .att-ctl.wide{ min-width: 240px; max-width: 420px; }
+  .att-actions{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .att-card button{ padding:6px 10px; border-radius:8px; }
+  .att-muted{ color: var(--muted); font-size:12px; }
   .att-status-pill.tone-green{ background:#dcfce7; color:#166534; border-color: rgba(22,101,52,.25); }
   .att-status-pill.tone-yellow{ background:#fef3c7; color:#92400e; border-color: rgba(146,64,14,.25); }
   .att-status-pill.tone-red{ background:#fee2e2; color:#991b1b; border-color: rgba(153,27,27,.25); }
@@ -2380,74 +2380,51 @@ function renderAttendancePage(){
     const projName = projId ? (safeArr(DATA.projects).find(p=>String(p.id)===projId)?.name || projId) : '';
     const taskName = taskId ? (tasks.find(t=>String(t.id)===taskId)?.title || taskId) : '';
 
+    const curLabel = currentEvent ? `${currentEvent.summary||'(予定)'} ${attFormatTime(currentEvent.start)}` : '-';
+    const nextLabel = nextEvent ? `${nextEvent.summary||'(予定)'} ${attFormatTime(nextEvent.start)}` : '-';
+    const roleLabel = String(u.role||'').trim();
+
     card.innerHTML = `
-      <div class="att-card-top">
-        <div class="att-avatar" style="background: hsl(${avatarHue} 70% 45%);"></div>
-        <div>
-          <div class="att-name">${escapeHtml(u.name||u.email||u.id)}</div>
-          <div class="att-role">${escapeHtml(u.role||'')}</div>
-        </div>
-        <div class="att-status-pill tone-${tone}">${escapeHtml(attStatusLabel(status))}</div>
-      </div>
       <div class="body">
-        <div class="row">
-          <div>
-            <label>勤務場所</label>
-            <select data-att-uid="${escapeHtml(uid)}" data-att-field="location">
-              <option value="office" ${location==='office'?'selected':''}>オフィス</option>
-              <option value="remote" ${location==='remote'?'selected':''}>テレワーク</option>
-              <option value="out" ${location==='out'?'selected':''}>外出</option>
-            </select>
+        <div class="att-line">
+          <div class="att-avatar" style="background: hsl(${avatarHue} 70% 45%);"></div>
+          <div class="att-person">
+            <span class="att-name">${escapeHtml(u.name||u.email||u.id)}</span>
+            <span class="att-role">${escapeHtml(roleLabel)}</span>
           </div>
-          <div>
-            <label>出勤/退勤</label>
-            <div class="toolbar">
-              <span class="muted">出勤 ${escapeHtml(attFormatTime(clockIn))}</span>
-              <span class="muted">退勤 ${escapeHtml(attFormatTime(clockOut))}</span>
-            </div>
+          <span class="att-k">勤務場所:</span>
+          <select class="att-ctl small" data-att-uid="${escapeHtml(uid)}" data-att-field="location">
+            <option value="office" ${location==='office'?'selected':''}>オフィス</option>
+            <option value="remote" ${location==='remote'?'selected':''}>テレワーク</option>
+            <option value="out" ${location==='out'?'selected':''}>外出</option>
+          </select>
+          <span class="att-k">出勤</span><span class="att-v">${escapeHtml(attFormatTime(clockIn))}</span>
+          <span class="att-k">退勤</span><span class="att-v">${escapeHtml(attFormatTime(clockOut))}</span>
+          <span class="att-k">勤務時間</span><span class="att-v">${escapeHtml(minutesToLabel(worked))}</span>
+          <span class="att-status-pill tone-${tone}">${escapeHtml(attStatusLabel(status))}</span>
+        </div>
+
+        <div class="att-line">
+          <span class="att-k">プロジェクト:</span>
+          <select class="att-ctl wide" data-att-uid="${escapeHtml(uid)}" data-att-field="project">${projOptions.join('')}</select>
+          <span class="att-k">タスク:</span>
+          <select class="att-ctl wide" data-att-uid="${escapeHtml(uid)}" data-att-field="task">${taskOptions.join('')}</select>
+          <span class="att-k">操作</span>
+          <div class="att-actions">
+            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="clockIn">出勤</button>
+            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleBreak">休憩</button>
+            <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleOut">外出</button>
+            <button data-att-uid="${escapeHtml(uid)}" data-att-action="clockOut">退勤</button>
           </div>
         </div>
 
-        <div class="row">
-          <div>
-            <label>プロジェクト</label>
-            <select data-att-uid="${escapeHtml(uid)}" data-att-field="project">${projOptions.join('')}</select>
-          </div>
-          <div>
-            <label>タスク</label>
-            <select data-att-uid="${escapeHtml(uid)}" data-att-field="task">${taskOptions.join('')}</select>
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>操作</label>
-            <div class="toolbar" style="flex-wrap:wrap;">
-              <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="clockIn">出勤</button>
-              <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleBreak">休憩</button>
-              <button class="secondary" data-att-uid="${escapeHtml(uid)}" data-att-action="toggleOut">外出</button>
-              <button data-att-uid="${escapeHtml(uid)}" data-att-action="clockOut">退勤</button>
-            </div>
-          </div>
-          <div>
-            <label>勤務(概算)</label>
-            <div class="muted">${escapeHtml(minutesToLabel(worked))}（freee集計は休憩1h30m固定）</div>
-            <div class="muted" style="font-size:12px;">${projName && taskName ? escapeHtml(projName+' / '+taskName) : (projName ? escapeHtml(projName) : (taskName?escapeHtml(taskName):''))}</div>
-          </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>メモ</label>
-            <input data-att-uid="${escapeHtml(uid)}" data-att-field="notes" value="${escapeHtml(row.notes||'')}" placeholder="任意"/>
-          </div>
-          <div>
-            <label>カレンダー（次/現在）</label>
-            <div class="muted" style="font-size:12px;">
-              ${currentEvent ? `今: ${escapeHtml(currentEvent.summary||'(予定)')} ${escapeHtml(attFormatTime(currentEvent.start))}` : '今: -'}<br/>
-              ${nextEvent ? `次: ${escapeHtml(nextEvent.summary||'(予定)')} ${escapeHtml(attFormatTime(nextEvent.start))}` : '次: -'}
-            </div>
-          </div>
+        <div class="att-line">
+          <span class="att-k">現在の予定:</span>
+          <span class="att-muted">${escapeHtml(curLabel)}</span>
+          <span class="att-k">次の予定:</span>
+          <span class="att-muted">${escapeHtml(nextLabel)}</span>
+          <span class="att-k">メモ:</span>
+          <input class="att-ctl" data-att-uid="${escapeHtml(uid)}" data-att-field="notes" value="${escapeHtml(row.notes||'')}" placeholder=""/>
         </div>
       </div>
     `;
@@ -3466,6 +3443,10 @@ function renderProjects() {
       ? '<button class="secondary mini" style="margin-left:6px;" data-tip="タスク一覧/状況を表示します" onclick="toggleProjectTaskList(\''+r.id+'\', this)">一覧</button>'
       : '';
 
+    const hardBtn = (PAGE === 'projects')
+      ? ' <button class="secondary" data-tip="このプロジェクトと関連タスク/添付URLを完全削除します（元に戻せません）。" onclick="deleteProjectHard(\''+r.id+'\')">完全削除</button>'
+      : '';
+
     tr.innerHTML =
       '<td'+bg+'>'+escapeHtml(r.name||'')+badge+' '+attBadge+'</td>'+
       '<td'+bg+'>'+escapeHtml(parentName)+'</td>'+
@@ -3484,7 +3465,7 @@ function renderProjects() {
       '<td>'+
         attBtn+
         ' <button class="secondary" data-tip="このプロジェクトについて編集します。" onclick="editProject(\''+r.id+'\')">編集</button>'+
-        ' <button class="secondary" data-tip="このプロジェクトと関連タスク/添付URLを完全削除します（元に戻せません）。" onclick="deleteProjectHard(\''+r.id+'\')">完全削除</button>'+
+        hardBtn+
         ' <button class="secondary" data-tip="このプロジェクトを完了扱いとして、過去ログにアーカイブします。アーカイブしたプロジェクトは上部メニューから「プロジェクト」タブで閲覧・復活できます。" onclick="toggleArchiveProject(\''+r.id+'\')">'+
           ((String(r.status||'').toLowerCase()==='archived')?'復活':'アーカイブ')+
         '</button>'+

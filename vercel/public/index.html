@@ -5932,6 +5932,7 @@ function renderProjectsPage(){
         <button class="secondary" onclick="toggleProjectTasks('${r.id}', this)">関連タスク</button>
         <button class="secondary" onclick="editProject('${r.id}')">編集</button>
         <button class="secondary" onclick="toggleArchiveProject('${r.id}')">${(String(r.status||'').toLowerCase()==='archived')?'復活':'アーカイブ'}</button>
+        <button class="secondary" data-tip="このプロジェクトと関連タスク/添付URLを完全削除します（元に戻せません）。" onclick="deleteProjectHard('${r.id}')">完全削除</button>
       </td>
     `;
     tb.appendChild(tr);

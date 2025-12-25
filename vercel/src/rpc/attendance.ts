@@ -26,6 +26,18 @@ type AttendanceRow = {
   updated_at?: string;
 };
 
+type AttendanceWorklogRow = {
+  id?: number;
+  created_at?: string;
+  user_id?: string;
+  work_date?: string; // YYYY-MM-DD
+  start_at?: string;
+  end_at?: string | null;
+  project_id?: string | null;
+  task_id?: string | null;
+  source?: string;
+};
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -48,6 +60,104 @@ function normalizeRow(r: AttendanceRow): AttendanceRow {
     status,
     location,
   };
+}
+
+function normId(v: unknown): string {
+  return String(v || '').trim();
+}
+
+function isWorklogActive(r: AttendanceRow): boolean {
+  // Counts time while working or out (äOèo) but not during breaks.
+  // Also requires an open work interval (clock_in without clock_out).
+  if (!r.clock_in) return false;
+  if (r.clock_out) return false;
+  return r.status === 'working' || r.status === 'out';
+}
+
+async function selectOpenWorklog(userId: string, date: string): Promise<AttendanceWorklogRow | null> {
+  // end_at=is.null for open segment
+  const query = `select=*&user_id=eq.${encodeURIComponent(userId)}`
+    + `&work_date=eq.${encodeURIComponent(date)}`
+    + `&end_at=is.null&order=start_at.desc&limit=1`;
+  const rows = await sbSelectAllSafe('attendance_worklogs', query);
+  const r = Array.isArray(rows) ? (rows[0] as any) : null;
+  return r ? (r as AttendanceWorklogRow) : null;
+}
+
+async function closeOpenWorklogIfAny(userId: string, date: string, endAtIso: string) {
+  const open = await selectOpenWorklog(userId, date);
+  if (!open || !open.id) return;
+  await sbUpsert(
+    'attendance_worklogs',
+    { id: open.id, end_at: endAtIso },
+    'id'
+  );
+}
+
+async function openWorklog(userId: string, date: string, startAtIso: string, projectId: string, taskId: string, source: string) {
+  const row: AttendanceWorklogRow = {
+    user_id: userId,
+    work_date: date,
+    start_at: startAtIso,
+    end_at: null,
+    project_id: projectId ? projectId : null,
+    task_id: taskId ? taskId : null,
+    source: source || 'unknown',
+  };
+  await sbUpsert('attendance_worklogs', row as any);
+}
+
+async function syncWorklogsForPatch(
+  before: AttendanceRow,
+  after: AttendanceRow,
+  actionType: string,
+  now: string
+) {
+  const userId = normId(after.user_id || after.user);
+  const date = normId(after.work_date);
+  if (!userId || !date) return;
+
+  const beforeActive = isWorklogActive(before);
+  const afterActive = isWorklogActive(after);
+
+  const beforeProjectId = normId(before.project_id);
+  const beforeTaskId = normId(before.task_id);
+  const afterProjectId = normId(after.project_id);
+  const afterTaskId = normId(after.task_id);
+
+  const changed = beforeProjectId !== afterProjectId || beforeTaskId !== afterTaskId;
+
+  // Transition rules:
+  // - active -> inactive : close current segment
+  // - inactive -> active : open new segment
+  // - active -> active + project/task changed : close + open
+  // - active -> active + unchanged : ensure an open segment exists (self-heal)
+
+  if (beforeActive && !afterActive) {
+    await closeOpenWorklogIfAny(userId, date, now);
+    return;
+  }
+
+  if (!beforeActive && afterActive) {
+    // Defensive: if an open segment exists due to previous failure, close it first.
+    await closeOpenWorklogIfAny(userId, date, now);
+    await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+    return;
+  }
+
+  if (beforeActive && afterActive) {
+    if (changed) {
+      await closeOpenWorklogIfAny(userId, date, now);
+      await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+      return;
+    }
+
+    // Self-heal: if somehow there is no open segment, open one.
+    const open = await selectOpenWorklog(userId, date);
+    if (!open) {
+      await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+    }
+  }
 }
 
 function makeValueJson(r: AttendanceRow): string {
@@ -136,6 +246,7 @@ export async function rpcPatchAttendance(userIdRaw: unknown, dateRaw: unknown, a
   if (!action || typeof action !== 'object' || !('type' in action)) throw new Error('action is required');
 
   const row = await getOrInitRow(userId, date);
+  const before = normalizeRow({ ...row });
   const now = nowIso();
 
   switch (action.type) {
@@ -228,7 +339,17 @@ export async function rpcPatchAttendance(userIdRaw: unknown, dateRaw: unknown, a
 
   // Requires unique index on (user_id, work_date) to be safe under concurrency.
   const saved = await sbUpsert('attendancemanager', row as any, 'user_id,work_date');
-  return normalizeRow(saved as any);
+  const after = normalizeRow(saved as any);
+
+  // Best-effort: record project/task time allocation segments.
+  // This requires table `attendance_worklogs` (see SUPABASE_ATTENDANCE_WORKLOGS.sql).
+  try {
+    await syncWorklogsForPatch(before, after, String((action as any).type || ''), now);
+  } catch (e) {
+    console.error('[attendance_worklogs] failed to sync worklogs:', e);
+  }
+
+  return after;
 }
 
 export async function rpcGetAttendanceSettings() {

@@ -45,6 +45,9 @@ export async function rpcCreateProjectDoc(projectId: string) {
   const p = await sbSelectOneById('projects', pid);
   if (!p) throw new Error(`Project not found: ${pid}`);
 
+  const owner = p.ownerUserId ? await sbSelectOneById('users', String(p.ownerUserId)) : null;
+  const parent = p.parentProjectId ? await sbSelectOneById('projects', String(p.parentProjectId)) : null;
+
   const env = loadGoogleEnv();
   const base = env.projectDocsFolderId || env.baseFolderId;
 
@@ -53,19 +56,50 @@ export async function rpcCreateProjectDoc(projectId: string) {
   const folderId = base ? await ensureFolderPath(base, ['プロジェクトDocs', sanitizeName(p.name || p.id)]) : undefined;
   const title = `プロジェクト ${p.name || p.id}`;
 
-  const initialText =
-    `${title}\n` +
-    `期間: ${(p.startDate || '-')} 〜 ${(p.endDate || '-')}　予算: ${Number(p.budget || 0).toLocaleString()} 円\n` +
-    `責任者: ${p.ownerUserId || '-'}\n`;
+  const templateId = await getSetting('PROJECT_TEMPLATE_ID');
 
-  const { docId, url } = await createGoogleDocInFolder({
-    title,
-    folderId,
-    shareRole: 'editor',
-    initialText,
-  });
+  const periodLabel = `${p.startDate || '-'}〜${p.endDate || '-'}`;
+  const ownerLabel = owner ? (owner.name || owner.email || owner.id) : (p.ownerUserId || '-');
+  const parentLabel = parent ? (parent.name || parent.id || '') : '';
 
-  await sbUpsert('projects', { id: pid, docId }, 'id');
+  const replacements: Record<string, string> = {
+    '【プロジェクト名】': String(p.name || p.id || ''),
+    '【タスク名】': '',
+    '【期間】': periodLabel,
+    '【担当者】': String(ownerLabel || ''),
+    '【親プロジェクト】': String(parentLabel || ''),
+  };
+
+  let docId = '';
+  let url = '';
+
+  if (templateId) {
+    const result = await copyDocTemplate({
+      templateId: String(templateId),
+      title,
+      folderId,
+      shareRole: 'editor',
+      replacements,
+    });
+    docId = result.docId;
+    url = result.url;
+  } else {
+    const initialText =
+      `${title}\n` +
+      `期間: ${(p.startDate || '-')} 〜 ${(p.endDate || '-')}　予算: ${Number(p.budget || 0).toLocaleString()} 円\n` +
+      `責任者: ${ownerLabel || '-'}\n`;
+
+    const created = await createGoogleDocInFolder({
+      title,
+      folderId,
+      shareRole: 'editor',
+      initialText,
+    });
+    docId = created.docId;
+    url = created.url;
+  }
+
+  await sbUpsert('projects', { id: pid, docId, docUrl: url }, 'id');
   const updated = await sbSelectOneById('projects', pid);
 
   return { ok: true, docId, project: updated, url };
@@ -77,6 +111,7 @@ export async function rpcCreateTaskDoc(taskId: string) {
   if (!t) throw new Error(`Task not found: ${tid}`);
 
   const proj = t.projectId ? await sbSelectOneById('projects', String(t.projectId)) : null;
+  const owner = t.ownerUserId ? await sbSelectOneById('users', String(t.ownerUserId)) : null;
 
   const env = loadGoogleEnv();
   const base = env.projectDocsFolderId || env.baseFolderId;
@@ -92,20 +127,51 @@ export async function rpcCreateTaskDoc(taskId: string) {
     : undefined;
 
   const title = `${proj ? `${proj.name || proj.id} - ` : ''}タスク ${t.title || t.id}`;
-  const initialText =
-    `${title}\n` +
-    `期限: ${t.dueDate || '-'}　優先度: ${t.priority || '-'}　状態: ${t.status || 'todo'}\n` +
-    (proj ? `プロジェクト: ${proj.name || proj.id}\n` : '');
 
-  const { docId, url } = await createGoogleDocInFolder({
-    title,
-    folderId,
-    shareRole: 'editor',
-    initialText,
-  });
+  const templateId = await getSetting('TASK_TEMPLATE_ID');
 
-  await sbUpsert('tasks', { id: tid, docId }, 'id');
+  const periodLabel = String(t.dueDate || proj?.endDate || proj?.startDate || '-');
+  const ownerLabel = owner ? (owner.name || owner.email || owner.id) : (t.ownerUserId || '-');
+  const parentProjectLabel = proj ? (proj.name || proj.id || '') : '';
 
+  const replacements: Record<string, string> = {
+    '【プロジェクト名】': String(parentProjectLabel || ''),
+    '【タスク名】': String(t.title || t.id || ''),
+    '【期間】': periodLabel,
+    '【担当者】': String(ownerLabel || ''),
+    '【親プロジェクト】': String(parentProjectLabel || ''),
+  };
+
+  let docId = '';
+  let url = '';
+
+  if (templateId) {
+    const result = await copyDocTemplate({
+      templateId: String(templateId),
+      title,
+      folderId,
+      shareRole: 'editor',
+      replacements,
+    });
+    docId = result.docId;
+    url = result.url;
+  } else {
+    const initialText =
+      `${title}\n` +
+      `期限: ${t.dueDate || '-'}　優先度: ${t.priority || '-'}　状態: ${t.status || 'todo'}\n` +
+      (proj ? `プロジェクト: ${proj.name || proj.id}\n` : '');
+
+    const created = await createGoogleDocInFolder({
+      title,
+      folderId,
+      shareRole: 'editor',
+      initialText,
+    });
+    docId = created.docId;
+    url = created.url;
+  }
+
+  await sbUpsert('tasks', { id: tid, docId, docUrl: url }, 'id');
   return { docId, url };
 }
 

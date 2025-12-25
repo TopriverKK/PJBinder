@@ -181,6 +181,10 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const crud = await getCrudMod();
     return await crud.rpcDeleteProject(String(args[0]));
   },
+  async deleteProjectHard(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcDeleteProjectHard(String(args[0]));
+  },
   async deleteTask(...args: any[]) {
     const crud = await getCrudMod();
     return await crud.rpcDeleteTask(String(args[0]));

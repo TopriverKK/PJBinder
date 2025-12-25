@@ -229,6 +229,8 @@
   .age-14 { box-shadow: inset 0 0 0 2px rgba(239,68,68,.6); }    /* 14日超 赤 */
 
   /* === Attendance UI (look recreation) === */
+  /* ダッシュボード表示時はカードリストを全幅にする */
+  #page-attendance.att-layout-dashboard .grid{ grid-template-columns: 1fr; }
   #att-cards{ display:flex; flex-direction:column; gap:6px; }
   .att-card{ padding: 8px 12px; border-radius: 10px; box-shadow: 0 1px 3px rgba(17, 24, 39, 0.04); }
   .att-card .body{ padding: 0; }
@@ -1288,12 +1290,7 @@ button.link:hover { opacity: .8; }
           <button onclick="saveAttendanceSettings()">保存</button>
         </div>
         <hr/>
-        <div class="muted" style="margin-bottom:6px;">ユーザーごとの設定</div>
-        <table id="att-user-settings">
-          <thead><tr><th>ユーザー</th><th>勤怠に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th></tr></thead>
-          <tbody></tbody>
-        </table>
-        <div class="muted" style="margin-top:6px;">個人ICSは /api/ics 経由で取得します（Google系ホストのみ許可）。</div>
+        <div class="muted" style="margin-top:6px;">個人ICS / freee従業員番号 / 勤怠への表示 は「ユーザー」タブで設定します。</div>
       </div>
     </div>
 
@@ -1979,6 +1976,11 @@ function applyAttendanceViewUi(){
   const s = document.getElementById('att-view-tab-summary');
   if (d) d.classList.toggle('active', ATT_VIEW === 'dashboard');
   if (s) s.classList.toggle('active', ATT_VIEW === 'summary');
+  const page = document.getElementById('page-attendance');
+  if (page) {
+    page.classList.toggle('att-layout-dashboard', ATT_VIEW === 'dashboard');
+    page.classList.toggle('att-layout-summary', ATT_VIEW === 'summary');
+  }
   document.querySelectorAll('#page-attendance [data-att-view]').forEach(el=>{
     const v = el.getAttribute('data-att-view');
     el.style.display = (v === ATT_VIEW) ? '' : 'none';
@@ -2258,50 +2260,38 @@ function isAttendanceVisibleUser(u){
   // Default: visible. Allow explicit false to hide.
   if (!u || typeof u !== 'object') return true;
   if (Object.prototype.hasOwnProperty.call(u, 'attendanceVisible')) {
-    return (u.attendanceVisible !== false);
+    const v = u.attendanceVisible;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v !== 0;
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (!s) return true;
+      if (['false','0','no','off'].includes(s)) return false;
+      if (['true','1','yes','on'].includes(s)) return true;
+      return true;
+    }
+    return v !== false;
   }
   // Backward/alternate field name safety.
   if (Object.prototype.hasOwnProperty.call(u, 'showAttendance')) {
-    return (u.showAttendance !== false);
+    const v = u.showAttendance;
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v !== 0;
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (!s) return true;
+      if (['false','0','no','off'].includes(s)) return false;
+      if (['true','1','yes','on'].includes(s)) return true;
+      return true;
+    }
+    return v !== false;
   }
   return true;
 }
 
 function renderAttendanceUserSettings(){
-  const tb = document.querySelector('#att-user-settings tbody');
-  if(!tb) return;
-  tb.innerHTML = '';
-  safeArr(DATA.users).filter(u=>!isUnsetUser(u)).forEach(u=>{
-    const tr = document.createElement('tr');
-    const display = escapeHtml(u.name||u.email||u.id||'');
-    const checked = isAttendanceVisibleUser(u) ? 'checked' : '';
-    tr.innerHTML = `
-      <td>${display}</td>
-      <td style="text-align:center;"><input type="checkbox" data-uid="${escapeHtml(u.id)}" data-field="attendanceVisible" ${checked}/></td>
-      <td><input data-uid="${escapeHtml(u.id)}" data-field="employeeNumber" value="${escapeHtml(u.employeeNumber||'')}" placeholder="12345"/></td>
-      <td><input data-uid="${escapeHtml(u.id)}" data-field="calendarUrl" value="${escapeHtml(u.calendarUrl||'')}" placeholder="https://calendar.google.com/.../basic.ics"/></td>
-    `;
-    tb.appendChild(tr);
-  });
-
-  // Attach one-time listeners (idempotent by replacing tbody)
-  tb.querySelectorAll('input[data-uid]').forEach(inp=>{
-    inp.addEventListener('change', ()=>{
-      const uid = inp.getAttribute('data-uid');
-      const field = inp.getAttribute('data-field');
-      if(!uid || !field) return;
-
-      let value = null;
-      if (inp.type === 'checkbox') value = !!inp.checked;
-      else value = inp.value;
-
-      const patch = { id: uid };
-      patch[field] = value;
-      gsr().withSuccessHandler(row=>{ patchRow('users', row); rerenderAfter('users'); toast('ユーザー設定を保存しました', true); })
-          .withFailureHandler(e=>{ toast('ユーザー設定保存に失敗: '+(e && e.message ? e.message : e), false); })
-          .upsertUser(patch);
-    }, { once:false });
-  });
+  // Attendance tab no longer shows per-user settings.
+  return;
 }
 
 function renderAttendancePage(){
@@ -2309,8 +2299,6 @@ function renderAttendancePage(){
   if (ATT_VIEW !== 'dashboard') return;
   const label = document.getElementById('att-today-label');
   if(label) label.textContent = todayStr();
-
-  renderAttendanceUserSettings();
 
   const wrap = document.getElementById('att-cards');
   if(!wrap) return;
@@ -3472,6 +3460,7 @@ function renderProjects() {
       '<td>'+
         attBtn+
         ' <button class="secondary" data-tip="このプロジェクトについて編集します。" onclick="editProject(\''+r.id+'\')">編集</button>'+
+        ' <button class="secondary" data-tip="このプロジェクトと関連タスク/添付URLを完全削除します（元に戻せません）。" onclick="deleteProjectHard(\''+r.id+'\')">完全削除</button>'+
         ' <button class="secondary" data-tip="このプロジェクトを完了扱いとして、過去ログにアーカイブします。アーカイブしたプロジェクトは上部メニューから「プロジェクト」タブで閲覧・復活できます。" onclick="toggleArchiveProject(\''+r.id+'\')">'+
           ((String(r.status||'').toLowerCase()==='archived')?'復活':'アーカイブ')+
         '</button>'+
@@ -3574,6 +3563,41 @@ function renderUsers() {
 }
 function delUser(id) { gsr().withSuccessHandler(()=>{ dropRow('users', id); rerenderAfter('users'); }).deleteUser(id); }
 function delMinute(id) { gsr().withSuccessHandler(()=>{ dropRow('minutes', id); rerenderAfter('minutes'); }).deleteMinute(id); }
+
+function deleteProjectHard(id){
+  const p = safeArr(DATA.projects).find(x=>String(x.id)===String(id));
+  const name = p ? (p.name||p.id) : String(id);
+  const ok = confirm(`⚠ プロジェクト「${name}」を完全削除します。\n関連タスク/添付URLも削除され、元に戻せません。\n\n本当に削除しますか？`);
+  if(!ok) return;
+
+  gsr()
+    .withSuccessHandler((r)=>{
+      // Drop project
+      dropRow('projects', String(id));
+
+      // Drop related tasks (client-side)
+      const removedTaskIds = new Set(
+        safeArr(DATA.tasks).filter(t=>String(t.projectId)===String(id)).map(t=>String(t.id))
+      );
+      DATA.tasks = safeArr(DATA.tasks).filter(t=>String(t.projectId)!==String(id));
+
+      // Drop attachments for project and those tasks
+      DATA.attachments = safeArr(DATA.attachments).filter(a=>{
+        const pt = String(a.parentType||'');
+        const pid = String(a.parentId||'');
+        if (pt==='project' && pid===String(id)) return false;
+        if (pt==='task' && removedTaskIds.has(pid)) return false;
+        return true;
+      });
+
+      rerenderAfter('projects');
+      toast('プロジェクトを完全削除しました', true);
+    })
+    .withFailureHandler((e)=>{
+      toast('完全削除に失敗: '+(e && e.message ? e.message : e), false);
+    })
+    .deleteProjectHard(String(id));
+}
 
 // --- Vault (AES-GCM) ---
 async function deriveKey(passphrase, salt) {

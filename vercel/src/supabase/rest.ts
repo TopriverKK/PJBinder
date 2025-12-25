@@ -89,3 +89,13 @@ export async function sbDelete(table: string, id: string) {
   });
   return { ok: true };
 }
+
+export async function sbDeleteWhere(table: string, query: string) {
+  const q = String(query || '').trim();
+  if (!q) throw new Error('sbDeleteWhere: query is required');
+  await sbFetch(`${encodeURIComponent(table)}?${q}`, {
+    method: 'DELETE',
+    headers: headers({ Prefer: 'return=minimal' }),
+  });
+  return { ok: true };
+}

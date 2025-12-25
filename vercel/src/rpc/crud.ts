@@ -1,4 +1,4 @@
-import { sbUpsert, sbSelectOneById, sbDelete } from '../supabase/rest.js';
+import { sbUpsert, sbSelect, sbSelectOneById, sbDelete, sbDeleteWhere } from '../supabase/rest.js';
 import {
   rpcCreateDailyReportDoc,
   rpcCreateMinuteDoc,
@@ -170,6 +170,32 @@ export async function rpcUpsertDailyReport(r: any) {
 export async function rpcDeleteProject(id: string) {
   await sbDelete('projects', id);
   return { ok: true, id };
+}
+
+export async function rpcDeleteProjectHard(id: string) {
+  const pid = String(id || '').trim();
+  if (!pid) throw new Error('deleteProjectHard: id is required');
+
+  // 1) Collect task ids under project
+  const tasks = await sbSelect('tasks', `select=id&projectId=eq.${encodeURIComponent(pid)}&limit=10000`);
+  const taskIds = Array.isArray(tasks) ? tasks.map((t: any) => String(t?.id || '')).filter(Boolean) : [];
+
+  // 2) Delete attachments for tasks (if any)
+  if (taskIds.length) {
+    const inList = taskIds.map((x) => `"${x.replaceAll('"', '')}"`).join(',');
+    await sbDeleteWhere('attachments', `parentType=eq.task&parentId=in.(${encodeURIComponent(inList)})`);
+  }
+
+  // 3) Delete attachments for project
+  await sbDeleteWhere('attachments', `parentType=eq.project&parentId=eq.${encodeURIComponent(pid)}`);
+
+  // 4) Delete tasks under project
+  await sbDeleteWhere('tasks', `projectId=eq.${encodeURIComponent(pid)}`);
+
+  // 5) Delete project
+  await sbDelete('projects', pid);
+
+  return { ok: true, id: pid, deletedTaskCount: taskIds.length };
 }
 
 export async function rpcDeleteTask(id: string) {

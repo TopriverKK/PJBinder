@@ -2109,6 +2109,13 @@ async function loadWeekly(){
       WEEKLY.centerWeekStart = center;
       WEEKLY.weeks = weeks;
       WEEKLY.rowsByKey = rowsByKey;
+    }catch(e){
+      console.error(e);
+      try{ showToast?.('ng', '週次の読み込みに失敗しました'); }catch(_){ }
+      // Avoid blank UI / infinite load loop: keep weeks state even on failure.
+      WEEKLY.centerWeekStart = center;
+      WEEKLY.weeks = weeks;
+      WEEKLY.rowsByKey = WEEKLY.rowsByKey || {};
     }finally{
       Busy.pop();
     }
@@ -2151,6 +2158,9 @@ function renderWeeklyPage(){
     range.textContent = `表示: ${weeklyRangeLabel(weeks[0])} / ${weeklyRangeLabel(weeks[1])} / ${weeklyRangeLabel(weeks[2])}`;
   }
 
+  const cont = el('weekly-users');
+  if (!cont) return;
+
   // 初回だけ自動ロード（center基準・3週分）
   const needLoad = (
     WEEKLY.centerWeekStart !== center ||
@@ -2159,12 +2169,10 @@ function renderWeeklyPage(){
     WEEKLY.weeks.some((w,i)=>String(w||'') !== String(weeks[i]||''))
   );
   if (center && needLoad) {
-    loadWeekly();
-    return;
+    // Render skeleton immediately; refresh in background.
+    cont.innerHTML = '<div class="muted">読み込み中...</div>';
+    try{ loadWeekly(); }catch(_){ }
   }
-
-  const cont = el('weekly-users');
-  if (!cont) return;
 
   const users = safeArr(DATA.users).slice().sort((a,b)=>{
     const an = String(a.name||a.email||a.id||'');

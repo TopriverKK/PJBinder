@@ -30,6 +30,11 @@
     --muted:#6b7280; --accent:#0ea5e9; --pill:#eef2ff; --pill-ink:#3730a3;
     --shadow: 0 1px 2px rgba(0,0,0,.05);
 
+    /* Weekly schedule sheet-like colors */
+    --weekly-name-bg: #dbeafe; /* light blue */
+    --weekly-week-bg: #fef3c7; /* light yellow */
+    --weekly-week-stripe: rgba(0,0,0,.05);
+
     /* Sticky UI offsets (fallbacks; JS will refine) */
     --header-h: 56px;
     --toolbar-h: 0px;
@@ -118,6 +123,11 @@
   th { color:#6b7280; font-weight:600; }
 
   /* Weekly table (gantt-like) */
+  /* Make weekly page use full width (single column) */
+  #page-weekly .weekly-grid { grid-template-columns: 1fr; }
+  #page-weekly #weekly-users { padding: 0; }
+  #page-weekly{ --wk-user-col: 170px; --wk-proj-col: 260px; }
+
   #weeklyTable { border-collapse: separate; border-spacing: 0; }
   #weeklyTable th, #weeklyTable td {
     border-right: 1px solid var(--border);
@@ -126,12 +136,27 @@
   }
   #weeklyTable th { position: sticky; top: 0; z-index: 4; }
   #weeklyTable .wk-sticky-1 { position: sticky; left: 0; z-index: 5; }
-  #weeklyTable .wk-sticky-2 { position: sticky; left: 260px; z-index: 5; }
-  #weeklyTable .wk-sticky-1, #weeklyTable .wk-sticky-2 { background: var(--card); }
+  #weeklyTable .wk-sticky-2 { position: sticky; left: var(--wk-user-col); z-index: 5; }
+  #weeklyTable .wk-sticky-1 { background: var(--weekly-name-bg); }
+  #weeklyTable .wk-sticky-2 { background: var(--card); }
   #weeklyTable .wk-sub { font-size: 12px; color: var(--muted); }
-  #weeklyTable .wk-rowhead { min-width: 260px; }
-  #weeklyTable .wk-proj { min-width: 260px; }
+  #weeklyTable .wk-rowhead { min-width: var(--wk-user-col); width: var(--wk-user-col); max-width: var(--wk-user-col); }
+  #weeklyTable .wk-proj { min-width: var(--wk-proj-col); }
   #weeklyTable .wk-week { min-width: 360px; }
+  #weeklyTable .wk-user-name{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Week header: yellow hatched like spreadsheet */
+  #weeklyTable thead th.wk-week{
+    background:
+      linear-gradient(var(--weekly-week-bg), var(--weekly-week-bg)),
+      repeating-linear-gradient(135deg,
+        var(--weekly-week-stripe) 0,
+        var(--weekly-week-stripe) 2px,
+        rgba(255,255,255,0) 2px,
+        rgba(255,255,255,0) 7px
+      );
+  }
+  /* Keep top-left sticky header readable */
+  #weeklyTable thead th.wk-sticky-1{ background: var(--weekly-name-bg); }
   .pill { padding:2px 8px; font-size:12px; border-radius:999px; background:var(--pill); color:var(--pill-ink); }
   .muted { color:var(--muted); }
   .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
@@ -1307,7 +1332,7 @@ button.link:hover { opacity: .8; }
 </section>
 
 <section class="page" id="page-weekly">
-  <div class="grid">
+  <div class="grid weekly-grid">
     <div class="card">
       <h2>週次進捗</h2>
       <div class="body">
@@ -1317,6 +1342,16 @@ button.link:hover { opacity: .8; }
             <input id="wk_start" type="date" />
             <button class="secondary" onclick="shiftWeekly(7)">次週→</button>
             <button onclick="loadWeekly()">更新</button>
+
+            <span style="width:12px;"></span>
+            <label class="muted" style="display:flex; gap:6px; align-items:center; user-select:none; font-size:12px;">
+              所属
+              <select id="wk_filter_dept" style="max-width:180px;"></select>
+            </label>
+            <label class="muted" style="display:flex; gap:6px; align-items:center; user-select:none; font-size:12px;">
+              ユーザー
+              <select id="wk_filter_user" style="max-width:220px;"></select>
+            </label>
           </div>
           <div class="muted" id="weekly-range" style="font-size:12px;"></div>
         </div>
@@ -2034,6 +2069,97 @@ let WEEKLY = {
   rowsByKey: {},
 };
 
+let WEEKLY_FILTER = {
+  department: '', // '' | '__unset__' | deptName
+  userId: '',
+};
+
+function weeklyUserDept(u){
+  return String((u && u.department) ? u.department : '').trim();
+}
+
+function setSelectOptions(sel, options, selectedValue){
+  if (!sel) return;
+  const cur = String(selectedValue ?? sel.value ?? '');
+  const html = options.map(o=>`<option value="${escapeHtml(String(o.value))}">${escapeHtml(String(o.label))}</option>`).join('');
+  sel.innerHTML = html;
+  sel.value = cur;
+  if (sel.value !== cur) {
+    // selection no longer valid
+    sel.value = '';
+  }
+}
+
+function weeklyDeptMatches(u, dept){
+  const d = weeklyUserDept(u);
+  const want = String(dept||'');
+  if (!want) return true;
+  if (want === '__unset__') return !d;
+  return d === want;
+}
+
+function weeklyApplyFilters(users){
+  let out = users;
+  const dept = String(WEEKLY_FILTER.department||'');
+  const uid = String(WEEKLY_FILTER.userId||'');
+  if (dept) out = out.filter(u=>weeklyDeptMatches(u, dept));
+  if (uid) out = out.filter(u=>String(u.id||'') === uid);
+  return out;
+}
+
+function ensureWeeklyFilterControls(baseUsers){
+  const deptSel = el('wk_filter_dept');
+  const userSel = el('wk_filter_user');
+  if (!deptSel || !userSel) return;
+
+  // Bind handlers once.
+  if (!deptSel.dataset.bound) {
+    deptSel.addEventListener('change', ()=>{
+      WEEKLY_FILTER.department = String(deptSel.value||'');
+      // If the current selected user doesn't belong to the dept anymore, reset.
+      if (WEEKLY_FILTER.userId) {
+        const ok = baseUsers.some(u => String(u.id||'') === String(WEEKLY_FILTER.userId||'') && weeklyDeptMatches(u, WEEKLY_FILTER.department));
+        if (!ok) {
+          WEEKLY_FILTER.userId = '';
+          try { userSel.value = ''; } catch(_){ }
+        }
+      }
+      renderWeeklyPage();
+    });
+    deptSel.dataset.bound = '1';
+  }
+  if (!userSel.dataset.bound) {
+    userSel.addEventListener('change', ()=>{
+      WEEKLY_FILTER.userId = String(userSel.value||'');
+      renderWeeklyPage();
+    });
+    userSel.dataset.bound = '1';
+  }
+
+  // Dept options from base users.
+  const depts = Array.from(new Set(baseUsers.map(u=>weeklyUserDept(u)).filter(Boolean)))
+    .sort((a,b)=>String(a).localeCompare(String(b), 'ja'));
+  const hasUnset = baseUsers.some(u=>!weeklyUserDept(u));
+  const deptOptions = [{ value:'', label:'全所属' }]
+    .concat(hasUnset ? [{ value:'__unset__', label:'（所属未設定）' }] : [])
+    .concat(depts.map(d=>({ value:d, label:d })));
+  setSelectOptions(deptSel, deptOptions, WEEKLY_FILTER.department);
+  WEEKLY_FILTER.department = String(deptSel.value||'');
+
+  // User options depend on dept selection.
+  const deptFiltered = baseUsers.filter(u=>weeklyDeptMatches(u, WEEKLY_FILTER.department));
+  const userOptions = [{ value:'', label:'全ユーザー' }].concat(
+    deptFiltered.map(u=>{
+      const name = String(u.name||u.email||u.id||'');
+      const emp = String(u.employeeNumber||'').trim();
+      const label = emp ? `${name} (${emp})` : name;
+      return { value: String(u.id||''), label };
+    })
+  );
+  setSelectOptions(userSel, userOptions, WEEKLY_FILTER.userId);
+  WEEKLY_FILTER.userId = String(userSel.value||'');
+}
+
 function fmtYMDLocal(d){
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,'0');
@@ -2206,7 +2332,7 @@ function renderWeeklyPage(){
   }
 
   // Use the same member selection/order as attendance.
-  const users = safeArr(DATA.users)
+  const baseUsers = safeArr(DATA.users)
     .filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u))
     .slice()
     .sort((a,b)=>{
@@ -2219,6 +2345,9 @@ function renderWeeklyPage(){
       const bn = String(b.name||b.email||b.id||'');
       return an.localeCompare(bn, 'ja');
     });
+
+  ensureWeeklyFilterControls(baseUsers);
+  const users = weeklyApplyFilters(baseUsers);
 
   const headWeeks = Array.isArray(WEEKLY.weeks) && WEEKLY.weeks.length === 3 ? WEEKLY.weeks : weeks;
   const thead = `
@@ -2269,8 +2398,8 @@ function renderWeeklyPage(){
         }).join('') || '<div class="muted" style="font-size:12px;">未完了タスクなし</div>';
 
       const userCell = `
-        <div style="font-weight:700;">${uname}</div>
-        <div class="muted" style="font-size:12px; margin-top:2px;">未完了タスク: ${openTasksForUser.length}</div>
+        <div class="wk-user-name" style="font-weight:700;">${uname}</div>
+        <div class="muted" style="font-size:12px; margin-top:2px;">未完了: ${openTasksForUser.length}</div>
       `;
 
       const projCell = `

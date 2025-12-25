@@ -1308,8 +1308,8 @@ button.link:hover { opacity: .8; }
       </div>
     </div>
     <div class="card">
-      <h2>メンバー別</h2>
-      <div class="body" id="weekly-users"></div>
+      <h2>メンバー×週（前週 / 今週 / 次週）</h2>
+      <div class="body" id="weekly-users" style="overflow:auto;"></div>
     </div>
   </div>
 </section>
@@ -2013,8 +2013,9 @@ function renderAll() {
 // Weekly progress
 // =============================
 let WEEKLY = {
-  weekStart: '',
-  rows: [],
+  centerWeekStart: '',
+  weeks: [],
+  rowsByKey: {},
 };
 
 function fmtYMDLocal(d){
@@ -2038,6 +2039,36 @@ function ensureWeeklyStartInput(){
   inp.value = fmtYMDLocal(weekStartMonday(new Date()));
 }
 
+function normalizeWeeklyStartInput(){
+  const inp = el('wk_start');
+  if (!inp) return '';
+  const raw = String(inp.value||'').trim();
+  const d = parseYMDLocal(raw) || weekStartMonday(new Date());
+  const mon = weekStartMonday(d);
+  const ws = fmtYMDLocal(mon);
+  if (raw !== ws) inp.value = ws;
+  return ws;
+}
+
+function weeklyWeeksFromCenter(centerWs){
+  const d0 = parseYMDLocal(String(centerWs||'')) || weekStartMonday(new Date());
+  const mon = weekStartMonday(d0);
+  const cur = fmtYMDLocal(mon);
+  const prev = fmtYMDLocal(addDays(mon, -7));
+  const next = fmtYMDLocal(addDays(mon, 7));
+  return [prev, cur, next];
+}
+
+function weeklyRangeLabel(ws){
+  try{
+    const d0 = parseYMDLocal(String(ws||'')) || weekStartMonday(new Date());
+    const d6 = addDays(d0, 6);
+    return `${fmtYMDLocal(d0)}〜${fmtYMDLocal(d6)}`;
+  }catch(_){
+    return String(ws||'');
+  }
+}
+
 function shiftWeekly(days){
   const inp = el('wk_start');
   if (!inp) return;
@@ -2046,21 +2077,38 @@ function shiftWeekly(days){
   loadWeekly();
 }
 
-function weeklyRowByUserId(uid){
-  return safeArr(WEEKLY.rows).find(r => String(r.userId||'') === String(uid));
+function weeklyKey(ws, uid){
+  return String(ws||'') + '|' + String(uid||'');
+}
+
+function weeklyRow(ws, uid){
+  const k = weeklyKey(ws, uid);
+  return (WEEKLY.rowsByKey && WEEKLY.rowsByKey[k]) ? WEEKLY.rowsByKey[k] : null;
 }
 
 async function loadWeekly(){
   return guardRun('weekly_load', async ()=>{
     ensureWeeklyStartInput();
-    const ws = String(el('wk_start')?.value||'').trim();
-    if(!ws){ alert('週開始日を指定してください'); return; }
+    const center = normalizeWeeklyStartInput();
+    if(!center){ alert('週開始日を指定してください'); return; }
+
+    const weeks = weeklyWeeksFromCenter(center);
 
     Busy.push();
     try{
-      const rows = await gas('getWeeklyReports', ws);
-      WEEKLY.weekStart = ws;
-      WEEKLY.rows = Array.isArray(rows) ? rows : [];
+      const results = await Promise.all(weeks.map(ws => gas('getWeeklyReports', ws)));
+      const rowsByKey = {};
+      weeks.forEach((ws, i)=>{
+        const rows = Array.isArray(results[i]) ? results[i] : [];
+        rows.forEach(r=>{
+          const uid = String(r.userId||'').trim();
+          if(!uid) return;
+          rowsByKey[weeklyKey(ws, uid)] = Object.assign({}, r, { weekStart: ws, userId: uid });
+        });
+      });
+      WEEKLY.centerWeekStart = center;
+      WEEKLY.weeks = weeks;
+      WEEKLY.rowsByKey = rowsByKey;
     }finally{
       Busy.pop();
     }
@@ -2068,29 +2116,25 @@ async function loadWeekly(){
   });
 }
 
-async function saveWeeklyForUser(userId){
-  return guardRun('weekly_save_' + String(userId||''), async ()=>{
+async function saveWeeklyForUserWeek(userId, weekStart){
+  const uid = String(userId||'').trim();
+  const ws = String(weekStart||'').trim();
+  return guardRun('weekly_save_' + uid + '_' + ws, async ()=>{
     ensureWeeklyStartInput();
-    const ws = String(el('wk_start')?.value||'').trim();
-    if(!ws){ alert('週開始日を指定してください'); return; }
-    const uid = String(userId||'').trim();
+    normalizeWeeklyStartInput();
+    if(!ws){ alert('週開始日が不正です'); return; }
     if(!uid){ alert('userId が不正です'); return; }
 
-    const issuesEl = el('wk_issues_'+uid);
-    const doneEl = el('wk_done_'+uid);
+    const issuesEl = el('wk_issues_'+uid+'_'+ws);
+    const doneEl = el('wk_done_'+uid+'_'+ws);
     const issues = issuesEl ? String(issuesEl.value||'') : '';
     const done = doneEl ? String(doneEl.value||'') : '';
 
     Busy.push();
     try{
       const saved = await gas('upsertWeeklyReport', { weekStart: ws, userId: uid, issues, done });
-      // local cache update
-      const next = Array.isArray(WEEKLY.rows) ? WEEKLY.rows.slice() : [];
-      const idx = next.findIndex(r => String(r.userId||'')===uid && String(r.weekStart||'')===ws);
-      if (idx >= 0) next[idx] = saved;
-      else next.push(saved);
-      WEEKLY.weekStart = ws;
-      WEEKLY.rows = next;
+      if (!WEEKLY.rowsByKey) WEEKLY.rowsByKey = {};
+      WEEKLY.rowsByKey[weeklyKey(ws, uid)] = Object.assign({}, saved, { weekStart: ws, userId: uid });
     }finally{
       Busy.pop();
     }
@@ -2100,17 +2144,21 @@ async function saveWeeklyForUser(userId){
 function renderWeeklyPage(){
   if (PAGE !== 'weekly') return;
   ensureWeeklyStartInput();
-
-  const ws = String(el('wk_start')?.value||'').trim();
+  const center = normalizeWeeklyStartInput();
+  const weeks = weeklyWeeksFromCenter(center);
   const range = el('weekly-range');
-  try{
-    const d0 = parseYMDLocal(ws) || weekStartMonday(new Date());
-    const d6 = addDays(d0, 6);
-    if (range) range.textContent = `${fmtYMDLocal(d0)} 〜 ${fmtYMDLocal(d6)}`;
-  }catch(_){ if (range) range.textContent = ''; }
+  if (range) {
+    range.textContent = `表示: ${weeklyRangeLabel(weeks[0])} / ${weeklyRangeLabel(weeks[1])} / ${weeklyRangeLabel(weeks[2])}`;
+  }
 
-  // 初回だけ自動ロード
-  if (ws && WEEKLY.weekStart !== ws) {
+  // 初回だけ自動ロード（center基準・3週分）
+  const needLoad = (
+    WEEKLY.centerWeekStart !== center ||
+    !Array.isArray(WEEKLY.weeks) ||
+    WEEKLY.weeks.length !== 3 ||
+    WEEKLY.weeks.some((w,i)=>String(w||'') !== String(weeks[i]||''))
+  );
+  if (center && needLoad) {
     loadWeekly();
     return;
   }
@@ -2124,7 +2172,19 @@ function renderWeeklyPage(){
     return an.localeCompare(bn);
   });
 
-  const html = users.map(u=>{
+  const headWeeks = Array.isArray(WEEKLY.weeks) && WEEKLY.weeks.length === 3 ? WEEKLY.weeks : weeks;
+  const thead = `
+    <thead>
+      <tr>
+        <th style="min-width:260px;">ユーザー</th>
+        <th style="min-width:360px;">前週<br><span class="muted" style="font-size:12px;">${escapeHtml(weeklyRangeLabel(headWeeks[0]))}</span></th>
+        <th style="min-width:360px;">今週<br><span class="muted" style="font-size:12px;">${escapeHtml(weeklyRangeLabel(headWeeks[1]))}</span></th>
+        <th style="min-width:360px;">次週<br><span class="muted" style="font-size:12px;">${escapeHtml(weeklyRangeLabel(headWeeks[2]))}</span></th>
+      </tr>
+    </thead>
+  `;
+
+  const tbody = users.map(u=>{
     const uid = String(u.id||'').trim();
     const uname = escapeHtml(u.name||u.email||u.id||'(unknown)');
 
@@ -2135,49 +2195,56 @@ function renderWeeklyPage(){
     const taskLines = openTasks
       .slice()
       .sort((a,b)=>String(a.dueDate||'9999-12-31').localeCompare(String(b.dueDate||'9999-12-31')))
-      .slice(0, 30)
+      .slice(0, 10)
       .map(t=>{
         const pj = nameByProjectId(t.projectId||'') || '';
         const due = t.dueDate ? ` [${escapeHtml(t.dueDate)}]` : '';
         return `<div style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">• ${escapeHtml(pj)} / ${escapeHtml(t.title||'')}${due}</div>`;
       }).join('') || '<div class="muted" style="font-size:12px;">未完了タスクなし</div>';
 
-    const projNames = Array.from(new Set(openTasks.map(t=>nameByProjectId(t.projectId||'')).filter(Boolean)))
-      .slice(0, 10)
-      .map(s=>escapeHtml(s))
-      .join(' / ');
+    const userCell = `
+      <div style="font-weight:700;">${uname}</div>
+      <div class="muted" style="font-size:12px; margin-top:2px;">未完了タスク: ${openTasks.length}</div>
+      <div style="margin-top:6px; max-height:140px; overflow:auto;">${taskLines}</div>
+    `;
 
-    const row = weeklyRowByUserId(uid) || {};
-    const issues = escapeHtml(String(row.issues||''));
-    const done = escapeHtml(String(row.done||''));
+    const cell = (ws)=>{
+      const r = weeklyRow(ws, uid) || {};
+      const issues = escapeHtml(String(r.issues||''));
+      const done = escapeHtml(String(r.done||''));
+      return `
+        <div>
+          <label>課題</label>
+          <textarea id="wk_issues_${uid}_${ws}" class="memo-edit" rows="2">${issues}</textarea>
+          <label style="margin-top:6px;">実施</label>
+          <textarea id="wk_done_${uid}_${ws}" class="memo-edit" rows="2">${done}</textarea>
+          <div class="toolbar" style="justify-content:flex-end; margin-top:6px;">
+            <button onclick="saveWeeklyForUserWeek('${uid}','${ws}')">保存</button>
+          </div>
+        </div>
+      `;
+    };
 
     return `
-      <div class="card see-through" style="padding:10px; margin-bottom:10px;">
-        <div style="display:flex; gap:8px; justify-content:space-between; align-items:baseline;">
-          <div style="font-weight:700;">${uname}</div>
-          <div class="muted" style="font-size:12px;">未完了タスク: ${openTasks.length}</div>
-        </div>
-        ${projNames ? `<div class="muted" style="font-size:12px; margin-top:4px;">PJ: ${projNames}</div>` : ''}
-        <div style="margin-top:6px; max-height:110px; overflow:auto;">${taskLines}</div>
-
-        <div class="row" style="margin-top:10px; align-items:flex-start;">
-          <div style="flex:1; min-width:260px;">
-            <label>課題（やること）</label>
-            <textarea id="wk_issues_${uid}" class="memo-edit" rows="3">${issues}</textarea>
-          </div>
-          <div style="flex:1; min-width:260px;">
-            <label>実施事項（やったこと）</label>
-            <textarea id="wk_done_${uid}" class="memo-edit" rows="3">${done}</textarea>
-          </div>
-        </div>
-        <div class="toolbar" style="justify-content:flex-end; margin-top:8px;">
-          <button onclick="saveWeeklyForUser('${uid}')">保存</button>
-        </div>
-      </div>
+      <tr>
+        <td style="vertical-align:top;">${userCell}</td>
+        <td style="vertical-align:top;">${cell(headWeeks[0])}</td>
+        <td style="vertical-align:top;">${cell(headWeeks[1])}</td>
+        <td style="vertical-align:top;">${cell(headWeeks[2])}</td>
+      </tr>
     `;
   }).join('');
 
-  cont.innerHTML = html || '<div class="muted">ユーザーがありません</div>';
+  const table = `
+    <div class="body list" style="padding:0;">
+      <table style="width:100%;">
+        ${thead}
+        <tbody>${tbody}</tbody>
+      </table>
+    </div>
+  `;
+
+  cont.innerHTML = (users.length ? table : '<div class="muted">ユーザーがありません</div>');
   attachDefaultMemoEditors();
 }
 

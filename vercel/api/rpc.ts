@@ -109,6 +109,10 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const m = await getDataMod();
     return await m.rpcGetAllData();
   },
+  async getAttendanceWorklogs() {
+    const m = await getDataMod();
+    return await m.rpcGetAttendanceWorklogs();
+  },
   async ping() {
     const m = await getDataMod();
     return await m.rpcPing();

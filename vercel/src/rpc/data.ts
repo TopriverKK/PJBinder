@@ -64,6 +64,10 @@ export async function rpcGetAllData(): Promise<AllData> {
   };
 }
 
+export async function rpcGetAttendanceWorklogs(): Promise<any[]> {
+  return await sbSelectAllSafe('attendance_worklogs');
+}
+
 function nowIso() {
   return new Date().toISOString();
 }

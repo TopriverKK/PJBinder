@@ -1524,15 +1524,31 @@ function readRouteParams(){
 
 function applyRouteFromUrl(){
   const { page, view, tab } = readRouteParams();
-  if (tab) {
-    try { switchTab(tab); } catch(_){ }
-  }
-  if (page === 'attendance') {
+
+  // IMPORTANT:
+  // `tab` is the dashboard's task tab (list/board/gantt).
+  // If we apply it while opening attendance, switchTab() may redirect to dashboard.
+  // Therefore we:
+  // 1) decide the target page first
+  // 2) navigate to page
+  // 3) apply tab only when the target page is dashboard
+
+  const targetPage = page || PAGE || 'dashboard';
+  if (targetPage === 'attendance') {
     ATT_VIEW = (view === 'summary') ? 'summary' : 'dashboard';
   }
+
   if (page) {
     goto(page, { skipRoute:true });
   }
+
+  const effectivePage = page || PAGE;
+  if (effectivePage === 'dashboard') {
+    if (tab) {
+      try { switchTab(tab); } catch(_){ }
+    }
+  }
+
   if (PAGE === 'attendance') {
     applyAttendanceViewUi();
     if (ATT_VIEW === 'summary') {
@@ -1580,7 +1596,18 @@ function goto(page, opts) {
   // URL: query param deep-link
   if (!opts.skipRoute) {
     if (page === 'attendance') {
-      updateRouteParams({ page:'attendance', view: (ATT_VIEW||'dashboard'), tab: ACTIVE_TAB }, { replace:false });
+      // `tab` is for dashboard task tabs (list/board/gantt). Do not include it for attendance.
+      updateRouteParams({ page:'attendance', view: (ATT_VIEW||'dashboard'), tab: null }, { replace:false });
+
+      // Clear hash as well: it may contain #tab=list from dashboard bookmarks.
+      try{
+        if (location.hash) {
+          const url = new URL(location.href);
+          url.hash = '';
+          const qs = url.searchParams.toString();
+          history.replaceState({}, '', url.pathname + (qs ? ('?'+qs) : ''));
+        }
+      }catch(_){ }
     } else {
       updateRouteParams({ page, view: null, tab: ACTIVE_TAB }, { replace:false });
     }
@@ -3025,6 +3052,9 @@ function updateHashFromState(){
 }
 
 function applyHash(){
+  // Hash state is used for dashboard task filters/tabs.
+  // Never apply it on other pages (e.g., attendance) to avoid unintended redirects.
+  try { if (PAGE !== 'dashboard') return; } catch(_){ }
   const raw = location.hash.replace(/^#/,''); if(!raw) return;
   const p = new URLSearchParams(raw);
   const tab = p.get('tab'); if(tab) switchTab(tab);
@@ -3035,7 +3065,13 @@ function applyHash(){
   OVERDUE = p.get('overdue')==='1';
 }
 
-window.addEventListener('hashchange', ()=>{ applyHash(); renderTasksTable(); renderKanban(); if (ACTIVE_TAB==='gantt') renderGantt(); });
+window.addEventListener('hashchange', ()=>{
+  try{ if (PAGE !== 'dashboard') return; }catch(_){ return; }
+  applyHash();
+  renderTasksTable();
+  renderKanban();
+  if (ACTIVE_TAB==='gantt') renderGantt();
+});
 
 // filters
 function applyFilters() {
@@ -6293,7 +6329,13 @@ async function fetchDocsMarkdown(name){
     const url = '/docs/' + encodeURIComponent(fileName);
     const resp = await fetch(url, { method:'GET' });
     if (resp.ok) {
-      return await resp.text();
+      // Force UTF-8 decode regardless of server headers (prevents mojibake).
+      try{
+        const buf = await resp.arrayBuffer();
+        return new TextDecoder('utf-8').decode(buf);
+      }catch(_){
+        return await resp.text();
+      }
     }
   }catch(_){ }
 

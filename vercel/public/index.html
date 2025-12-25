@@ -3231,7 +3231,6 @@ function renderTasksTable() {
         <span class="cell-title" data-field="title">${escapeHtml(r.title||'')}</span>
         ${docBadges} ${attBadge}
         <div class="muted" style="font-size:12px;">${escapeHtml(nameByProjectId(r.projectId||''))}</div>
-        ${docsBtns ? '<div class="toolbar" style="margin-top:4px;">'+docsBtns+'</div>' : ''}
       </td>
       <td${bg}><span class="pill">${r.type||''}</span></td>
       <td${bg}>${escapeHtml(assignees||'')}</td>

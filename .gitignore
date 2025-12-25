@@ -1,4 +1,4 @@
-# Node / Vercel
+﻿# Node / Vercel
 vercel/node_modules/
 vercel/.vercel/
 vercel/.env
@@ -18,4 +18,7 @@ vercel/.smoke-dist/
 Thumbs.db
 
 # Workspace (do not track)
-�ΑӊǗ��c�[��/
+# NOTE: Keep this file UTF-8 so Japanese paths match.
+/勤怠管理ツール
+/勤怠管理ツール/
+

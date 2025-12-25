@@ -87,7 +87,7 @@ export async function rpcCreateProjectDoc(projectId: string) {
     const initialText =
       `${title}\n` +
       `期間: ${(p.startDate || '-')} 〜 ${(p.endDate || '-')}　予算: ${Number(p.budget || 0).toLocaleString()} 円\n` +
-      `責任者: ${ownerLabel || '-'}\n`;
+      `主担当者: ${ownerLabel || '-'}\n`;
 
     const created = await createGoogleDocInFolder({
       title,

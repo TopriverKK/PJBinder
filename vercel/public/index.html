@@ -622,9 +622,9 @@ button.link:hover { opacity: .8; }
         <div class="body" id="budget-summary"></div>
       </div>
       <div class="card">
-        <h2>責任者別 予算集計</h2>
+        <h2>主担当者別 予算集計</h2>
         <div class="body">
-          <table id="budget-by-owner"><thead><tr><th>責任者</th><th>プロジェクト数</th><th>予算合計</th></tr></thead><tbody></tbody></table>
+          <table id="budget-by-owner"><thead><tr><th>主担当者</th><th>プロジェクト数</th><th>予算合計</th></tr></thead><tbody></tbody></table>
         </div>
       </div>
     </div>
@@ -693,7 +693,7 @@ button.link:hover { opacity: .8; }
           <table id="projAllTable">
             <thead>
               <tr>
-                <th>名称</th><th>ステータス</th><th>親</th><th>責任者</th>
+                <th>名称</th><th>ステータス</th><th>親</th><th>主担当者</th>
                 <th>優先度</th><th>予算</th><th>期間</th>
                 <th>未完了</th><th>完了</th><th>添付</th><th></th>
               </tr>
@@ -865,7 +865,7 @@ button.link:hover { opacity: .8; }
           </div>
           <div class="row">
             <div>
-              <label>責任者（Users）</label>
+              <label>主担当者（Users）</label>
               <select id="p_owner_select"></select>
             </div>
             <div>
@@ -932,7 +932,7 @@ button.link:hover { opacity: .8; }
           </div>
           <div class="row">
             <div>
-              <label>責任者（Users）</label>
+              <label>主担当者（Users）</label>
               <select id="t_owner_select"></select>
             </div>
             <div>
@@ -1095,7 +1095,7 @@ button.link:hover { opacity: .8; }
           <div class="body list see-through" style="padding:0;">
             <table id="projTable">
               <thead><tr>
-                <th>名称</th><th>親</th><th>責任者</th><th>優先度</th>
+                <th>名称</th><th>親</th><th>主担当者</th><th>優先度</th>
                 <th>タスク(未/完)</th>  <!-- ← 追加 -->
                 <th>メモ</th>
                 <th>予算</th><th>期間</th><th></th>
@@ -1140,7 +1140,7 @@ button.link:hover { opacity: .8; }
         </div>
         <div class="row">
           <div><label>ロール</label>
-            <select id="u_role"><option>一般</option><option>責任者</option><option>管理者</option></select>
+            <select id="u_role"><option>一般</option><option>主担当者</option><option>管理者</option></select>
           </div>
           <div><label>所属</label><input id="u_dept"/></div>
         </div>
@@ -1821,6 +1821,7 @@ function refresh() {
         attachments:  pick('attachments'),
         minutes:      pick('minutes'),
         dailyReports: pick('dailyreports','daily_reports','daily'),
+        attendanceWorklogs: pick('attendanceworklogs','attendance_worklogs','worklogs'),
         shareds:      safeArr(d.shareds ?? d.Shareds ?? d.shared),
       };
       hydrateSelects();
@@ -2211,33 +2212,55 @@ function weeklyUserProjectKey(uid, projectId){
 }
 
 function weeklyComputeHoursMapsForWeek(weekStartYmd){
-  // Uses DATA.dailyReports (hours, date, userId, projectId)
+  // Uses DATA.attendanceWorklogs (attendance_worklogs) intervals.
   // Returns hours for the given week + total hours.
   const weekMap = {};
   const totalMap = {};
   const ws = String(weekStartYmd||'').trim();
-  let we = '';
-  try {
-    const wsD = parseYMDLocal(ws);
-    we = wsD ? fmtYMDLocal(addDays(wsD, 6)) : '';
-  } catch(_){ we=''; }
+  const weekStart = parseYMDLocal(ws);
+  const weekEndExcl = weekStart ? addDays(weekStart, 7) : null;
+  const now = new Date();
 
   const add = (map, key, hours)=>{
     if (!key) return;
     map[key] = (map[key] || 0) + (Number(hours) || 0);
   };
 
-  safeArr(DATA.dailyReports).forEach(r=>{
-    const uid = String(r.userId||'').trim();
-    if (!uid) return;
-    const pid = String(r.projectId||'').trim();
-    const key = weeklyUserProjectKey(uid, pid);
-    const h = Number(r.hours||0) || 0;
-    add(totalMap, key, h);
+  const pick = (obj, ...keys)=>{
+    for (const k of keys) {
+      if (obj && obj[k] != null) return obj[k];
+    }
+    return undefined;
+  };
 
-    const d = String(r.date||'').trim();
-    if (ws && we && d && d >= ws && d <= we) {
-      add(weekMap, key, h);
+  const toDate = (v)=>{
+    if (!v) return null;
+    const d = new Date(v);
+    return Number.isFinite(d.getTime()) ? d : null;
+  };
+
+  const overlapMs = (a0, a1, b0, b1)=>{
+    const s = Math.max(a0.getTime(), b0.getTime());
+    const e = Math.min(a1.getTime(), b1.getTime());
+    return Math.max(0, e - s);
+  };
+
+  safeArr(DATA.attendanceWorklogs).forEach(w=>{
+    const uid = String(pick(w,'user_id','userId','userid')||'').trim();
+    if (!uid) return;
+    const pid = String(pick(w,'project_id','projectId','projectid')||'').trim();
+    const startAt = toDate(pick(w,'start_at','startAt','start'));
+    if (!startAt) return;
+    const endAt = toDate(pick(w,'end_at','endAt','end')) || now;
+    if (endAt.getTime() <= startAt.getTime()) return;
+
+    const key = weeklyUserProjectKey(uid, pid);
+    const totalH = (endAt.getTime() - startAt.getTime()) / 3600000;
+    add(totalMap, key, totalH);
+
+    if (weekStart && weekEndExcl) {
+      const wkMs = overlapMs(startAt, endAt, weekStart, weekEndExcl);
+      if (wkMs > 0) add(weekMap, key, wkMs / 3600000);
     }
   });
 
@@ -2407,16 +2430,16 @@ function renderWeeklyPage(){
       <tr>
         <th class="wk-rowhead wk-sticky-1">ユーザー</th>
         <th class="wk-proj wk-sticky-2">プロジェクト</th>
-        <th class="wk-week">前週<br><span class="wk-sub">${escapeHtml(weeklyRangeLabel(headWeeks[0]))}</span></th>
-        <th class="wk-week">今週<br><span class="wk-sub">${escapeHtml(weeklyRangeLabel(headWeeks[1]))}</span></th>
-        <th class="wk-week">次週<br><span class="wk-sub">${escapeHtml(weeklyRangeLabel(headWeeks[2]))}</span></th>
+        <th class="wk-week">前週 <span class="wk-sub">${escapeHtml(weeklyRangeLabel(headWeeks[0]))}</span></th>
+        <th class="wk-week">今週 <span class="wk-sub">${escapeHtml(weeklyRangeLabel(headWeeks[1]))}</span></th>
+        <th class="wk-week">次週 <span class="wk-sub">${escapeHtml(weeklyRangeLabel(headWeeks[2]))}</span></th>
       </tr>
     </thead>
   `;
 
   const activeProjects = safeArr(DATA.projects).filter(p=>String(p.status||'active').toLowerCase() !== 'archived');
   const projNameById = (pid)=>{
-    if (!pid) return '（共通）';
+    if (!pid) return '（共通・その他）';
     const p = activeProjects.find(x=>String(x.id)===String(pid));
     return p ? (p.name || p.id) : String(pid);
   };
@@ -3750,7 +3773,10 @@ function renderTasksTable() {
   rows = rows.sort((a,b)=>String(a.dueDate||'9999-12-31').localeCompare(String(b.dueDate||'9999-12-31'))).slice(0,500);
 
   for (const r of rows) {
-    const assignees = String(r.assignees||'').split(',').filter(Boolean).map(s=>nameByUserId(s)).join(', ');
+    const assignees = orderedAssigneeIds(r.ownerUserId || '', r.assignees || '')
+      .map(s => nameByUserId(s) || displayUser(s) || s)
+      .filter(Boolean)
+      .join(', ');
     const tDocUrl = getTaskDocUrl(r.id);
     const pDocUrl = getProjectDocUrl(r.projectId||'');
     const docsBtns = [
@@ -4463,9 +4489,7 @@ function addTask() {
     if (!ok) return; // 中断
   }
 
-  let assigneesArr = selMulti('t_assignees_select');
-  const ownerId = sel('t_owner_select');
-  if (ownerId && !assigneesArr.includes(ownerId)) assigneesArr.push(ownerId);
+  const assigneesArr = orderedAssigneeIds(sel('t_owner_select'), selMulti('t_assignees_select'));
 
   let tc = val('t_color');
   if (!editId && tc === '#ffffff') tc = ''; // 新規＆白→無指定扱い
@@ -4589,7 +4613,7 @@ async function createTaskDoc() {
     body += 'プロジェクト: ' + projName + (parentName ? '（親: ' + parentName + '）' : '') + '\n';
     body += 'Docs作成日時: ' + `${y}-${m}-${d} ${hh}:${mm}` + '　プロジェクト期間: ' + projStart + '〜' + projEnd + '\n';
     if (projBudgetNum) body += '予算: ' + projBudgetNum.toLocaleString() + ' 円\n';
-    body += '責任者: ' + (owner || '-') + '　担当者: ' + (assignees || '-') + '\n\n---';
+    body += '主担当者: ' + (owner || '-') + '　担当者: ' + (assignees || '-') + '\n\n---';
 
     gsr().withSuccessHandler(function () { }).replaceDocWithMemo(res.docId, body);
 
@@ -6034,10 +6058,20 @@ function userKey(any){
   const u = safeArr(DATA.users).find(x => x.id===s || x.email===s || x.name===s);
   return u ? String(u.id) : s; // 見つかれば内部ID、なければそのまま
 }
+function orderedAssigneeIds(ownerUserId, assignees){
+  const owner = String(ownerUserId||'').trim();
+  const raw = Array.isArray(assignees) ? assignees : String(assignees||'').split(',');
+  const ids = raw.map(s=>String(s||'').trim()).filter(Boolean);
+  const seen = new Set();
+  const uniq = [];
+  for (const id of ids) { if (!seen.has(id)) { seen.add(id); uniq.push(id); } }
+  if (!owner) return uniq;
+  return [owner, ...uniq.filter(x=>x!==owner)];
+}
 function primaryAssigneeKey(t){
+  if (t.ownerUserId) return userKey(t.ownerUserId);
   const tokens = String(t.assignees||'').split(',').map(s=>s.trim()).filter(Boolean);
   if (tokens.length) return userKey(tokens[0]);
-  if (t.ownerUserId) return userKey(t.ownerUserId); // 担当未設定なら責任者で束ねる
   return '__NONE__';
 }
 function displayNameFromKey(key){
@@ -7091,7 +7125,7 @@ function openTaskFormModal(){
     </div>
     <div class="row">
       <div><label>主担当者（Users）(必須)</label>${document.getElementById('t_owner_select').outerHTML.replace('t_owner_select','mt_owner_select')}</div>
-      <div><label data-tip="このタスクに実際に関わるメンバーをすべて選択します。ctrl+クリックで複数人指定可能です。主責任者は自動で追加されます。">担当者（複数選択可）(任意)</label>${assigneeHtml}</div>
+      <div><label data-tip="このタスクに実際に関わるメンバーをすべて選択します。ctrl+クリックで複数人指定可能です。主担当者は自動で担当に含めます。">担当者（複数選択可）(任意)</label>${assigneeHtml}</div>
     </div>
     <div class="row">
       <div><label>優先度(必須)</label>${document.getElementById('t_prio').outerHTML.replace('t_prio','mt_prio')}</div>
@@ -7166,7 +7200,7 @@ function showProjectModal(id){
       <div><label>親プロジェクト</label><select id="pm_parent"><option value="">（なし）</option>${projOpts}</select></div>
     </div>
     <div class="row">
-      <div><label>責任者</label><select id="pm_owner"><option value="">（未選択）</option>${userOpts}</select></div>
+      <div><label>主担当者</label><select id="pm_owner"><option value="">（未選択）</option>${userOpts}</select></div>
       <div><label>優先度</label>
         <select id="pm_prio">
           <option value="">-</option>
@@ -7261,7 +7295,7 @@ function showTaskModal(id){
       <div><label>期限</label><input id="tm_due" type="date" value="${escapeHtml(t.dueDate||'')}"/></div>
     </div>
     <div class="row">
-      <div><label>責任者</label><select id="tm_owner"><option value="">（未選択）</option>${userOpts}</select></div>
+      <div><label>主担当者</label><select id="tm_owner"><option value="">（未選択）</option>${userOpts}</select></div>
       <div>
         <label>担当者（複数可）</label>
         <select id="tm_assignees" multiple size="6" style="min-height:110px;">${assOpts}</select>
@@ -7306,14 +7340,15 @@ function showTaskModal(id){
 
 function saveTaskFromModal(id){
   const ass = Array.from(document.querySelectorAll('#tm_assignees option:checked')).map(o=>o.value);
+  const ownerUserId = sel('tm_owner');
   const payload = {
     id,
     projectId: sel('tm_project'),
     parentTaskId: '',
     type: sel('tm_type')||'single',
     title: val('tm_title').trim(),
-    ownerUserId: sel('tm_owner'),
-    assignees: ass.join(','),
+    ownerUserId,
+    assignees: orderedAssigneeIds(ownerUserId, ass).join(','),
     dueDate: val('tm_due'),
     status: (safeArr(DATA.tasks).find(x=>String(x.id)===String(id))?.status)||'todo',
     priority: val('tm_prio'),
@@ -7446,7 +7481,7 @@ function closestSafe(target, selector){
     </div>
     <div class="row">
       <div>
-        <label>責任者</label>
+        <label>主担当者</label>
         <select id="fly_p_owner"></select>
       </div>
       <div>
@@ -7492,7 +7527,7 @@ function closestSafe(target, selector){
       <div>
         <label>担当者（複数可）</label>
         <select id="fly_t_assignees" multiple size="4"></select>
-        <div class="hint">責任者は自動で担当に含めます</div>
+        <div class="hint">主担当者は自動で担当に含めます</div>
       </div>
       <div>
         <label>期限</label>

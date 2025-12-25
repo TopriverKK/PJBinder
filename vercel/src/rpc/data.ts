@@ -13,6 +13,7 @@ export type AllData = {
   attachments: any[];
   minutes: any[];
   dailyReports: any[];
+  attendanceWorklogs: any[];
   shareds: any[];
 };
 
@@ -29,6 +30,7 @@ export async function rpcGetAllData(): Promise<AllData> {
     attachments,
     minutes,
     dailyReports,
+    attendanceWorklogs,
     shareds,
   ] = await Promise.all([
     sbSelectAllSafe('users'),
@@ -41,6 +43,7 @@ export async function rpcGetAllData(): Promise<AllData> {
     sbSelectAllSafe('attachments'),
     sbSelectAllSafe('minutes'),
     sbSelectAllSafe('dailyreports'),
+    sbSelectAllSafe('attendance_worklogs'),
     sbSelectAllSafe('shareds'),
   ]);
 
@@ -56,6 +59,7 @@ export async function rpcGetAllData(): Promise<AllData> {
     attachments,
     minutes,
     dailyReports,
+    attendanceWorklogs,
     shareds,
   };
 }

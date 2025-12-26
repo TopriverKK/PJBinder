@@ -2322,7 +2322,15 @@ function weeklyComputeHoursMapsForWeek(weekStartYmd){
   safeArr(DATA.attendanceWorklogs).forEach(w=>{
     const uid = String(pick(w,'user_id','userId','userid')||'').trim();
     if (!uid) return;
-    const pid = String(pick(w,'project_id','projectId','projectid')||'').trim();
+    let pid = String(pick(w,'project_id','projectId','projectid')||'').trim();
+    // プロジェクト未指定でタスクだけ指定されている場合、タスクのプロジェクトに寄せて集計する
+    if (!pid) {
+      const tid = String(pick(w,'task_id','taskId','taskid')||'').trim();
+      if (tid) {
+        const taskProj = safeArr(DATA.tasks).find(t => String(t.id||'') === tid)?.projectId;
+        if (taskProj) pid = String(taskProj);
+      }
+    }
     const startAt = toDate(pick(w,'start_at','startAt','start'));
     if (!startAt) return;
     const endAt = toDate(pick(w,'end_at','endAt','end')) || now;
@@ -7946,6 +7954,7 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
 
 
 

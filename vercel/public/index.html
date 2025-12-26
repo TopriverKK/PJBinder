@@ -1850,9 +1850,10 @@ function refresh() {
         attachments:  pick('attachments'),
         minutes:      pick('minutes'),
         dailyReports: pick('dailyreports','daily_reports','daily'),
-        attendanceWorklogs: pick('attendanceworklogs','attendance_worklogs','worklogs'),
+        attendanceWorklogs: [], // lazy load on weekly view
         shareds:      safeArr(d.shareds ?? d.Shareds ?? d.shared),
       };
+      ATT_WORKLOGS_LOADED = false;
       hydrateSelects();
       renderAll();
       Busy.pop();
@@ -2228,6 +2229,17 @@ function ensureWeeklyStartInput(){
   inp.value = fmtYMDLocal(weekStartMonday(new Date()));
 }
 
+async function ensureAttendanceWorklogsLoaded(){
+  if (ATT_WORKLOGS_LOADED && Array.isArray(DATA.attendanceWorklogs) && DATA.attendanceWorklogs.length) return;
+  try{
+    const rows = await gas('getAttendanceWorklogs');
+    if (Array.isArray(rows)) DATA.attendanceWorklogs = rows;
+    ATT_WORKLOGS_LOADED = true;
+  }catch(e){
+    console.error('attendance_worklogs load failed', e);
+  }
+}
+
 function normalizeWeeklyStartInput(){
   const inp = el('wk_start');
   if (!inp) return '';
@@ -2353,6 +2365,7 @@ async function loadWeekly(){
     ensureWeeklyStartInput();
     const center = normalizeWeeklyStartInput();
     if(!center){ alert('週開始日を指定してください'); return; }
+    await ensureAttendanceWorklogsLoaded();
 
     const weeks = weeklyWeeksFromCenter(center);
 
@@ -2653,6 +2666,7 @@ let ATT_VIEW = 'dashboard'; // 'dashboard' | 'summary'
 let ATT_AUTO_REFRESH_ENABLED = true;
 let ATT_AUTO_REFRESH_INTERVAL_MS = 120000; // default 120s
 let ATT_AUTO_REFRESH_TIMER = null;
+let ATT_WORKLOGS_LOADED = false;
 
 const ATT_LS_AUTO_REFRESH_ENABLED = 'att_auto_refresh_enabled_v1';
 const ATT_LS_AUTO_REFRESH_INTERVAL_SEC = 'att_auto_refresh_interval_sec_v1';

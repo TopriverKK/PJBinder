@@ -2535,6 +2535,11 @@ function renderWeeklyPage(){
       if (pidTrim) projectIdsSet.add(pidTrim);
     };
     openTasksForUser.forEach(t=>markProject(t.projectId));
+    activeProjects.forEach(p=>{
+      const owner = String(p.ownerUserId || p.owner || '').trim();
+      const memberList = String(p.members || p.assignees || p.memberIds || '').split(',').map(s=>s.trim()).filter(Boolean);
+      if (owner === uid || memberList.includes(uid)) markProject(p.id);
+    });
     const collectFromMap = (map)=>{
       Object.keys(map||{}).forEach(k=>{
         const [kUid, kPid=''] = String(k||'').split('|');

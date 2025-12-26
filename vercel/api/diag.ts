@@ -39,6 +39,7 @@ export default async function handler(req: any, res: any) {
     env: {
       SUPABASE_URL: has('SUPABASE_URL'),
       SUPABASE_SERVICE_ROLE_KEY: has('SUPABASE_SERVICE_ROLE_KEY'),
+      SUPABASE_KEY: has('SUPABASE_KEY'),
       GOOGLE_CLIENT_EMAIL: has('GOOGLE_CLIENT_EMAIL'),
       GOOGLE_PRIVATE_KEY: has('GOOGLE_PRIVATE_KEY'),
       GOOGLE_DRIVE_ID: has('GOOGLE_DRIVE_ID'),

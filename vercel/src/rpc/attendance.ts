@@ -380,13 +380,17 @@ export async function rpcPatchAttendance(userIdRaw: unknown, dateRaw: unknown, a
 
   // Best-effort: record project/task time allocation segments.
   // This requires table `attendance_worklogs` (see SUPABASE_ATTENDANCE_WORKLOGS.sql).
+  let worklogSyncError: string | null = null;
   try {
     await syncWorklogsForPatch(before, after, String((action as any).type || ''), now);
   } catch (e) {
+    const msg = (e instanceof Error) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e));
+    worklogSyncError = msg;
     console.error('[attendance_worklogs] failed to sync worklogs:', e);
   }
 
-  return after;
+  // Attach debug field for UI; not persisted to DB.
+  return { ...after, _worklogSyncError: worklogSyncError } as any;
 }
 
 export async function rpcGetAttendanceSettings() {

@@ -2990,6 +2990,14 @@ async function patchAttendance(userId, action){
     renderAttendancePage();
     setAttendanceSaveHint(userId, '保存しました', true);
 
+    try{
+      const werr = saved && typeof saved==='object' ? (saved._worklogSyncError || saved.worklogSyncError) : null;
+      if (werr) {
+        setAttendanceSaveHint(userId, '工数ログ保存失敗', false);
+        toast('attendance_worklogs 保存に失敗: '+String(werr), false);
+      }
+    }catch(_){ }
+
     // Keep in-memory worklogs in sync to avoid stale open segments
     // continuing to accumulate in weekly totals/UI.
     scheduleAttendanceWorklogsRefresh();

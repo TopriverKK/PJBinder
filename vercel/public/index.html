@@ -2520,25 +2520,6 @@ function renderWeeklyPage(){
   };
 
   const tasksAll = safeArr(DATA.tasks);
-  const monthHoursMap = {};
-  (()=>{
-    const center = parseYMDLocal(headWeeks[1]) || new Date();
-    const ms = new Date(center.getFullYear(), center.getMonth(), 1);
-    const me = new Date(center.getFullYear(), center.getMonth()+1, 1);
-    const toDateLocal = (v)=>{ if(!v) return null; const d=new Date(v); return Number.isFinite(d.getTime())?d:null; };
-    const overlapMs = (a0,a1,b0,b1)=>Math.max(0, Math.min(a1.getTime(), b1.getTime()) - Math.max(a0.getTime(), b0.getTime()));
-    const addH = (k,h)=>{ if(!k) return; monthHoursMap[k]=(monthHoursMap[k]||0)+(Number(h)||0); };
-    safeArr(DATA.attendanceWorklogs).forEach(w=>{
-      const uid = String((w && (w.user_id ?? w.userId ?? w.userid))||'').trim();
-      if (!uid) return;
-      const pid = String((w && (w.project_id ?? w.projectId ?? w.projectid))||'').trim();
-      const s = toDateLocal(w && (w.start_at ?? w.startAt ?? w.start));
-      const e = toDateLocal(w && (w.end_at ?? w.endAt ?? w.end)) || new Date();
-      if (!s || e.getTime() <= s.getTime()) return;
-      const ov = overlapMs(s,e,ms,me);
-      if (ov>0) addH(weeklyUserProjectKey(uid,pid), ov/3600000);
-    });
-  })();
 
   const rows = [];
   users.forEach(u=>{
@@ -2584,17 +2565,9 @@ function renderWeeklyPage(){
         <div class="muted" style="font-size:12px; margin-top:2px;">未完了: ${openTasksForUser.length}</div>
       `;
 
-      const key = weeklyUserProjectKey(uid, pid);
-      const weekH = wkHoursMap[key] || 0;
-      const totalH = totalHoursMap[key] || 0;
-      const monthH = monthHoursMap[key] || 0;
-      const summaryLine = pid
-        ? `今週: ${fmtHours(weekH)} / 累計: ${fmtHours(totalH)}`
-        : `今週: ${fmtHours(weekH)} / 今月: ${fmtHours(monthH)}`;
-
       const projCell = `
         <div class="wk-proj-name">${escapeHtml(projNameById(pid))}</div>
-        <div class="muted" style="font-size:12px; margin-top:2px;">${escapeHtml(summaryLine)}</div>
+        <div class="muted" style="font-size:12px; margin-top:2px;">今週: ${escapeHtml(fmtHours(wkHoursMap[weeklyUserProjectKey(uid, pid)]||0))} / 累計: ${escapeHtml(fmtHours(totalHoursMap[weeklyUserProjectKey(uid, pid)]||0))}</div>
         <div style="margin-top:6px; max-height:120px; overflow:auto;">${taskLines}</div>
       `;
 

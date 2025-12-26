@@ -107,7 +107,21 @@ async function closeOpenWorklogsIfAny(userId: string, date: string, endAtIso: st
   // Close all open segments defensively (prevents double-counting).
   for (const open of opens) {
     if (!open || !open.id) continue;
-    await sbUpsert('attendance_worklogs', { id: open.id, end_at: endAtIso }, 'id');
+    // PostgREST upsert overwrites unspecified columns, so include required fields.
+    await sbUpsert(
+      'attendance_worklogs',
+      {
+        id: open.id,
+        user_id: open.user_id,
+        work_date: open.work_date,
+        start_at: open.start_at,
+        end_at: endAtIso,
+        project_id: open.project_id ?? null,
+        task_id: open.task_id ?? null,
+        source: open.source || 'unknown',
+      },
+      'id'
+    );
   }
 }
 
@@ -116,7 +130,21 @@ async function closeOpenWorklogsAnyDateIfAny(userId: string, endAtIso: string) {
   if (!opens.length) return;
   for (const open of opens) {
     if (!open || !open.id) continue;
-    await sbUpsert('attendance_worklogs', { id: open.id, end_at: endAtIso }, 'id');
+    // PostgREST upsert overwrites unspecified columns, so include required fields.
+    await sbUpsert(
+      'attendance_worklogs',
+      {
+        id: open.id,
+        user_id: open.user_id,
+        work_date: open.work_date,
+        start_at: open.start_at,
+        end_at: endAtIso,
+        project_id: open.project_id ?? null,
+        task_id: open.task_id ?? null,
+        source: open.source || 'unknown',
+      },
+      'id'
+    );
   }
 }
 

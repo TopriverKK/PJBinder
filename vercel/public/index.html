@@ -2529,10 +2529,9 @@ function renderWeeklyPage(){
       .filter(t => String(t.status||'').toLowerCase() !== 'done')
       .filter(t => String(t.assignees||'').split(',').map(s=>s.trim()).filter(Boolean).includes(uid));
     const projectIdsSet = new Set();
-    let hasCommon = false;
     const markProject = (pidRaw)=>{
       const pidTrim = String(pidRaw||'').trim();
-      if (pidTrim) projectIdsSet.add(pidTrim); else hasCommon = true;
+      if (pidTrim) projectIdsSet.add(pidTrim);
     };
     openTasksForUser.forEach(t=>markProject(t.projectId));
     const collectFromMap = (map)=>{
@@ -2543,8 +2542,7 @@ function renderWeeklyPage(){
     };
     collectFromMap(wkHoursMap);
     collectFromMap(totalHoursMap);
-    const orderedProjectIds = Array.from(projectIdsSet).sort((a,b)=>projNameById(a).localeCompare(projNameById(b), 'ja'));
-    if (hasCommon) orderedProjectIds.unshift('');
+    const orderedProjectIds = [''].concat(Array.from(projectIdsSet).sort((a,b)=>projNameById(a).localeCompare(projNameById(b), 'ja')));
 
     orderedProjectIds.forEach((pid, idx)=>{
       const openTasks = pid

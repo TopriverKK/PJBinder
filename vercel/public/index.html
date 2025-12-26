@@ -2708,6 +2708,14 @@ function pauseAttendanceAutoRefresh({ reason='' } = {}){
     clearInterval(ATT_AUTO_REFRESH_TIMER);
     ATT_AUTO_REFRESH_TIMER = null;
   }
+  // Show warning when paused due to ineligible state
+  if (reason && reason !== 'disabled') {
+    const warn = document.getElementById('att-auto-warning');
+    if (warn) {
+      warn.style.display = '';
+      warn.textContent = '自動更新が一時停止しました（画面が非表示/他タブなど）。';
+    }
+  }
 }
 
 function stopAttendanceAutoRefresh({ uncheck=false, reason='' } = {}){
@@ -2731,6 +2739,8 @@ function applyAttendanceViewUi(){
     const v = el.getAttribute('data-att-view');
     el.style.display = (v === ATT_VIEW) ? '' : 'none';
   });
+  const warn = document.getElementById('att-auto-warning');
+  if (warn) warn.style.display = 'none';
 }
 
 function setAttendanceView(view, opts){
@@ -3146,8 +3156,24 @@ function renderAttendancePage(){
     const projId = String(row.project_id||'');
     const taskId = String(row.task_id||'');
 
+    // プロジェクト選択: 担当プロジェクトを優先的に並べる
+    const userProjectSet = new Set(
+      safeArr(DATA.tasks)
+        .filter(t => String(t.assignees||'').split(',').map(s=>s.trim()).includes(uid))
+        .map(t => String(t.projectId||'').trim())
+        .filter(Boolean)
+    );
+    const projectList = safeArr(DATA.projects)
+      .filter(p=>String(p.status||'active')!=='archived')
+      .slice()
+      .sort((a,b)=>{
+        const afav = userProjectSet.has(String(a.id||''));
+        const bfav = userProjectSet.has(String(b.id||''));
+        if (afav !== bfav) return afav ? -1 : 1;
+        return String(a.name||a.id||'').localeCompare(String(b.name||b.id||''),'ja');
+      });
     const projOptions = ['<option value="">（未指定）</option>']
-      .concat(safeArr(DATA.projects).filter(p=>String(p.status||'active')!=='archived')
+      .concat(projectList
         .map(p=>`<option value="${escapeHtml(p.id)}" ${String(p.id)===projId?'selected':''}>${escapeHtml(p.name||p.id)}</option>`));
 
     const tasks = safeArr(DATA.tasks);
@@ -3458,7 +3484,21 @@ function computeWorkIntervals(att){
     const bStart = new Date(b.start);
     const bEnd = new Date(b.end || new Date().toISOString());
     if(!(bEnd > bStart)) continue;
-    intervals = intervals.flatMap(iv => subtractInterval(iv, [bStart, bEnd]));
+
+    // 12:00-13:00 は固定休憩として別途控除しているため、そこに重なる部分は二重控除しない
+    const lunchStart = new Date(bStart);
+    lunchStart.setHours(12,0,0,0);
+    const lunchEnd = new Date(bStart);
+    lunchEnd.setHours(13,0,0,0);
+
+    // breakSegments: 昼休みを除外した休憩区間（0〜2区間）
+    const segments = subtractInterval([bStart, bEnd], [lunchStart, lunchEnd]);
+    for (const seg of segments){
+      const segStart = seg[0], segEnd = seg[1];
+      if (!(segEnd > segStart)) continue;
+      intervals = intervals.flatMap(iv => subtractInterval(iv, [segStart, segEnd]));
+      if(intervals.length===0) break;
+    }
     if(intervals.length===0) break;
   }
   return intervals.filter(iv=>iv[1]>iv[0]);

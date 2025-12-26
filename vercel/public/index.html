@@ -2343,9 +2343,15 @@ function weeklyComputeHoursMapsForWeek(weekStartYmd){
         if (taskProj) pid = String(taskProj);
       }
     }
-    const startAt = toDate(pick(w,'start_at','startAt','start'));
+    const parsedValue = (()=>{
+      if (!w || typeof w.value !== 'string') return null;
+      try{ return JSON.parse(w.value); }catch(_){ return null; }
+    })();
+    const startRaw = pick(w,'start_at','startAt','start','clock_in','clockIn','clockin','startTime') || (parsedValue && (parsedValue.start_at || parsedValue.clock_in || parsedValue.start));
+    const endRaw   = pick(w,'end_at','endAt','end','clock_out','clockOut','clockout','endTime')   || (parsedValue && (parsedValue.end_at || parsedValue.clock_out || parsedValue.end));
+    const startAt = toDate(startRaw);
     if (!startAt) return;
-    const endAt = toDate(pick(w,'end_at','endAt','end')) || now;
+    const endAt = toDate(endRaw) || now;
     if (endAt.getTime() <= startAt.getTime()) return;
 
     const key = weeklyUserProjectKey(uid, pid);

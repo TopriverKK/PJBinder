@@ -137,6 +137,8 @@
   #page-weekly .wk-scopebar select{ padding: 6px 8px; font-size: 13px; }
   #page-weekly .wk-scopebar input[type="date"]{ padding: 6px 8px; font-size: 13px; }
   #page-weekly .wk-scopebar button{ padding: 6px 10px; }
+  #page-weekly .wk-row-common td{ background: #f8fafc; }
+  #page-weekly .wk-proj-common .wk-proj-name{ font-weight: 700; color: #1f2937; }
   #page-weekly .wk-scope-label{ display:flex; gap:6px; align-items:center; user-select:none; font-size:12px; color: var(--muted); }
 
   #weeklyTable { border-collapse: separate; border-spacing: 0; }
@@ -2319,15 +2321,7 @@ function weeklyComputeHoursMapsForWeek(weekStartYmd){
   safeArr(DATA.attendanceWorklogs).forEach(w=>{
     const uid = String(pick(w,'user_id','userId','userid')||'').trim();
     if (!uid) return;
-    let pid = String(pick(w,'project_id','projectId','projectid')||'').trim();
-    // プロジェクト未指定でタスクだけ指定されている場合、タスクのプロジェクトに寄せる
-    if (!pid) {
-      const tid = String(pick(w,'task_id','taskId','taskid')||'').trim();
-      if (tid) {
-        const taskProj = safeArr(DATA.tasks).find(t => String(t.id||'') === tid)?.projectId;
-        if (taskProj) pid = String(taskProj);
-      }
-    }
+    const pid = String(pick(w,'project_id','projectId','projectid')||'').trim();
     const startAt = toDate(pick(w,'start_at','startAt','start'));
     if (!startAt) return;
     const endAt = toDate(pick(w,'end_at','endAt','end')) || now;
@@ -2534,15 +2528,28 @@ function renderWeeklyPage(){
     const openTasksForUser = tasksAll
       .filter(t => String(t.status||'').toLowerCase() !== 'done')
       .filter(t => String(t.assignees||'').split(',').map(s=>s.trim()).filter(Boolean).includes(uid));
-    const projectIds = Array.from(new Set(openTasksForUser.map(t=>String(t.projectId||'').trim()))).filter(pid=>pid);
-    const hasCommon = openTasksForUser.some(t=>!String(t.projectId||'').trim()) ||
-      !!wkHoursMap[weeklyUserProjectKey(uid, '')] || !!totalHoursMap[weeklyUserProjectKey(uid, '')];
-    const orderedProjectIds = (hasCommon ? [''] : []).concat(projectIds.sort((a,b)=>projNameById(a).localeCompare(projNameById(b), 'ja')));
+    const projectIdsSet = new Set();
+    let hasCommon = false;
+    const markProject = (pidRaw)=>{
+      const pidTrim = String(pidRaw||'').trim();
+      if (pidTrim) projectIdsSet.add(pidTrim); else hasCommon = true;
+    };
+    openTasksForUser.forEach(t=>markProject(t.projectId));
+    const collectFromMap = (map)=>{
+      Object.keys(map||{}).forEach(k=>{
+        const [kUid, kPid=''] = String(k||'').split('|');
+        if (String(kUid) === uid) markProject(kPid);
+      });
+    };
+    collectFromMap(wkHoursMap);
+    collectFromMap(totalHoursMap);
+    const orderedProjectIds = Array.from(projectIdsSet).sort((a,b)=>projNameById(a).localeCompare(projNameById(b), 'ja'));
+    if (hasCommon) orderedProjectIds.unshift('');
 
     orderedProjectIds.forEach((pid, idx)=>{
       const openTasks = pid
         ? openTasksForUser.filter(t=>String(t.projectId||'')===String(pid))
-        : openTasksForUser;
+        : openTasksForUser.filter(t=>!String(t.projectId||'').trim());
 
       const taskLines = openTasks
         .slice()
@@ -2583,9 +2590,9 @@ function renderWeeklyPage(){
       };
 
       rows.push(`
-        <tr>
+        <tr class="${pid ? '' : 'wk-row-common'}">
           <td class="wk-rowhead wk-sticky-1" style="vertical-align:top;">${idx===0 ? userCell : ''}</td>
-          <td class="wk-proj wk-sticky-2" style="vertical-align:top;">${projCell}</td>
+          <td class="wk-proj wk-sticky-2 ${pid ? '' : 'wk-proj-common'}" style="vertical-align:top;">${projCell}</td>
           <td class="wk-week" style="vertical-align:top;">${cell(headWeeks[0])}</td>
           <td class="wk-week" style="vertical-align:top;">${cell(headWeeks[1])}</td>
           <td class="wk-week" style="vertical-align:top;">${cell(headWeeks[2])}</td>

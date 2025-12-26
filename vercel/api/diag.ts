@@ -38,6 +38,7 @@ export default async function handler(req: any, res: any) {
     },
     env: {
       SUPABASE_URL: has('SUPABASE_URL'),
+      NEXT_PUBLIC_SUPABASE_URL: has('NEXT_PUBLIC_SUPABASE_URL'),
       SUPABASE_SERVICE_ROLE_KEY: has('SUPABASE_SERVICE_ROLE_KEY'),
       SUPABASE_KEY: has('SUPABASE_KEY'),
       GOOGLE_CLIENT_EMAIL: has('GOOGLE_CLIENT_EMAIL'),

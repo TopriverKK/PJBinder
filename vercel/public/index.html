@@ -201,7 +201,7 @@
   .col h3 { font-size:13px; margin:0 0 8px 0; display:flex; justify-content:space-between; align-items:center; }
   .cardlet { background:#fff; border:1px solid var(--border); border-radius:10px; padding:6px; margin:6px 0; box-shadow: var(--shadow); cursor:grab; font-size:12px; line-height:1.35; }
   .dropping { outline:2px dashed var(--accent); outline-offset:-4px; }
-  .filters { display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px; }
+  .filters { display:grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap:8px; margin-bottom:8px; }
   .filters.sticky { position: sticky; top: 56px; z-index: 25; border:1px solid var(--border); border-radius:10px; padding:8px; }
   .help { line-height:1.8; }
   @media (max-width: 1200px) {
@@ -1010,14 +1010,15 @@ button.link:hover { opacity: .8; }
           </div>
 
           <div class="filters sticky see-through">
-            <input id="f_keyword" placeholder="キーワード（タイトル/メモ等）"/>
-            <select id="f_project"></select>
-            <select id="f_assignee"></select>
-            <div><label class="muted">期限(From)</label><input id="f_from" type="date"/></div>
-            <div><label class="muted">期限(To)</label><input id="f_to" type="date"/></div>
+            <input id="f_keyword" placeholder="キーワード（タイトル/メモ等）" aria-label="キーワード検索"/>
+            <select id="f_project" aria-label="プロジェクト絞り込み"></select>
+            <select id="f_assignee" aria-label="担当者絞り込み"></select>
+            <select id="f_department" aria-label="部署絞り込み"></select>
+            <div><label class="muted">期限(From)</label><input id="f_from" type="date" aria-label="期限From"/></div>
+            <div><label class="muted">期限(To)</label><input id="f_to" type="date" aria-label="期限To"/></div>
             <div>
               <label class="muted">優先度</label>
-              <select id="f_priority">
+              <select id="f_priority" aria-label="優先度絞り込み">
                 <option value="">全優先度</option>
                 <option>高</option><option>中</option><option>低</option>
               </select>
@@ -1753,7 +1754,7 @@ function gotoDashboardTab(tab){
 
 // --- Data & Filters ---
 let DATA = {users:[], projects:[], tasks:[], subs:[], ledger:[], ledgerPlans:[], credentials:[], attachments:[], minutes:[], dailyReports:[], shareds:[]};
-let FILTERS = { keyword:'', project:'', assignee:'', from:'', to:'', priority:'', status:'' };
+let FILTERS = { keyword:'', project:'', assignee:'', department:'', from:'', to:'', priority:'', status:'' };
 let PAGE = 'dashboard';
 let ACTIVE_TAB = 'list';
 let GANTT_SCALE = (localStorage.getItem('gantt_scale')||'day');
@@ -1761,7 +1762,7 @@ let GANTT_SCALE = (localStorage.getItem('gantt_scale')||'day');
 function countAttachments(kind, id){
   return safeArr(DATA.attachments).filter(a => a.parentType===kind && String(a.parentId)===String(id)).length;
 }
-const FILTERS_KEY = 'pm_filters_v1';
+const FILTERS_KEY = 'pm_filters_v2';
 let OVERDUE = false; // 遅延クイックフィルタ
 const dayMs = 24*60*60*1000; // グローバル日ミリ秒（ガント/日付計算で使用）
 
@@ -1779,13 +1780,14 @@ function loadFiltersFromLS(){
       keyword: f.keyword||'',
       project: f.project||'',
       assignee: f.assignee||'',
+      department: f.department||'',
       from: f.from||'',
       to: f.to||'',
       priority: f.priority||'',
       status: f.status||''
     };
     // UIへ反映（セレクトは hydrateSelects でも再設定されます）
-    const map = {keyword:'f_keyword', project:'f_project', assignee:'f_assignee', from:'f_from', to:'f_to', priority:'f_priority', status:'f_status'};
+    const map = {keyword:'f_keyword', project:'f_project', assignee:'f_assignee', department:'f_department', from:'f_from', to:'f_to', priority:'f_priority', status:'f_status'};
     Object.keys(map).forEach(k=>{ const e=el(map[k]); if(e) e.value=FILTERS[k]||''; });
   }catch(_){}
 }
@@ -1881,6 +1883,7 @@ function hydrateSelects(){
   const users     = safeArr(DATA.users);
   const projects  = safeArr(DATA.projects);
   const activePjs = projects.filter(p => String(p.status||'').toLowerCase() !== 'archived');
+  const departments = Array.from(new Set(users.map(u=>String(u.department||'').trim()).filter(Boolean)));
 
   // 汎用: セレクトへ流し込み（空=プレイスホルダー文言を表示）
   const set = (id, items, {empty=true, label=x=>x.name||x.title||x.id||'', value=x=>x.id}={})=>{
@@ -1916,6 +1919,17 @@ function hydrateSelects(){
   // --- ユーザー系 ---
   ['p_owner_select','t_owner_select','f_assignee','dr_user','sh_owner','c_owner']
     .forEach(id => set(id, users, {empty:true, label:u=>u.name||u.email||u.id, value:u=>u.id}));
+  // 部署フィルタ
+  (function setDeptFilter(){
+    const el = document.getElementById('f_department');
+    if (!el) return;
+    while(el.options.length) el.remove(0);
+    el.add(new Option('全所属',''));
+    departments.forEach(d => el.add(new Option(d, d)));
+    // 復元
+    el.value = FILTERS.department || '';
+    if (el.value !== (FILTERS.department||'')) el.value = '';
+  })();
 
   // タスク担当（複数選択）
   const multi = document.getElementById('t_assignees_select');
@@ -1942,7 +1956,7 @@ function hydrateSelects(){
   setMulti('dr_tasks', openTasks, 6, 12);
 
   // --- フィルタの値をUIに復元 ---
-  const map = { project:'f_project', assignee:'f_assignee', priority:'f_priority', status:'f_status' };
+  const map = { project:'f_project', assignee:'f_assignee', department:'f_department', priority:'f_priority', status:'f_status' };
   Object.keys(map).forEach(k => { const e = document.getElementById(map[k]); if(e) e.value = FILTERS[k] || ''; });
   ['f_keyword','f_from','f_to'].forEach(id => { const e = document.getElementById(id); if(e) e.value = (FILTERS[id.replace('f_','')] || ''); });
 
@@ -3781,7 +3795,7 @@ function applyHash(){
   const p = new URLSearchParams(raw);
   const tab = p.get('tab'); if(tab) switchTab(tab);
 
-  ['keyword','project','assignee','from','to','priority','status'].forEach(k=>{
+  ['keyword','project','assignee','department','from','to','priority','status'].forEach(k=>{
     const v = p.get(k)||''; if(v){ FILTERS[k]=v; const id='f_'+(k==='keyword'?'keyword':k); const e=el(id); if(e) e.value=v; }
   });
   OVERDUE = p.get('overdue')==='1';
@@ -3801,6 +3815,7 @@ function applyFilters() {
     keyword: document.getElementById('f_keyword').value.trim(),
     project: document.getElementById('f_project').value,
     assignee: document.getElementById('f_assignee').value,
+    department: document.getElementById('f_department').value,
     from: document.getElementById('f_from').value,
     to: document.getElementById('f_to').value,
     priority: document.getElementById('f_priority').value,
@@ -3820,7 +3835,7 @@ function quickOverdue(){
   renderTasksTable(); renderKanban(); if (ACTIVE_TAB==='gantt') renderGantt();
 }
 function clearFilters() {
-  ['f_keyword','f_project','f_assignee','f_from','f_to','f_priority','f_status'].forEach(id=>{ const elx=document.getElementById(id); if (elx) elx.value=''; });
+  ['f_keyword','f_project','f_assignee','f_department','f_from','f_to','f_priority','f_status'].forEach(id=>{ const elx=document.getElementById(id); if (elx) elx.value=''; });
   OVERDUE = false;
   applyFilters();
   saveFiltersToLS();
@@ -3829,12 +3844,21 @@ function clearFilters() {
 function filterTasks(list) {
   let rows = list.slice();
   const f = FILTERS;
+  const userDeptById = new Map(safeArr(DATA.users).map(u => [String(u.id||''), String(u.department||'').trim()]));
   if (f.keyword) {
     const k = f.keyword.toLowerCase();
     rows = rows.filter(x => String(x.title||'').toLowerCase().includes(k) || String(x.memoText||'').toLowerCase().includes(k));
   }
   if (f.project)  rows = rows.filter(x => String(x.projectId||'') === String(f.project));
   if (f.assignee) rows = rows.filter(x => String(x.assignees||'').split(',').map(s=>s.trim()).includes(f.assignee));
+  if (f.department) {
+    const want = String(f.department||'');
+    rows = rows.filter(x => {
+      const assignees = String(x.assignees||'').split(',').map(s=>s.trim()).filter(Boolean);
+      if (!assignees.length) return false;
+      return assignees.some(a => (userDeptById.get(a)||'') === want);
+    });
+  }
   if (f.from)     rows = rows.filter(x => x.dueDate && x.dueDate >= f.from);
   if (f.to)       rows = rows.filter(x => x.dueDate && x.dueDate <= f.to);
   if (f.status === 'notdone') {

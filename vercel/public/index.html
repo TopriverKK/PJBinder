@@ -2309,8 +2309,20 @@ function weeklyComputeHoursMapsForWeek(weekStartYmd){
 
   const toDate = (v)=>{
     if (!v) return null;
-    const d = new Date(v);
-    return Number.isFinite(d.getTime()) ? d : null;
+    const tryParse = (s)=>{
+      const d = new Date(s);
+      return Number.isFinite(d.getTime()) ? d : null;
+    };
+    const raw = String(v);
+    let d = tryParse(raw);
+    if (d) return d;
+    // Normalize common timestamp variants: "YYYY-MM-DD HH:mm:ss.sss+00" => "YYYY-MM-DDTHH:mm:ss.sss+00:00"
+    const t1 = raw.replace(' ', 'T');
+    d = tryParse(t1);
+    if (d) return d;
+    const t2 = t1.replace(/\+(\d\d)$/, '+$1:00');
+    d = tryParse(t2);
+    return d;
   };
 
   const overlapMs = (a0, a1, b0, b1)=>{

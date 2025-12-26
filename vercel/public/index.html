@@ -2596,7 +2596,7 @@ function renderWeeklyPage(){
 
       rows.push(`
         <tr class="${pid ? '' : 'wk-row-common'}">
-          <td class="wk-rowhead wk-sticky-1" style="vertical-align:top;">${idx===0 ? userCell : ''}</td>
+          <td class="wk-rowhead wk-sticky-1" style="vertical-align:top;">${userCell}</td>
           <td class="wk-proj wk-sticky-2 ${pid ? '' : 'wk-proj-common'}" style="vertical-align:top;">${projCell}</td>
           <td class="wk-week" style="vertical-align:top;">${cell(headWeeks[0])}</td>
           <td class="wk-week" style="vertical-align:top;">${cell(headWeeks[1])}</td>

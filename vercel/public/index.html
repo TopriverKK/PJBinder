@@ -2529,11 +2529,11 @@ function renderWeeklyPage(){
     const overlapMs = (a0,a1,b0,b1)=>Math.max(0, Math.min(a1.getTime(), b1.getTime()) - Math.max(a0.getTime(), b0.getTime()));
     const addH = (k,h)=>{ if(!k) return; monthHoursMap[k]=(monthHoursMap[k]||0)+(Number(h)||0); };
     safeArr(DATA.attendanceWorklogs).forEach(w=>{
-      const uid = String(pick(w,'user_id','userId','userid')||'').trim();
+      const uid = String((w && (w.user_id ?? w.userId ?? w.userid))||'').trim();
       if (!uid) return;
-      const pid = String(pick(w,'project_id','projectId','projectid')||'').trim();
-      const s = toDateLocal(pick(w,'start_at','startAt','start'));
-      const e = toDateLocal(pick(w,'end_at','endAt','end')) || new Date();
+      const pid = String((w && (w.project_id ?? w.projectId ?? w.projectid))||'').trim();
+      const s = toDateLocal(w && (w.start_at ?? w.startAt ?? w.start));
+      const e = toDateLocal(w && (w.end_at ?? w.endAt ?? w.end)) || new Date();
       if (!s || e.getTime() <= s.getTime()) return;
       const ov = overlapMs(s,e,ms,me);
       if (ov>0) addH(weeklyUserProjectKey(uid,pid), ov/3600000);
@@ -7968,6 +7968,7 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
 
 
 

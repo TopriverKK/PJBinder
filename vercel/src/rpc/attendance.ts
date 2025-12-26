@@ -67,7 +67,7 @@ function normId(v: unknown): string {
 }
 
 function isWorklogActive(r: AttendanceRow): boolean {
-  // Counts time while working or out (ŠOo) but not during breaks.
+  // Counts time while working or out, but not during breaks.
   // Also requires an open work interval (clock_in without clock_out).
   if (!r.clock_in) return false;
   if (r.clock_out) return false;
@@ -143,59 +143,69 @@ async function syncWorklogsForPatch(
   const date = normId(after.work_date);
   if (!userId || !date) return;
 
+  const afterProjectId = normId(after.project_id);
+  const afterTaskId = normId(after.task_id);
   const beforeActive = isWorklogActive(before);
   const afterActive = isWorklogActive(after);
 
+  const closeAll = async () => {
+    // Close any open segment(s) across any date (handles leftovers/day boundary)
+    await closeOpenWorklogsAnyDateIfAny(userId, now);
+  };
+  const openNew = async () => {
+    await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+  };
+
+  // 1) If now inactive, close any open segments
+  if (!afterActive) {
+    await closeAll();
+    return;
+  }
+
+  // 2) Becoming active: close leftovers then open new
+  if (!beforeActive && afterActive) {
+    await closeAll();
+    await openNew();
+    return;
+  }
+
+  // 3) Always cut when project/task changes during active state
+  if (actionType === 'setProjectTask') {
+    await closeAll();
+    await openNew();
+    return;
+  }
+
+  // 4) Active->active self-heal (ensure one open segment matching current project/task)
   const beforeProjectId = normId(before.project_id);
   const beforeTaskId = normId(before.task_id);
-  const afterProjectId = normId(after.project_id);
-  const afterTaskId = normId(after.task_id);
-
   const changed = beforeProjectId !== afterProjectId || beforeTaskId !== afterTaskId;
-
-  // Transition rules:
-  // - active -> inactive : close current segment
-  // - inactive -> active : open new segment
-  // - active -> active + project/task changed : close + open
-  // - active -> active + unchanged : ensure an open segment exists (self-heal)
-
-  if (beforeActive && !afterActive) {
-    // Close any open segment(s) across dates (handles day-boundary leftovers).
-    await closeOpenWorklogsAnyDateIfAny(userId, now);
-    return;
-  }
-
-  if (!beforeActive && afterActive) {
-    // Defensive: if an open segment exists due to previous failure, close it first.
-    await closeOpenWorklogsAnyDateIfAny(userId, now);
-    await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
-    return;
-  }
 
   if (beforeActive && afterActive) {
     if (changed) {
-      await closeOpenWorklogsAnyDateIfAny(userId, now);
-      await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+      await closeAll();
+      await openNew();
       return;
     }
 
     // Self-heal: ensure exactly one open segment and it matches current project/task.
     const opens = await selectOpenWorklogs(userId, date);
     if (opens.length !== 1) {
-      await closeOpenWorklogsAnyDateIfAny(userId, now);
-      await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+      await closeAll();
+      await openNew();
       return;
     }
     const open = opens[0];
     const openProjectId = normId(open.project_id);
     const openTaskId = normId(open.task_id);
     if (openProjectId !== afterProjectId || openTaskId !== afterTaskId) {
-      await closeOpenWorklogsAnyDateIfAny(userId, now);
-      await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
+      await closeAll();
+      await openNew();
       return;
     }
   }
 }
+
 
 function makeValueJson(r: AttendanceRow): string {
   // Keep a compact backup payload in value for debugging/fallback.

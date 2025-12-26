@@ -347,6 +347,20 @@
   .att-card.card-state-event .row,
   .att-card.card-state-done .row,
   .att-card.card-state-not-clocked .row{ background: rgba(255,255,255,.6); border-radius: 10px; padding: 6px; margin-bottom: 4px; }
+  .att-card.is-busy { opacity: .6; pointer-events: none; }
+
+  @media (max-width: 768px) {
+    #page-attendance .grid { grid-template-columns: 1fr !important; }
+    #page-attendance .att-actions {
+      position: sticky;
+      bottom: 0;
+      background: var(--card);
+      padding-top: 6px;
+      padding-bottom: 6px;
+      border-top: 1px solid var(--border);
+      z-index: 6;
+    }
+  }
 
   /* 透かしより前面に出す対象を追加（header だけでなく toolbar も） */
   header, #global-toolbar, .container { position: relative; z-index: 1; }
@@ -1385,6 +1399,9 @@ button.link:hover { opacity: .8; }
     <div class="card" data-att-view="dashboard">
       <h2>出勤状況（今日） <span class="muted" id="att-today-label"></span></h2>
       <div class="body">
+        <div id="att-auto-warning" class="muted" style="display:none;color:#b45309;background:#fef3c7;border:1px solid #f59e0b;padding:6px 8px;border-radius:8px;margin-bottom:8px;">
+          自動更新が一時停止しました（画面が非表示/他タブなど）。
+        </div>
         <div class="toolbar" style="justify-content:space-between;">
           <div class="toolbar">
             <button class="secondary" id="att_refresh_btn" onclick="refreshAttendance()">更新</button>
@@ -2598,6 +2615,16 @@ function setAttendanceSaveHint(userId, text, ok){
   }catch(_){ }
 }
 
+function setAttendanceCardBusy(userId, busy){
+  try{
+    const uid = String(userId||'');
+    const card = document.querySelector(`.att-card[data-att-card-uid="${CSS.escape(uid)}"]`);
+    if(!card) return;
+    card.classList.toggle('is-busy', !!busy);
+    card.querySelectorAll('button,select,input,textarea').forEach(el => { el.disabled = !!busy; });
+  }catch(_){ }
+}
+
 function setAttendanceRefreshBusy(busy){
   try{
     const b = document.getElementById('att_refresh_btn');
@@ -3007,6 +3034,7 @@ function attFindRowForUser(userId){
 
 async function patchAttendance(userId, action){
   const date = todayStr();
+  setAttendanceCardBusy(userId, true);
   try{
     setAttendanceSaveHint(userId, '保存中...', true);
     const saved = await gas('patchAttendance', userId, date, action);
@@ -3034,6 +3062,9 @@ async function patchAttendance(userId, action){
     console.error(e);
     toast('出勤状況更新に失敗: '+(e && e.message ? e.message : e), false);
     setAttendanceSaveHint(userId, '保存失敗', false);
+  }
+  finally{
+    setAttendanceCardBusy(userId, false);
   }
 }
 
@@ -3153,6 +3184,7 @@ function renderAttendancePage(){
 
     const card = document.createElement('div');
     card.className = `card att-card ${stateClass}`;
+    card.setAttribute('data-att-card-uid', uid);
     const projId = String(row.project_id||'');
     const taskId = String(row.task_id||'');
 

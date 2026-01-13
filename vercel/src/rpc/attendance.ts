@@ -184,6 +184,12 @@ async function syncWorklogsForPatch(
     await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
   };
 
+  // 強制終了: 退勤操作時は必ず全オープン区間を閉じる（状態が既に非稼働でも閉じる）
+  if (actionType === 'clockOut') {
+    await closeAll();
+    return;
+  }
+
   // 1) If now inactive, close any open segments
   if (!afterActive) {
     await closeAll();

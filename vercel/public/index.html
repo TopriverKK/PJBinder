@@ -245,6 +245,13 @@
 
   /* Docsバッジ */
   .doc-badge{ margin-left:4px; cursor:pointer; opacity:.9; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border:1px solid var(--border); border-radius:999px; background:var(--card); font-size:12px; line-height:1.2; white-space:nowrap; }
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:20; display:none; align-items:center; justify-content:center; }
+  .modal-panel{ background:var(--card); border-radius:12px; padding:16px; max-width:760px; width:calc(100% - 32px); box-shadow:0 10px 40px rgba(0,0,0,.25); max-height:80vh; overflow:auto; }
+  .modal-panel h3{ margin-top:0; margin-bottom:8px; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+  .att-modal-row{ display:grid; grid-template-columns: 1fr 1.2fr auto; gap:6px; align-items:center; margin-bottom:6px; }
+  .att-modal-row input{ width:100%; }
+  .att-modal-row button{ white-space:nowrap; }
   .doc-badge:hover{ opacity:1; transform: translateY(-1px); }
 
   /* ツールボタンの詰め */
@@ -631,6 +638,7 @@ button.link:hover { opacity: .8; }
   <div class="toolbar">
     <button class="secondary" onclick="refresh()">最新化</button>
     <button class="secondary" id="nav-help"    onclick="openUsageGuide('BEGINNER')">使い方</button>
+    <button class="secondary" id="nav-updates" onclick="openUpdatesModal()">アップデート</button>
   </div>
   <nav>
     <button class="active" id="nav-dashboard" onclick="goto('dashboard')">ダッシュボード</button>
@@ -4170,7 +4178,7 @@ function renderTasksTable() {
         <button class="secondary" data-tip="この項目を編集します" onclick="editTask('${r.id}')">編集</button>
         <button class="secondary" onclick="moveStatus('${r.id}','doing')">→進行中</button>
         <button class="secondary" onclick="moveStatus('${r.id}','done')">✓完了</button>
-        <button class="secondary" onclick="editTaskMemo('${r.id}')">メモ</button>
+        <button class="secondary" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">添付</button>
         <button class="secondary" onclick="delTask('${r.id}')">削除</button>
       </td>
     `;
@@ -4513,14 +4521,14 @@ function renderProjects() {
     // Docs の URL（未定義対策）
     const pDocUrl = getProjectDocUrl(r.id);
 
-    const attBtn = '<button class="secondary" data-tip="添付URL一覧を開きます。"  onclick="toggleAttachmentList(\'project\',\''+r.id+'\', this)">添付URL</button>';
+    const attBtn = '<button class="secondary" data-tip="添付を管理します。"  onclick="openAttachmentModal(\\'project\\',\\''+r.id+'\\',\\''+escapeJsSq(r.name||r.id)+'\\')">添付</button>';
     const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">📄Doc</span>' : '';
 
     const tr = document.createElement('tr');
 
     const attN = countProjectAttachmentsDeep(r.id);
     const attBadge = attN
-      ? '<span class="doc-badge" data-tip="添付URL一覧を開きます。" title="添付 '+attN+'件" onclick="toggleAttachmentList(\'project\',\''+r.id+'\', this)">📎'+attN+'</span>'
+      ? '<span class="doc-badge" data-tip="添付URL一覧を開きます。" title="添付 '+attN+'件" onclick="openAttachmentModal(\\'project\\',\\''+r.id+'\\',\\''+escapeJsSq(r.name||r.id)+'\\')">📎'+attN+'</span>'
       : '';
 
     // 親プロジェクト名（オプショナルチェイニングなし）
@@ -4574,13 +4582,84 @@ function renderProjects() {
 
 
 
+let ATT_MODAL = { kind:'', id:'', label:'', items:[], deleted:new Set<number|string>() };
+function openAttachmentModal(kind, id, label){
+  const list = safeArr(DATA.attachments)
+    .filter(a=>String(a.parentType||a.parent_type||a.type||'')===String(kind) && String(a.parentId||a.parent_id||'')===String(id))
+    .map(a=>{
+      const url = a.url || (a.fileId ? ('https://drive.google.com/file/d/'+a.fileId) : '');
+      return { ...a, url };
+    });
+  ATT_MODAL = { kind, id, label: label||id, items: list, deleted: new Set() };
+  el('att-modal-title').textContent = `添付管理: ${label||id}`;
+  renderAttachmentModalList();
+  const bg = el('att-modal'); if(bg){ bg.style.display='flex'; }
+}
+function renderAttachmentModalList(){
+  const wrap = el('att-modal-list'); if(!wrap) return;
+  const rows = (ATT_MODAL.items||[]).map((a,idx)=>{
+    const id = a.id ? String(a.id) : '';
+    return `
+      <div class="att-modal-row att-row" data-idx="${idx}" data-id="${escapeHtml(id)}">
+        <input value="${escapeHtml(a.title||'')}" placeholder="名称" />
+        <input value="${escapeHtml(a.url||'')}" placeholder="URL (https://...)" />
+        <button class="secondary" onclick="removeAttachmentRow(${idx})">削除</button>
+      </div>
+    `;
+  }).join('') || '<div class="muted">まだ添付がありません</div>';
+  wrap.innerHTML = rows;
+}
+function addAttachmentRow(){
+  const title = (document.getElementById('att-new-title')||{}).value || '';
+  const url = (document.getElementById('att-new-url')||{}).value || '';
+  if(!url.trim()){ alert('URLを入力してください'); return; }
+  ATT_MODAL.items.push({ title:title.trim(), url:url.trim(), type:'url' });
+  if(el('att-new-title')) el('att-new-title').value='';
+  if(el('att-new-url')) el('att-new-url').value='';
+  renderAttachmentModalList();
+}
+function removeAttachmentRow(idx){
+  const it = (ATT_MODAL.items||[])[idx];
+  if(it && it.id) ATT_MODAL.deleted.add(String(it.id));
+  ATT_MODAL.items.splice(idx,1);
+  renderAttachmentModalList();
+}
+async function saveAttachmentModal(){
+  const rows = Array.from(document.querySelectorAll('#att-modal-list .att-row'));
+  const items = rows.map(div=>{
+    const inputs = div.querySelectorAll('input');
+    const title = inputs[0]?.value || '';
+    const url = inputs[1]?.value || '';
+    const parsed = parseAttachmentLines(`${title},${url}`)[0] || { title, url, type:'url', fileId:'' };
+    return { id: div.getAttribute('data-id') || undefined, ...parsed };
+  }).filter(it=> (it.title||it.url));
+  const delIds = Array.from(ATT_MODAL.deleted||[]);
+  Busy.push();
+  try{
+    if(items.length) await gas('upsertAttachments', ATT_MODAL.kind, ATT_MODAL.id, items);
+    for(const did of delIds){ await gas('deleteAttachment', did); }
+    await refresh();
+    closeAttachmentModal();
+  }catch(e){
+    alert('添付の保存に失敗: '+(e && e.message ? e.message : e));
+  }finally{
+    Busy.pop();
+  }
+}
+function closeAttachmentModal(){
+  const bg = el('att-modal'); if(bg){ bg.style.display='none'; }
+  ATT_MODAL = { kind:'', id:'', label:'', items:[], deleted:new Set() };
+}
 function openAttachDialogFor(kind, id){
-  const sample = '例)\n設計資料,https://docs.google.com/document/d/xxxxxxxx';
-  const txt = prompt(`添付するURL/Driveファイルを改行で複数入力できます。\n"${sample}"\n`, '');
-  if (txt === null) return;
-  const items = parseAttachmentLines(txt);
-  if (!items.length) return;
-  gsr().withSuccessHandler(()=>refresh()).upsertAttachments(kind, id, items);
+  let label = id;
+  if (kind === 'project') {
+    label = (safeArr(DATA.projects).find(p=>String(p.id)===String(id))?.name) || id;
+  } else if (kind === 'task') {
+    label = (safeArr(DATA.tasks).find(t=>String(t.id)===String(id))?.title) || id;
+  } else if (kind === 'shared') {
+    label = (safeArr(DATA.shareds).find(s=>String(s.id)===String(id))?.name) || id;
+  }
+  openAttachmentModal(kind, id, label);
 }
 
 
@@ -5827,25 +5906,12 @@ function openAttachDialog(kind){
       : '先に対象を追加してください');
     return;
   }
-  const sample = '例)\nhttps://docs.google.com/document/d/xxxxxxxx\n設計資料,https://example.com/spec\n...';
-  const txt = prompt(`添付するURL/Driveファイルを改行で複数入力できます。\n"${sample}"\n`, '');
-  if (txt === null) return;
-  const items = parseAttachmentLines(txt);
-  if (!items.length) return;
-  gsr().withSuccessHandler(()=>refresh()).upsertAttachments(kind, tgt.id, items);
+  openAttachmentModal(kind, tgt.id, tgt.name || tgt.title || tgt.id);
 }
 
 
 function openAttachmentManager(kind, id){
-  const list = safeArr(DATA.attachments).filter(a=>a.parentType===kind && String(a.parentId)===String(id));
-  if(!list.length){ alert('添付はありません'); return; }
-  const lines = list.map(a=> `・${a.title||'(無題)'}\n   ${a.url || ('https://drive.google.com/file/d/'+a.fileId)}`).join('\n');
-  const choice = prompt(`添付(${list.length}件)：\n${lines}\n\n新規追加はURLを入力（複数は改行）`, '');
-  if(choice===null) return;
-  if(choice.trim()){
-    const items = parseAttachmentLines(choice);
-    if(items.length) gsr().withSuccessHandler(()=>refresh()).upsertAttachments(kind, id, items);
-  }
+  openAttachmentModal(kind, id, id);
 }
 function renderMinutesPage(){
   if (PAGE!=='minutes') return;
@@ -6080,34 +6146,9 @@ function renderDailyCalendar(){
   html += '</div>';
   cont.innerHTML = html;
 }
-// ── 添付のインライン表示トグル（表の行の直下に差し込む） ──
+// ── 添付管理モーダルを開く ──
 function toggleAttachmentList(kind, id, anchor){
-  try{
-    const tr = anchor.closest('tr');
-    if(!tr) return;
-    const next = tr.nextElementSibling;
-    if(next && next.classList.contains('att-row')){
-      next.remove(); // 既に開いていれば閉じる
-      return;
-    }
-    const list = safeArr(DATA.attachments).filter(a=>a.parentType===kind && String(a.parentId)===String(id));
-    const cols = tr.parentElement.closest('table')?.querySelectorAll('thead th')?.length || 1;
-
-    const holder = document.createElement('tr');
-    holder.className = 'att-row';
-    const td = document.createElement('td');
-    td.colSpan = cols;
-    td.innerHTML = list.length
-      ? `<div class="inline-attachments">
-           ${list.map(a=>`<div>・<a href="${a.url || ('https://drive.google.com/file/d/'+(a.fileId||''))}" target="_blank" rel="noopener">${escapeHtml(a.title||'(無題)')}</a></div>`).join('')}
-           <div style="margin-top:6px;">
-             <button class="secondary mini" onclick="openAttachmentManager('${kind}','${id}')">＋追加</button>
-           </div>
-         </div>`
-      : `<div class="inline-attachments muted">添付はありません</div>`;
-    holder.appendChild(td);
-    tr.after(holder);
-  }catch(e){ console.error(e); }
+  openAttachmentModal(kind, id, id);
 }
 // ── プロジェクトの関連タスク一覧トグル（表の行の直下に差し込む） ──
 function toggleProjectTaskList(projectId, anchor){
@@ -6575,29 +6616,7 @@ function renderShareds(){
       </td>`;
     tb.appendChild(tr);
   });
-}function toggleAttachmentList(kind, parentId, badgeEl){
-  const row = badgeEl?.closest('tr');
-  if(!row) return;
 
-  // 既に出ていれば畳む
-  const next = row.nextElementSibling;
-  if (next && next.classList.contains('att-row')) {
-    next.remove();
-    return;
-  }
-
-  // 新規で挿入
-  const list = safeArr(DATA.attachments)
-    .filter(a => a.parentType === kind && String(a.parentId) === String(parentId));
-  const html = renderAttachmentInline(list);
-
-  const tr = document.createElement('tr');
-  tr.className = 'att-row';
-  tr.innerHTML = `<td colspan="7">
-    <div class="inline-attachments">${html || '<span class="muted">添付なし</span>'}</div>
-  </td>`;
-  row.insertAdjacentElement('afterend', tr);
-}
 
 function renderAttachmentInline(list){
   if(!list.length) return '';
@@ -7387,6 +7406,29 @@ function openUsageGuide(initial){
     loadUsageDocsInto(modalRoot, first);
   });
 }
+
+async function openUpdatesModal(){
+  const modal = el('updates-modal');
+  const body = el('updates-body');
+  if (body) body.innerHTML = '<div class="muted">読み込み中...</div>';
+  if (modal) modal.style.display = 'flex';
+  try{
+    const resp = await fetch('/update.md');
+    if (!resp.ok) throw new Error('update.md を取得できませんでした');
+    const md = await resp.text();
+    if (body) {
+      body.innerHTML = '<div class="md-docs">' + mdToHtml(md) + '</div>';
+      renderMermaidIn(body);
+    }
+  }catch(e){
+    const msg = (e && e.message) ? e.message : String(e);
+    if (body) body.innerHTML = '<div class="muted">表示に失敗しました: ' + escapeHtml(msg) + '</div>';
+  }
+}
+function closeUpdatesModal(){
+  const modal = el('updates-modal');
+  if (modal) modal.style.display = 'none';
+}
 // 現在のクイック追加の入力欄をそのまま使い、モーダルに「複製」して表示する。
 // 保存時は既存の addProject / addTask をそのまま呼ぶ。
 function openProjectFormModal(){
@@ -7992,9 +8034,40 @@ function closestSafe(target, selector){
   </div>
 </div>
 
+
+<!-- 添付管理モーダル -->
+<div class="modal-backdrop" id="att-modal">
+  <div class="modal-panel">
+    <h3 id="att-modal-title">添付管理</h3>
+    <div id="att-modal-list"></div>
+    <div class="att-modal-row" style="margin-top:10px;">
+      <input id="att-new-title" placeholder="名称（例: 設計資料）"/>
+      <input id="att-new-url" placeholder="URL (https://... または Drive URL)"/>
+      <button class="secondary" onclick="addAttachmentRow()">追加</button>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeAttachmentModal()">キャンセル</button>
+      <button class="primary" onclick="saveAttachmentModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- アップデート表示モーダル -->
+<div class="modal-backdrop" id="updates-modal">
+  <div class="modal-panel">
+    <h3>アップデート</h3>
+    <div id="updates-body" style="white-space:pre-wrap; font-family:'Segoe UI', sans-serif; font-size:13px;"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeUpdatesModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
 </body>
 
 </html>
+
+
 
 
 

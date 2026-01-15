@@ -195,6 +195,10 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const crud = await getCrudMod();
     return await crud.rpcUpsertAttachments(args[0], args[1], args[2]);
   },
+  async deleteAttachment(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcDeleteAttachment(String(args[0]));
+  },
 
   async setTaskStatus(...args: any[]) {
     const crud = await getCrudMod();

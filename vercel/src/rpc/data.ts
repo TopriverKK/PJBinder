@@ -1,4 +1,4 @@
-import { sbSelectAllSafe } from '../supabase/selectAll.js';
+ï»¿import { sbSelectAllSafe } from '../supabase/selectAll.js';
 import { sbDelete, sbUpsert } from '../supabase/rest.js';
 
 export type AllData = {
@@ -203,13 +203,13 @@ export async function rpcUpsertAttachments(kind: any, parentId: any, items: any[
   const parentType = String(kind || '').trim();
   const pid = String(parentId || '').trim();
   const list = Array.isArray(items) ? items : [];
-  if (!parentType || !pid) throw new Error('upsertAttachments: kind ‚Æ id ‚Í•K{‚Å‚·');
+  if (!parentType || !pid) throw new Error('upsertAttachments: kind ã¨ id ã¯å¿…é ˆã§ã™');
 
   const createdAt = nowIso();
   await Promise.all(
     list.map((it) => {
       const row = {
-        id: `att_${crypto.randomUUID().slice(0, 12)}`,
+        id: it?.id ? String(it.id) : `att_${crypto.randomUUID().slice(0, 12)}`,
         parentType,
         parentId: pid,
         type: it?.type ?? null,
@@ -228,6 +228,10 @@ export async function rpcUpsertAttachments(kind: any, parentId: any, items: any[
 
 export async function rpcDeleteUser(id: string) {
   return await sbDelete('users', String(id));
+}
+
+export async function rpcDeleteAttachment(id: string) {
+  return await sbDelete('attachments', String(id));
 }
 
 export async function rpcDeleteTask(id: string) {
@@ -269,3 +273,6 @@ export async function rpcPing() {
     now: new Date().toISOString(),
   };
 }
+
+
+

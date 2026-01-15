@@ -2559,7 +2559,7 @@ function renderWeeklyPage(){
   };
   const projHasDoc = (pid)=> {
     const p = projById(pid);
-    return !!(p && (p.docUrl || p.docID || (p as any).docId));
+    return !!(p && (p.docUrl || p.docID || p.docId));
   };
 
   const tasksAll = safeArr(DATA.tasks);

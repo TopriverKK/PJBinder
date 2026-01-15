@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="manifest" href="/site.webmanifest">
+<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials">
 <meta name="theme-color" content="#0ea5e9">
 <title>PJバインダー</title>
 <!-- Markdown + Mermaid (usage docs) -->
@@ -4521,14 +4521,14 @@ function renderProjects() {
     // Docs の URL（未定義対策）
     const pDocUrl = getProjectDocUrl(r.id);
 
-    const attBtn = '<button class="secondary" data-tip="添付を管理します。"  onclick="openAttachmentModal(\\'project\\',\\''+r.id+'\\',\\''+escapeJsSq(r.name||r.id)+'\\')">添付</button>';
+    const attBtn = `<button class="secondary" data-tip="添付を管理します。" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">添付</button>`;
     const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">📄Doc</span>' : '';
 
     const tr = document.createElement('tr');
 
     const attN = countProjectAttachmentsDeep(r.id);
     const attBadge = attN
-      ? '<span class="doc-badge" data-tip="添付URL一覧を開きます。" title="添付 '+attN+'件" onclick="openAttachmentModal(\\'project\\',\\''+r.id+'\\',\\''+escapeJsSq(r.name||r.id)+'\\')">📎'+attN+'</span>'
+      ? `<span class="doc-badge" data-tip="添付URL一覧を開きます。" title="添付 ${attN}件" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">📎${attN}</span>`
       : '';
 
     // 親プロジェクト名（オプショナルチェイニングなし）

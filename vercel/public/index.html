@@ -140,6 +140,13 @@
   #page-weekly h2{ color: var(--primary); }
   #page-weekly .wk-row-common td{ background: #f8fafc; }
   #page-weekly .wk-proj-common .wk-proj-name{ font-weight: 700; color: #1f2937; }
+  #page-weekly .wk-proj.prio-high{ box-shadow: inset 4px 0 #ef4444; }
+  #page-weekly .wk-proj.prio-mid { box-shadow: inset 4px 0 #f59e0b; }
+  #page-weekly .wk-proj.prio-low { box-shadow: inset 4px 0 #10b981; }
+  .wk-prio-badge{ display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border-radius:999px; border:1px solid rgba(17,24,39,.12); font-size:11px; color:#111827; background:#e5e7eb; }
+  .wk-prio-badge.prio-high{ background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.35); color:#991b1b; }
+  .wk-prio-badge.prio-mid { background:rgba(245,158,11,.18); border-color:rgba(245,158,11,.35); color:#92400e; }
+  .wk-prio-badge.prio-low { background:rgba(16,185,129,.15); border-color:rgba(16,185,129,.35); color:#065f46; }
   #page-weekly .wk-scope-label{ display:flex; gap:6px; align-items:center; user-select:none; font-size:12px; color: var(--muted); }
 
   #weeklyTable { border-collapse: separate; border-spacing: 0; }
@@ -702,7 +709,7 @@ button.link:hover { opacity: .8; }
   </section>
   <section class="page" id="page-projects">
     <div class="card">
-      <h2>プロジェクト一覧（アクティブ＋アーカイブ）</h2>
+      <h2>プロジェクト一覧（アクティブ＋完了）</h2>
       <div class="body">
         <div class="toolbar" style="gap:8px; flex-wrap:wrap; margin-bottom:8px;">
           <input id="proj_f_keyword" placeholder="キーワード（名称/メモ）"/>
@@ -714,7 +721,7 @@ button.link:hover { opacity: .8; }
           <select id="proj_f_status">
             <option value="">全ステータス</option>
             <option value="active">アクティブ</option>
-            <option value="archived">アーカイブ</option>
+            <option value="archived">完了</option>
           </select>
           <button class="secondary" onclick="clearProjectsFilters()">クリア</button>
           <button onclick="applyProjectsFilters()">フィルタ適用</button>
@@ -2544,6 +2551,16 @@ function renderWeeklyPage(){
     const p = activeProjects.find(x=>String(x.id)===String(pid));
     return p ? (p.name || p.id) : String(pid);
   };
+  const projById = (pid)=> activeProjects.find(x=>String(x.id)===String(pid)) || null;
+  const projPriorityLabel = (pid)=> normPriority((projById(pid)?.priority)||'');
+  const projPriorityClass = (pid)=>{
+    const pr = projPriorityLabel(pid);
+    return pr==='高' ? 'prio-high' : pr==='中' ? 'prio-mid' : pr==='低' ? 'prio-low' : '';
+  };
+  const projHasDoc = (pid)=> {
+    const p = projById(pid);
+    return !!(p && (p.docUrl || p.docID || (p as any).docId));
+  };
 
   const tasksAll = safeArr(DATA.tasks);
 
@@ -2588,7 +2605,9 @@ function renderWeeklyPage(){
         .slice(0, 30)
         .map(t=>{
           const due = t.dueDate ? ` [${escapeHtml(t.dueDate)}]` : '';
-          return `<div style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">&bull; ${escapeHtml(t.title||'')}${due}</div>`;
+          const hasDoc = !!(t.docUrl || t.docID || t.docId);
+          const docBtn = `<button class="secondary mini" style="margin-left:6px;" ${hasDoc?'':'disabled'} onclick="openTaskDocById('${escapeJsSq(String(t.id||''))}')">Doc</button>`;
+          return `<div style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">&bull; ${escapeHtml(t.title||'')}${due} ${docBtn}</div>`;
         }).join('') || '<div class="muted" style="font-size:12px;">未完了タスクなし</div>';
 
       const userCell = `
@@ -2597,7 +2616,11 @@ function renderWeeklyPage(){
       `;
 
       const projCell = `
-        <div class="wk-proj-name">${escapeHtml(projNameById(pid))}</div>
+        <div class="wk-proj-name">
+          ${escapeHtml(projNameById(pid))}
+          ${pid ? `<button class="secondary mini" style="margin-left:6px;" ${projHasDoc(pid)?'':'disabled'} onclick="openProjectDocById('${escapeJsSq(pid)}')">Doc</button>` : ''}
+          ${projPriorityLabel(pid) ? `<span class="wk-prio-badge ${projPriorityClass(pid)}" style="margin-left:4px;">優先度: ${escapeHtml(projPriorityLabel(pid))}</span>` : ''}
+        </div>
         <div class="muted" style="font-size:12px; margin-top:2px;">今週: ${escapeHtml(fmtHours(wkHoursMap[weeklyUserProjectKey(uid, pid)]||0))} / 累計: ${escapeHtml(fmtHours(totalHoursMap[weeklyUserProjectKey(uid, pid)]||0))}</div>
         <div style="margin-top:6px; max-height:120px; overflow:auto;">${taskLines}</div>
       `;
@@ -2623,7 +2646,7 @@ function renderWeeklyPage(){
       rows.push(`
         <tr class="${pid ? '' : 'wk-row-common'}">
           <td class="wk-rowhead wk-sticky-1" style="vertical-align:top;">${userCell}</td>
-          <td class="wk-proj wk-sticky-2 ${pid ? '' : 'wk-proj-common'}" style="vertical-align:top;">${projCell}</td>
+          <td class="wk-proj wk-sticky-2 ${pid ? projPriorityClass(pid) : ''} ${pid ? '' : 'wk-proj-common'}" style="vertical-align:top;">${projCell}</td>
           <td class="wk-week" style="vertical-align:top;">${cell(headWeeks[0])}</td>
           <td class="wk-week" style="vertical-align:top;">${cell(headWeeks[1])}</td>
           <td class="wk-week" style="vertical-align:top;">${cell(headWeeks[2])}</td>
@@ -4540,8 +4563,8 @@ function renderProjects() {
         attBtn+
         ' <button class="secondary" data-tip="このプロジェクトについて編集します。" onclick="editProject(\''+r.id+'\')">編集</button>'+
         hardBtn+
-        ' <button class="secondary" data-tip="このプロジェクトを完了扱いとして、過去ログにアーカイブします。アーカイブしたプロジェクトは上部メニューから「プロジェクト」タブで閲覧・復活できます。" onclick="toggleArchiveProject(\''+r.id+'\')">'+
-          ((String(r.status||'').toLowerCase()==='archived')?'復活':'アーカイブ')+
+        ' <button class="secondary" data-tip="このプロジェクトを完了扱いとして、過去ログに移します。完了扱いにしたプロジェクトは上部メニューから「プロジェクト」タブで閲覧・復活できます。" onclick="toggleArchiveProject(\''+r.id+'\')">'+
+          ((String(r.status||'').toLowerCase()==='archived')?'復活':'完了')+
         '</button>'+
       '</td>';
 
@@ -6159,7 +6182,7 @@ function getProjectTaskCounts(pid){
 }
 
 function projectStatusLabel(s){
-  return String(s||'').toLowerCase()==='archived' ? 'アーカイブ' : 'アクティブ';
+  return String(s||'').toLowerCase()==='archived' ? '完了' : 'アクティブ';
 }
 
 function toggleProjectTasks(projectId, anchor){
@@ -6205,7 +6228,7 @@ function renderProjectsPage(){
   const pri = document.getElementById('proj_f_priority')?.value || '';
   const stf = document.getElementById('proj_f_status')?.value || ''; // ''|'active'|'archived'
 
-  // 絞り込み（アーカイブ含む！）
+  // 絞り込み（完了含む！）
   let rows = safeArr(DATA.projects).slice(0,1000).filter(p=>{
     if (stf && String(p.status||'').toLowerCase() !== stf) return false;
     if (own && String(p.ownerUserId||'') !== own) return false;
@@ -6253,7 +6276,7 @@ function renderProjectsPage(){
         ${docBtn}
         <button class="secondary" onclick="toggleProjectTasks('${r.id}', this)">関連タスク</button>
         <button class="secondary" onclick="editProject('${r.id}')">編集</button>
-        <button class="secondary" onclick="toggleArchiveProject('${r.id}')">${(String(r.status||'').toLowerCase()==='archived')?'復活':'アーカイブ'}</button>
+        <button class="secondary" onclick="toggleArchiveProject('${r.id}')">${(String(r.status||'').toLowerCase()==='archived')?'復活':'完了'}</button>
         <button class="secondary" data-tip="このプロジェクトと関連タスク/添付URLを完全削除します（元に戻せません）。" onclick="deleteProjectHard('${r.id}')">完全削除</button>
       </td>
     `;

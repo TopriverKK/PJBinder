@@ -4633,6 +4633,56 @@ function attachTaskInlineEditHandlers(){
     ta.addEventListener('blur', ()=> setTimeout(()=>{ if(cell.dataset.editing==='1') cancel(); }, 10));
   });
 }
+let PROJ_INLINE_BOUND = false;
+function attachProjectInlineEditHandlers(){
+  if (PROJ_INLINE_BOUND) return; PROJ_INLINE_BOUND = true;
+  const tb = document.querySelector('#projTable tbody'); if(!tb) return;
+  tb.addEventListener('click', (e)=>{
+    const cell = closestSafe(e.target, '.cell-prio');
+    if(!cell || cell.dataset.editing==='1') return;
+    const tr = cell.closest('tr'); const id = tr?.dataset.id; if(!id) return;
+    const p = safeArr(DATA.projects).find(x=>String(x.id)===String(id)); if(!p) return;
+
+    cell.dataset.editing='1';
+    const oldHTML = cell.innerHTML;
+
+    const input = document.createElement('select');
+    ['','高','中','低'].forEach(v=>{
+      const o=document.createElement('option'); o.value=v; o.textContent=v||'-';
+      if(normPriority(p.priority||'')===v) o.selected=true;
+      input.appendChild(o);
+    });
+    const ctl = document.createElement('span');
+    ctl.className = 'inline-ctl';
+    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='✓';
+    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='✖';
+    const wrap = document.createElement('span');
+    wrap.appendChild(input); wrap.appendChild(ctl);
+    ctl.appendChild(ok); ctl.appendChild(ng);
+    cell.innerHTML=''; cell.appendChild(wrap); input.focus();
+
+    const cancel=()=>{ cell.innerHTML = oldHTML; cell.dataset.editing=''; };
+    const commit=()=>{
+      const patch = Object.assign({}, p, { priority: input.value });
+      try{
+        google.script.run
+          .withSuccessHandler(()=>{
+            showToast('ok','保存しました');
+            cell.classList.add('cell-flash'); setTimeout(()=>cell.classList.remove('cell-flash'),1200);
+            refresh();
+          })
+          .withFailureHandler(err=>{ showToast('ng', (err && err.message) ? err.message : '保存に失敗しました'); cancel(); })
+          .upsertProject(patch);
+      }catch(e){
+        showToast('ng','通信エラー'); cancel();
+      }
+      cell.dataset.editing='';
+    };
+    ok.addEventListener('click', commit);
+    ng.addEventListener('click', cancel);
+    input.addEventListener('keydown', (ev)=>{ if(ev.key==='Enter'){ ev.preventDefault(); commit(); } if(ev.key==='Escape'){ ev.preventDefault(); cancel(); } });
+  });
+}
 
 // 追加: 通常（スイムOFF）時は内側の #col_xxx 自体にも drop/dragover を付与
 function _wireInnerDrops_(){
@@ -4913,11 +4963,12 @@ function renderProjects() {
       ? ' <button class="secondary" data-tip="このプロジェクトと関連タスク/添付URLを完全削除します（元に戻せません）。" onclick="deleteProjectHard(\''+r.id+'\')">完全削除</button>'
       : '';
 
+    tr.dataset.id = r.id;
     tr.innerHTML =
       '<td'+bg+'>'+escapeHtml(r.name||'')+badge+' '+attBadge+'</td>'+
       '<td'+bg+'>'+escapeHtml(parentName)+'</td>'+
       '<td'+bg+'>'+escapeHtml(nameByUserId(r.ownerUserId||''))+'</td>'+
-      '<td class="cell-prio '+(prc?('prio-'+prc):'')+'">'+
+      '<td class="cell-prio '+(prc?('prio-'+prc):'')+'" data-field="priority">'+
         '<span class="pill prio-badge '+(prc?('prio-'+prc):'')+'">'+
           escapeHtml(prioLabel || '')+
         '</span>'+
@@ -4939,6 +4990,7 @@ function renderProjects() {
 
     tb.appendChild(tr);
   }
+  attachProjectInlineEditHandlers();
 }
 
 
@@ -7991,25 +8043,25 @@ const Flyout = (function(){
   const btnSubmit = document.getElementById('flyout-submit');
 
   function open(){
-    mask.classList.add('open');
-    panel.classList.add('open');
+    mask?.classList.add('open');
+    panel?.classList.add('open');
     document.body.classList.add('flyout-open');
     hydrateQuickForm(); // セレクト等を流し込む
     // 初期フォーカス
     setTimeout(()=> document.getElementById('qx_t_title')?.focus(), 10);
   }
   function close(){
-    mask.classList.remove('open');
-    panel.classList.remove('open');
+    mask?.classList.remove('open');
+    panel?.classList.remove('open');
     document.body.classList.remove('flyout-open');
   }
-  function toggle(){ panel.classList.contains('open') ? close() : open(); }
+  function toggle(){ panel?.classList.contains('open') ? close() : open(); }
 
   // ESC/クリックで閉じる
   mask?.addEventListener('click', close);
   btnClose?.addEventListener('click', close);
   btnCancel?.addEventListener('click', close);
-  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && panel.classList.contains('open')) close(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && panel?.classList.contains('open')) close(); });
 
   // 作成ボタン → 既存addTask()を利用
   btnSubmit?.addEventListener('click', submitQuickTask);

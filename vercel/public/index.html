@@ -947,25 +947,18 @@ button.link:hover { opacity: .8; }
           </div>
           <div class="row">
             <div><label>予約者</label><select id="fac_user"></select></div>
-            <div><label>ステータス</label>
-              <select id="fac_status">
-                <option value="pending">申請中</option>
-                <option value="approved">承認</option>
-                <option value="rejected">却下</option>
-                <option value="canceled">取消</option>
-              </select>
-            </div>
+            <div></div>
           </div>
           <div class="row">
             <div><label>開始日</label><input id="fac_start_date" type="date"/></div>
             <div><label>終了日</label><input id="fac_end_date" type="date"/></div>
           </div>
           <div class="row">
-            <div><label>開始時刻</label><input id="fac_start_time" type="time"/></div>
-            <div><label>終了時刻</label><input id="fac_end_time" type="time"/></div>
+            <div><label>開始時刻</label><input id="fac_start_time" type="time" step="900"/></div>
+            <div><label>終了時刻</label><input id="fac_end_time" type="time" step="900"/></div>
           </div>
           <div class="row">
-            <div><label>場所</label><input id="fac_location" placeholder="例: 3F会議室"/></div>
+            <div><label>場所</label><input id="fac_location" placeholder="例: 本社事務所"/></div>
             <div><label>プロジェクト</label><select id="fac_project"></select></div>
           </div>
           <div class="row">
@@ -985,7 +978,7 @@ button.link:hover { opacity: .8; }
           <table id="facilityTable">
             <thead>
               <tr>
-                <th>期間</th><th>設備</th><th>場所</th><th>予約名</th><th>予約者</th><th>ステータス</th><th>プロジェクト</th><th></th>
+                <th>期間</th><th>設備</th><th>場所</th><th>予約名</th><th>予約者</th><th>プロジェクト</th><th></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -5692,9 +5685,9 @@ function resetFacilityForm(){
   if (el('fac_facility')) el('fac_facility').value = '';
   if (el('fac_title')) el('fac_title').value = '';
   if (el('fac_user')) el('fac_user').value = '';
-  if (el('fac_status')) el('fac_status').value = 'pending';
-  if (el('fac_start_date')) el('fac_start_date').value = '';
-  if (el('fac_end_date')) el('fac_end_date').value = '';
+  const today = todayStr();
+  if (el('fac_start_date')) el('fac_start_date').value = today;
+  if (el('fac_end_date')) el('fac_end_date').value = today;
   if (el('fac_start_time')) el('fac_start_time').value = '';
   if (el('fac_end_time')) el('fac_end_time').value = '';
   if (el('fac_location')) el('fac_location').value = '';
@@ -5707,20 +5700,96 @@ function facilityStatusLabel(status){
   return map[String(status||'').toLowerCase()] || String(status||'');
 }
 
+let FAC_TIME_BOUND = false;
+function bindFacilityTimeDefaults(){
+  if (FAC_TIME_BOUND) return;
+  const st = el('fac_start_time');
+  const et = el('fac_end_time');
+  const bind = (node)=>{
+    if (!node) return;
+    node.addEventListener('focus', ()=>facilitySuggestTimes());
+    node.addEventListener('click', ()=>facilitySuggestTimes());
+  };
+  bind(st); bind(et);
+  FAC_TIME_BOUND = true;
+}
+
+function facilitySuggestTimes(){
+  const stEl = el('fac_start_time');
+  const etEl = el('fac_end_time');
+  if (!stEl || !etEl) return;
+
+  const now = new Date();
+  const mins = now.getMinutes();
+  const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 0, 0, 0);
+  const addMin = mins === 0 ? 30 : (mins <= 30 ? 30 : 60);
+  const next = new Date(base.getTime() + addMin * 60000);
+  const fmt = (d)=> String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+
+  if (!stEl.value) stEl.value = fmt(next);
+  if (!etEl.value) etEl.value = fmt(new Date(next.getTime() + 60 * 60000));
+}
+
+function isFacilityOverlap(payload){
+  const pid = String(payload.facilityId||'').trim();
+  if (!pid) return false;
+  const startDate = payload.startDate || '';
+  const endDate = payload.endDate || payload.startDate || '';
+  if (!startDate) return false;
+
+  const startDay = parseYMDLocal(startDate);
+  const endDay = parseYMDLocal(endDate);
+  if (!startDay || !endDay) return false;
+
+  const selfId = String(payload.id||'');
+  const stMinRaw = minutesFromTime(payload.startTime);
+  const etMinRaw = minutesFromTime(payload.endTime);
+  const stMin = (stMinRaw == null) ? 0 : stMinRaw;
+  const etMin = (etMinRaw == null) ? 24 * 60 : etMinRaw;
+
+  for (const r of safeArr(DATA.facilityReservations)){
+    if (String(r.facilityId||'') !== pid) continue;
+    if (selfId && String(r.id||'') === selfId) continue;
+    const rStatus = String(r.status||'').toLowerCase();
+    if (rStatus === 'canceled' || rStatus === 'rejected') continue;
+
+    const rStartDate = r.startDate || '';
+    const rEndDate = r.endDate || r.startDate || '';
+    const rStartDay = parseYMDLocal(rStartDate);
+    const rEndDay = parseYMDLocal(rEndDate);
+    if (!rStartDay || !rEndDay) continue;
+
+    const maxStart = (rStartDay > startDay) ? rStartDay : startDay;
+    const minEnd = (rEndDay < endDay) ? rEndDay : endDay;
+    if (minEnd < maxStart) continue;
+
+    const rStRaw = minutesFromTime(r.startTime);
+    const rEtRaw = minutesFromTime(r.endTime);
+    const rSt = (rStRaw == null) ? 0 : rStRaw;
+    const rEt = (rEtRaw == null) ? 24 * 60 : rEtRaw;
+
+    const overlap = Math.max(stMin, rSt) < Math.min(etMin, rEt);
+    if (overlap) return true;
+  }
+  return false;
+}
+
 function addFacilityReservation(){
   const id = val('fac_editing_id');
   const facilityId = sel('fac_facility');
   const facility = safeArr(DATA.facilityAssets).find(f=>String(f.id)===String(facilityId));
   const facilityName = facility ? (facility.name || facility.id) : '';
+  const startDate = val('fac_start_date');
+  const endDate = val('fac_end_date') || startDate;
   const payload = {
     id: id || undefined,
     facilityId: facilityId || '',
     facilityName: facilityName || '',
     title: val('fac_title'),
     userId: sel('fac_user'),
-    status: sel('fac_status') || 'pending',
-    startDate: val('fac_start_date'),
-    endDate: val('fac_end_date'),
+    status: 'approved',
+    startDate: startDate,
+    endDate: endDate,
     startTime: val('fac_start_time'),
     endTime: val('fac_end_time'),
     location: val('fac_location'),
@@ -5729,6 +5798,20 @@ function addFacilityReservation(){
   };
   if (!payload.facilityId || !payload.facilityName){ alert('設備名は必須です'); return; }
   if (!payload.startDate){ alert('開始日は必須です'); return; }
+  if (payload.endDate && payload.endDate < payload.startDate){
+    alert('終了日は開始日以降にしてください。'); return;
+  }
+  if (payload.startDate === payload.endDate){
+    const st = minutesFromTime(payload.startTime);
+    const et = minutesFromTime(payload.endTime);
+    if (st != null && et != null && et <= st){
+      alert('終了時刻は開始時刻より後にしてください。'); return;
+    }
+  }
+  if (isFacilityOverlap(payload)){
+    alert('同じ設備は同時間帯に予約できません。時間を変更してください。');
+    return;
+  }
   gsr().withSuccessHandler(()=>{
     resetFacilityForm();
     refresh();
@@ -5742,7 +5825,6 @@ function editFacilityReservation(id){
   if (el('fac_facility')) el('fac_facility').value = r.facilityId || '';
   if (el('fac_title')) el('fac_title').value = r.title || '';
   if (el('fac_user')) el('fac_user').value = r.userId || '';
-  if (el('fac_status')) el('fac_status').value = r.status || 'pending';
   if (el('fac_start_date')) el('fac_start_date').value = r.startDate || '';
   if (el('fac_end_date')) el('fac_end_date').value = r.endDate || '';
   if (el('fac_start_time')) el('fac_start_time').value = r.startTime || '';
@@ -5760,6 +5842,10 @@ function delFacilityReservation(id){
 function renderFacilityPage(){
   if (PAGE !== 'facility') return;
   const tb = document.querySelector('#facilityTable tbody'); if (!tb) return;
+  const today = todayStr();
+  if (el('fac_start_date') && !el('fac_start_date').value) el('fac_start_date').value = today;
+  if (el('fac_end_date') && !el('fac_end_date').value) el('fac_end_date').value = today;
+  bindFacilityTimeDefaults();
   tb.innerHTML = '';
   const facilityMap = new Map(safeArr(DATA.facilityAssets).map(f=>[String(f.id), f]));
   const rows = safeArr(DATA.facilityReservations).slice()
@@ -5781,7 +5867,6 @@ function renderFacilityPage(){
       <td>${escapeHtml(loc)}</td>
       <td>${escapeHtml(r.title||'')}</td>
       <td>${escapeHtml(nameByUserId(r.userId||''))}</td>
-      <td>${escapeHtml(facilityStatusLabel(r.status))}</td>
       <td>${escapeHtml(nameByProjectId(r.projectId||''))}</td>
       <td style="white-space:nowrap;">
         <button class="secondary" onclick="editFacilityReservation('${escapeJsSq(String(r.id||''))}')">編集</button>

@@ -227,6 +227,10 @@
   #page-facility .facility-panel.active{ display:block; }
   #page-facility .facility-tabs{ margin-bottom:10px; }
   #facility-gantt{ overflow-x:auto; }
+  #page-facility .facility-resv-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  @media (max-width: 1200px){
+    #page-facility .facility-resv-grid{ grid-template-columns: 1fr; }
+  }
 
   /* ===== Usage docs (Markdown) ===== */
   .md-docs-nav{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px 0; }
@@ -909,7 +913,6 @@ button.link:hover { opacity: .8; }
     <div class="tabs facility-tabs" id="facility-tabs">
       <div class="tab active" data-tab="reservations" onclick="setFacilityTab('reservations')">予約</div>
       <div class="tab" data-tab="assets" onclick="setFacilityTab('assets')">設備一覧</div>
-      <div class="tab" data-tab="gantt" onclick="setFacilityTab('gantt')">週次ガント</div>
     </div>
     <div class="grid facility-grid" id="facility-grid">
       <div class="card facility-panel" data-facility-tab="assets">
@@ -944,7 +947,8 @@ button.link:hover { opacity: .8; }
 
       <div class="card facility-panel active" data-facility-tab="reservations">
         <h2>設備予約</h2>
-        <div class="body">
+        <div class="body facility-resv-grid">
+          <div>
           <input type="hidden" id="fac_editing_id"/>
           <div class="row">
             <div><label>設備名</label><select id="fac_facility"></select></div>
@@ -974,6 +978,19 @@ button.link:hover { opacity: .8; }
             <button onclick="addFacilityReservation()">登録</button>
             <button class="secondary" onclick="resetFacilityForm()">クリア</button>
           </div>
+          </div>
+          <div class="card" style="margin:0;">
+            <div class="body">
+              <div class="toolbar" style="gap:8px; margin-bottom:8px;">
+                <button class="secondary" onclick="shiftFacilityWeek(-7)">←前週</button>
+                <input id="fac_week_start" type="date"/>
+                <button class="secondary" onclick="shiftFacilityWeek(7)">次週→</button>
+                <button class="secondary" onclick="setFacilityWeekToday()">今週</button>
+                <button onclick="renderFacilityGantt()">更新</button>
+              </div>
+              <div id="facility-gantt"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -991,19 +1008,6 @@ button.link:hover { opacity: .8; }
         </div>
       </div>
 
-      <div class="card facility-panel" data-facility-tab="gantt">
-        <h2>予約状況（週次）</h2>
-        <div class="body">
-          <div class="toolbar" style="gap:8px; margin-bottom:8px;">
-            <button class="secondary" onclick="shiftFacilityWeek(-7)">←前週</button>
-            <input id="fac_week_start" type="date"/>
-            <button class="secondary" onclick="shiftFacilityWeek(7)">次週→</button>
-            <button class="secondary" onclick="setFacilityWeekToday()">今週</button>
-            <button onclick="renderFacilityGantt()">更新</button>
-          </div>
-          <div id="facility-gantt"></div>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -5621,6 +5625,7 @@ function editSubscription(id){
 
 let FACILITY_TAB = 'reservations';
 try { const ft = localStorage.getItem('facility_tab'); if (ft) FACILITY_TAB = ft; } catch(_){ }
+if (FACILITY_TAB !== 'reservations' && FACILITY_TAB !== 'assets') FACILITY_TAB = 'reservations';
 
 function applyFacilityTabState(){
   if (PAGE !== 'facility') return;
@@ -5635,7 +5640,7 @@ function applyFacilityTabState(){
     panel.classList.toggle('active', t === FACILITY_TAB);
   });
   if (FACILITY_TAB === 'assets') renderFacilityAssets();
-  if (FACILITY_TAB === 'gantt') renderFacilityGantt();
+  if (FACILITY_TAB === 'reservations') renderFacilityGantt();
 }
 
 function setFacilityTab(tab){

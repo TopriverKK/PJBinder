@@ -2944,9 +2944,6 @@ function renderWeeklyPage(){
             <textarea id="wk_issues_${idp}" class="memo-edit wk-weekly-memo" rows="3">${issues}</textarea>
             <label style="margin-top:0px;">実施</label>
             <textarea id="wk_done_${idp}" class="memo-edit wk-weekly-memo" rows="3">${done}</textarea>
-            <div class="toolbar" style="justify-content:flex-end; margin-top:6px;">
-              <button onclick="saveWeeklyForUserProjectWeek('${escapeJsSq(uid)}','${escapeJsSq(pid)}','${escapeJsSq(ws)}')">保存</button>
-            </div>
           </div>
         `;
       };
@@ -2983,6 +2980,23 @@ function renderWeeklyPage(){
       };
       ta.addEventListener('input', grow);
       grow();
+    });
+  }catch(_){}
+  try{
+    cont.querySelectorAll('textarea.wk-weekly-memo').forEach(ta=>{
+      if (ta.dataset.bound==='1') return;
+      ta.dataset.bound='1';
+      ta.addEventListener('blur', ()=>{
+        const id = ta.id || '';
+        const m = id.match(/^wk_(issues|done)_(.+)$/);
+        if (!m) return;
+        const parts = m[2].split('_');
+        if (parts.length < 3) return;
+        const ws = parts.pop();
+        const pid = parts.pop();
+        const uid = parts.join('_');
+        saveWeeklyForUserProjectWeek(uid, pid, ws);
+      });
     });
   }catch(_){}
   attachDefaultMemoEditors();

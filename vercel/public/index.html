@@ -215,7 +215,7 @@
   .fac-day-col.today{ background:
       linear-gradient(rgba(14,165,233,.08), rgba(14,165,233,.08)),
       repeating-linear-gradient(to bottom, rgba(0,0,0,.06) 0, rgba(0,0,0,.06) 1px, transparent 1px, transparent 48px); }
-  .fac-event{ position:absolute; left:4px; right:4px; border-radius:8px; padding:6px; color:#fff; font-size:11px; line-height:1.3; overflow:hidden; box-shadow: var(--shadow); }
+  .fac-event{ position:absolute; left:4px; right:4px; border-radius:8px; padding:6px; color:#fff; font-size:11px; line-height:1.3; overflow:hidden; box-shadow: var(--shadow); box-sizing:border-box; }
   .fac-event .meta{ font-size:10px; opacity:.9; }
   #page-facility .facility-grid.single{ grid-template-columns: 1fr; }
   #page-facility .facility-panel{ display:none; }
@@ -5869,6 +5869,7 @@ function renderFacilityGantt(){
   const reservations = safeArr(DATA.facilityReservations);
   const dayStartMin = FAC_GANTT.startHour * 60;
   const dayEndMin = FAC_GANTT.endHour * 60;
+  const dayEvents = {};
 
   reservations.forEach(r=>{
     if (!r.startDate) return;
@@ -5898,20 +5899,67 @@ function renderFacilityGantt(){
       const loc = r.location ? ` / ${r.location}` : '';
       const labelTime = `${String(Math.floor(startMin/60)).padStart(2,'0')}:${String(startMin%60).padStart(2,'0')}-${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
 
-      const ev = document.createElement('div');
-      ev.className = 'fac-event';
-      ev.style.background = color;
-      ev.style.top = `${((startMin - dayStartMin) / 60) * FAC_GANTT.hourHeight}px`;
-      ev.style.height = `${((endMin - startMin) / 60) * FAC_GANTT.hourHeight}px`;
-      if (String(r.status||'') === 'rejected' || String(r.status||'') === 'canceled') {
-        ev.style.opacity = '0.4';
-      }
-      ev.innerHTML = `
-        <div>${escapeHtml(facName)} ${escapeHtml(r.title||'')}</div>
-        <div class="meta">${escapeHtml(labelTime)} ${escapeHtml(who)}${escapeHtml(loc)}</div>
-      `;
-      colMap[dateKey].appendChild(ev);
+      if (!dayEvents[dateKey]) dayEvents[dateKey] = [];
+      dayEvents[dateKey].push({
+        startMin,
+        endMin,
+        labelTime,
+        who,
+        loc,
+        facName,
+        color,
+        status: String(r.status||''),
+        title: r.title || ''
+      });
     }
+  });
+
+  Object.keys(dayEvents).forEach(dateKey=>{
+    const col = colMap[dateKey];
+    if (!col) return;
+    const list = dayEvents[dateKey].slice()
+      .sort((a,b)=> (a.startMin - b.startMin) || (a.endMin - b.endMin));
+
+    const colEnds = [];
+    let maxCols = 0;
+    list.forEach(ev=>{
+      let placed = false;
+      for (let i=0; i<colEnds.length; i++){
+        if (colEnds[i] <= ev.startMin){
+          colEnds[i] = ev.endMin;
+          ev.col = i;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed){
+        ev.col = colEnds.length;
+        colEnds.push(ev.endMin);
+      }
+      if (colEnds.length > maxCols) maxCols = colEnds.length;
+    });
+
+    list.forEach(ev=>{
+      const colCount = Math.max(1, maxCols);
+      const colWidth = 100 / colCount;
+      const leftPct = ev.col * colWidth;
+      const evEl = document.createElement('div');
+      evEl.className = 'fac-event';
+      evEl.style.background = ev.color;
+      evEl.style.top = `${((ev.startMin - dayStartMin) / 60) * FAC_GANTT.hourHeight}px`;
+      evEl.style.height = `${((ev.endMin - ev.startMin) / 60) * FAC_GANTT.hourHeight}px`;
+      evEl.style.left = `${leftPct}%`;
+      evEl.style.width = `${colWidth}%`;
+      evEl.style.right = 'auto';
+      if (ev.status === 'rejected' || ev.status === 'canceled') {
+        evEl.style.opacity = '0.4';
+      }
+      evEl.innerHTML = `
+        <div>${escapeHtml(ev.facName)} ${escapeHtml(ev.title||'')}</div>
+        <div class="meta">${escapeHtml(ev.labelTime)} ${escapeHtml(ev.who||'')}${escapeHtml(ev.loc||'')}</div>
+      `;
+      col.appendChild(evEl);
+    });
   });
 }
 

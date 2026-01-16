@@ -2943,9 +2943,9 @@ function renderWeeklyPage(){
         return `
           <div>
             <label>課題</label>
-            <textarea id="wk_issues_${idp}" class="memo-edit wk-weekly-memo" rows="4">${issues}</textarea>
+            <textarea id="wk_issues_${idp}" class="memo-edit wk-weekly-memo" rows="3">${issues}</textarea>
             <label style="margin-top:0px;">実施</label>
-            <textarea id="wk_done_${idp}" class="memo-edit wk-weekly-memo" rows="4">${done}</textarea>
+            <textarea id="wk_done_${idp}" class="memo-edit wk-weekly-memo" rows="3">${done}</textarea>
             <div class="toolbar" style="justify-content:flex-end; margin-top:6px;">
               <button onclick="saveWeeklyForUserProjectWeek('${escapeJsSq(uid)}','${escapeJsSq(pid)}','${escapeJsSq(ws)}')">保存</button>
             </div>

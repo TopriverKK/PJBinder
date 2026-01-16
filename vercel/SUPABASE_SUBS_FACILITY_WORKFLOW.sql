@@ -8,6 +8,8 @@ create table if not exists public.subscriptions (
   "startDate" text,
   "amount" numeric,
   "taxIncluded" boolean,
+  "amountInclTax" numeric,
+  "amountExclTax" numeric,
   "projectId" text,
   "taxCode" text,
   "account" text,
@@ -21,6 +23,9 @@ create table if not exists public.subscriptions (
 
 create index if not exists subscriptions_project_idx on public.subscriptions ("projectId");
 create index if not exists subscriptions_next_bill_idx on public.subscriptions ("nextBillDate");
+
+alter table public.subscriptions add column if not exists "amountInclTax" numeric;
+alter table public.subscriptions add column if not exists "amountExclTax" numeric;
 
 create table if not exists public.facility_reservations (
   id text primary key,

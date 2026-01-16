@@ -3074,6 +3074,14 @@ function setAttendanceView(view, opts){
 const fixedBreakMinutes = 90;
 const defaultHolidayIcs = 'https://www.google.com/calendar/ical/ja.japanese%23holiday%40group.v.calendar.google.com/public/basic.ics';
 
+function parseTaxRate(input){
+  const raw = String(input || '').trim();
+  if (!raw) return 0;
+  const n = parseFloat(raw.replace('%',''));
+  if (!Number.isFinite(n)) return 0;
+  return n > 1 ? (n / 100) : n;
+}
+
 function attStatusLabel(s){
   return ({'not-clocked':'未打刻', working:'出勤中', break:'休憩中', out:'外出中', done:'退勤済'})[String(s||'not-clocked')] || String(s||'');
 }
@@ -3433,7 +3441,7 @@ function renderAttendancePage(){
     const location = String(row.location||'office');
     const clockIn = row.clock_in || '';
     const clockOut = row.clock_out || '';
-    const worked = (clockIn ? Math.max(0, minutesBetweenIso(clockIn, clockOut) - fixedBreakMinutes) : 0);
+    const worked = computeWorkedMinutes(row);
 
     const currentEvent = (ATT.currentEventsByUser && ATT.currentEventsByUser[uid]) || null;
     const nextEvent = (ATT.nextEventsByUser && ATT.nextEventsByUser[uid]) || null;
@@ -3679,7 +3687,7 @@ function renderAttendanceMonthTable(month){
     const tr = document.createElement('tr');
     const uid = String(r.user_id||r.user||'');
     const uname = nameByUserId(uid);
-    const worked = (r.clock_in && r.clock_out) ? Math.max(0, minutesBetweenIso(r.clock_in, r.clock_out) - fixedBreakMinutes) : 0;
+    const worked = (r.clock_in && r.clock_out) ? computeWorkedMinutes(r) : 0;
     const projName = r.project_id ? (safeArr(DATA.projects).find(p=>String(p.id)===String(r.project_id))?.name || r.project_id) : '';
     const taskName = r.task_id ? (safeArr(DATA.tasks).find(t=>String(t.id)===String(r.task_id))?.title || r.task_id) : '';
     const pt = projName && taskName ? `${projName} / ${taskName}` : (projName || taskName || '');
@@ -3732,7 +3740,7 @@ function renderAttendanceWeekTable(month){
     if(!dateKey || dateKey.slice(0,7)!==String(month||'')) return;
     const uid = String(r.user_id||r.user||'');
     if(!uid) return;
-    const worked = (r.clock_in && r.clock_out) ? Math.max(0, minutesBetweenIso(r.clock_in, r.clock_out) - fixedBreakMinutes) : 0;
+    const worked = (r.clock_in && r.clock_out) ? computeWorkedMinutes(r) : 0;
     if(worked<=0) return;
     const ws = mondayStart(dateKey);
     const we = addDaysKey(ws, 6);
@@ -3813,6 +3821,12 @@ function computeWorkIntervals(att){
     if(intervals.length===0) break;
   }
   return intervals.filter(iv=>iv[1]>iv[0]);
+}
+function computeWorkedMinutes(att){
+  if(!att || !att.clock_in) return 0;
+  const intervals = computeWorkIntervals(att);
+  const total = intervals.reduce((sum, iv)=> sum + ((iv[1]-iv[0]) / 60000), 0);
+  return Math.max(0, Math.round(total - fixedBreakMinutes));
 }
 function computeNightMinutes(att){
   const intervals = computeWorkIntervals(att);
@@ -3915,7 +3929,7 @@ async function exportFreeeAttendanceCsv(){
       items.forEach(att=>{
         const dateKey = String(att.work_date||'');
         if(!dateKey) return;
-        const workedMinutes = (att.clock_in && att.clock_out) ? Math.max(0, minutesBetweenIso(att.clock_in, att.clock_out) - fixedBreakMinutes) : 0;
+        const workedMinutes = (att.clock_in && att.clock_out) ? computeWorkedMinutes(att) : 0;
         const nightMinutes = computeNightMinutes(att);
         const prev = workedByDay.get(dateKey);
         if(!prev) workedByDay.set(dateKey, { workedMinutes, nightMinutes });
@@ -5259,15 +5273,33 @@ function toggleArchiveProject(id){
 // Subs page
 function addSubscription(){
   const editId = val('s_editing_id');
+  const amountRaw = Number(val('s_amount')||0);
+  const taxRate = parseTaxRate(val('s_taxCode'));
+  const taxIncl = (sel('s_taxIncl')==='true');
+  let amountExclTax = amountRaw;
+  let amountInclTax = amountRaw;
+  if (taxRate > 0) {
+    if (taxIncl) {
+      amountInclTax = amountRaw;
+      amountExclTax = amountRaw / (1 + taxRate);
+    } else {
+      amountExclTax = amountRaw;
+      amountInclTax = amountRaw * (1 + taxRate);
+    }
+  }
+  amountExclTax = Math.round(amountExclTax);
+  amountInclTax = Math.round(amountInclTax);
   const s = {
     id: editId || undefined,
     serviceName: val('s_service'),
     vendor: val('s_vendor'),
     startDate: '',
-    amount: Number(val('s_amount')||0),
-    taxIncluded: (sel('s_taxIncl')==='true'),
+    amount: amountRaw,
+    taxIncluded: taxIncl,
     projectId: sel('s_project'),
     taxCode: val('s_taxCode'),
+    amountInclTax,
+    amountExclTax,
     account: val('s_account')||'サブスク費用',
     cycle: sel('s_cycle')||'monthly',
     nextBillDate: val('s_nextBill'),

@@ -296,6 +296,8 @@
   /* 添付のインライン行 */
   .att-row td { background: #fff; }
   .inline-attachments{ padding:8px 12px; background:#f8fafc; border:1px solid var(--border); border-radius:8px; }
+  .inline-attachments.slide{ overflow:hidden; max-height:0; transition:max-height .2s ease; }
+  .inline-attachments.slide.open{ max-height:800px; }
   /* 日報一覧をグリッド横断で表示 */
   #page-daily #daily-list-card { grid-column: 1 / -1; }
   /* 検索ツールバーも固定（フィルタの直下に重ならない位置） */
@@ -1923,8 +1925,25 @@ let PAGE = 'dashboard';
 let ACTIVE_TAB = 'list';
 let GANTT_SCALE = (localStorage.getItem('gantt_scale')||'day');
 // 添付件数
+function isValidAttachment(a){
+  const url = String(a?.url || '').trim();
+  const fileId = String(a?.fileId || '').trim();
+  return !!(url || fileId);
+}
+function listAttachments(kind, id){
+  return safeArr(DATA.attachments).filter(a =>
+    String(a.parentType||a.parent_type||a.type||'')===String(kind) &&
+    String(a.parentId||a.parent_id||'')===String(id)
+  ).filter(isValidAttachment);
+}
+function attachmentHref(a){
+  const url = String(a?.url || '').trim();
+  if (url) return url;
+  const fileId = String(a?.fileId || '').trim();
+  return fileId ? `https://drive.google.com/file/d/${fileId}/view` : '';
+}
 function countAttachments(kind, id){
-  return safeArr(DATA.attachments).filter(a => a.parentType===kind && String(a.parentId)===String(id)).length;
+  return listAttachments(kind, id).length;
 }
 const FILTERS_KEY = 'pm_filters_v2';
 let OVERDUE = false; // 遅延クイックフィルタ
@@ -4318,7 +4337,7 @@ function renderTasksTable() {
         <button class="secondary" data-tip="この項目を編集します" onclick="editTask('${r.id}')">編集</button>
         <button class="secondary" onclick="moveStatus('${r.id}','doing')">→進行中</button>
         <button class="secondary" onclick="moveStatus('${r.id}','done')">✓完了</button>
-        <button class="secondary" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">添付</button>
+        <button class="secondary" onclick="toggleAttachmentList('task','${r.id}', this)">📎</button>
         <button class="secondary" onclick="delTask('${r.id}')">削除</button>
       </td>
     `;
@@ -4661,14 +4680,14 @@ function renderProjects() {
     // Docs の URL（未定義対策）
     const pDocUrl = getProjectDocUrl(r.id);
 
-    const attBtn = `<button class="secondary" data-tip="添付を管理します。" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">添付</button>`;
+    const attBtn = `<button class="secondary" data-tip="添付一覧を表示します。" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">📎</button>`;
     const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">📄Doc</span>' : '';
 
     const tr = document.createElement('tr');
 
     const attN = countProjectAttachmentsDeep(r.id);
     const attBadge = attN
-      ? `<span class="doc-badge" data-tip="添付URL一覧を開きます。" title="添付 ${attN}件" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">📎${attN}</span>`
+      ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">📎${attN}</span>`
       : '';
 
     // 親プロジェクト名（オプショナルチェイニングなし）
@@ -6416,11 +6435,15 @@ function addDailyReport(){
 
 function countProjectAttachmentsDeep(projectId){
   const pid = String(projectId||'');
-  const direct = safeArr(DATA.attachments).filter(a=>a.parentType==='project' && String(a.parentId)===pid).length;
+  const direct = listAttachments('project', pid).length;
   const taskIds = safeArr(DATA.tasks).filter(t=>String(t.projectId)===pid).map(t=>String(t.id));
-  const taskAtt = safeArr(DATA.attachments).filter(a=>a.parentType==='task' && taskIds.includes(String(a.parentId))).length;
+  const taskAtt = safeArr(DATA.attachments)
+    .filter(a=>String(a.parentType||a.parent_type||a.type||'')==='task' && taskIds.includes(String(a.parentId||a.parent_id||'')))
+    .filter(isValidAttachment).length;
   const minuteIds = safeArr(DATA.minutes).filter(m=>String(m.projectId)===pid).map(m=>String(m.id));
-  const minuteAtt = safeArr(DATA.attachments).filter(a=>a.parentType==='minute' && minuteIds.includes(String(a.parentId))).length;
+  const minuteAtt = safeArr(DATA.attachments)
+    .filter(a=>String(a.parentType||a.parent_type||a.type||'')==='minute' && minuteIds.includes(String(a.parentId||a.parent_id||'')))
+    .filter(isValidAttachment).length;
   return direct + taskAtt + minuteAtt;
 }
 async function createDailyReportDocFromForm(){
@@ -6505,9 +6528,55 @@ function renderDailyCalendar(){
   html += '</div>';
   cont.innerHTML = html;
 }
-// ── 添付管理モーダルを開く ──
+// ── 添付一覧を行の下にスライド表示 ──
 function toggleAttachmentList(kind, id, anchor){
-  openAttachmentModal(kind, id, id);
+  try{
+    const tr = anchor && anchor.closest ? anchor.closest('tr') : null;
+    if (!tr) { openAttachmentModal(kind, id, id); return; }
+
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains('attachment-inline-row')) {
+      const panel = next.querySelector('.inline-attachments');
+      if (panel) {
+        panel.style.maxHeight = panel.scrollHeight + 'px';
+        requestAnimationFrame(()=>{ panel.classList.remove('open'); panel.style.maxHeight = '0px'; });
+        setTimeout(()=>next.remove(), 220);
+      } else {
+        next.remove();
+      }
+      return;
+    }
+
+    const items = listAttachments(kind, id);
+    const cols = tr.parentElement.closest('table')?.querySelectorAll('thead th')?.length || 1;
+    const holder = document.createElement('tr');
+    holder.className = 'attachment-inline-row';
+    const td = document.createElement('td');
+    td.colSpan = cols;
+
+    if (!items.length) {
+      td.innerHTML = `<div class="inline-attachments muted">添付はありません</div>`;
+    } else {
+      const html = items.map(a=>{
+        const href = attachmentHref(a);
+        const title = escapeHtml(a.title || href || '(無題)');
+        return `<div style="margin:4px 0;">📎 <a href="${escapeHtml(href)}" target="_blank" rel="noopener">${title}</a></div>`;
+      }).join('');
+      td.innerHTML = `<div class="inline-attachments slide">${html}</div>`;
+    }
+
+    holder.appendChild(td);
+    tr.after(holder);
+
+    const panel = td.querySelector('.inline-attachments.slide');
+    if (panel) {
+      requestAnimationFrame(()=>{
+        panel.classList.add('open');
+        panel.style.maxHeight = panel.scrollHeight + 'px';
+      });
+      panel.addEventListener('transitionend', ()=>{ panel.style.maxHeight = 'none'; }, { once:true });
+    }
+  }catch(e){ console.error(e); }
 }
 // ── プロジェクトの関連タスク一覧トグル（表の行の直下に差し込む） ──
 function toggleProjectTaskList(projectId, anchor){
@@ -6647,7 +6716,7 @@ function renderProjectsPage(){
     const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄Doc</span>` : '';
     const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJ Doc</button>` : '';
     const attN    = countProjectAttachmentsDeep(r.id);
-    const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を開きます。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">📎${attN}</span>` : '';
+    const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">📎${attN}</span>` : '';
 
     const theme = themeFor(r.id, null);
     const bg = ` style="background:${theme.bg}"`;

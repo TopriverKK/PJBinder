@@ -163,6 +163,14 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const crud = await getCrudMod();
     return await crud.rpcUpsertSubscription(args[0]);
   },
+  async upsertFacilityReservation(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcUpsertFacilityReservation(args[0]);
+  },
+  async upsertPaymentRequest(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcUpsertPaymentRequest(args[0]);
+  },
   async upsertLedgerEntry(...args: any[]) {
     const crud = await getCrudMod();
     return await crud.rpcUpsertLedgerEntry(args[0]);
@@ -220,6 +228,14 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   async deleteSubscription(...args: any[]) {
     const crud = await getCrudMod();
     return await crud.rpcDeleteSubscription(String(args[0]));
+  },
+  async deleteFacilityReservation(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcDeleteFacilityReservation(String(args[0]));
+  },
+  async deletePaymentRequest(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcDeletePaymentRequest(String(args[0]));
   },
   async deleteLedgerEntry(...args: any[]) {
     const crud = await getCrudMod();

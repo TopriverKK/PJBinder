@@ -76,6 +76,28 @@ export async function rpcUpsertSubscription(s: any) {
   return Array.isArray(results) ? results[0] : results;
 }
 
+export async function rpcUpsertFacilityReservation(r: any) {
+  r.updatedAt = isoDate(new Date());
+  if (!r.id) {
+    r.id = `fr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    r.createdAt = r.updatedAt;
+  }
+
+  const results = await sbUpsert('facility_reservations', r, 'id');
+  return Array.isArray(results) ? results[0] : results;
+}
+
+export async function rpcUpsertPaymentRequest(r: any) {
+  r.updatedAt = isoDate(new Date());
+  if (!r.id) {
+    r.id = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    r.createdAt = r.updatedAt;
+  }
+
+  const results = await sbUpsert('payment_requests', r, 'id');
+  return Array.isArray(results) ? results[0] : results;
+}
+
 export async function rpcUpsertLedgerEntry(e: any) {
   e.updatedAt = isoDate(new Date());
   if (!e.id) {
@@ -219,6 +241,16 @@ export async function rpcDeleteTask(id: string) {
 
 export async function rpcDeleteSubscription(id: string) {
   await sbDelete('subscriptions', id);
+  return { ok: true, id };
+}
+
+export async function rpcDeleteFacilityReservation(id: string) {
+  await sbDelete('facility_reservations', id);
+  return { ok: true, id };
+}
+
+export async function rpcDeletePaymentRequest(id: string) {
+  await sbDelete('payment_requests', id);
   return { ok: true, id };
 }
 

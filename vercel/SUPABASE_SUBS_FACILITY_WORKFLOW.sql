@@ -48,9 +48,9 @@ create table if not exists public.facility_reservations (
 create index if not exists facility_reservations_user_idx on public.facility_reservations ("userId");
 create index if not exists facility_reservations_project_idx on public.facility_reservations ("projectId");
 create index if not exists facility_reservations_start_idx on public.facility_reservations ("startDate");
-create index if not exists facility_reservations_facility_idx on public.facility_reservations ("facilityId");
 
 alter table public.facility_reservations add column if not exists "facilityId" text;
+create index if not exists facility_reservations_facility_idx on public.facility_reservations ("facilityId");
 
 create table if not exists public.facility_assets (
   id text primary key,

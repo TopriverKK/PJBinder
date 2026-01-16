@@ -167,6 +167,12 @@
   #weeklyTable .wk-user-name{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #weeklyTable .wk-proj-name{ font-size: 15px; font-weight: 700; }
   #weeklyTable .wk-proj-memo{ margin-top:6px; font-size:12px; color: var(--muted); white-space: pre-wrap; }
+  #weeklyTable .wk-weekly-memo{
+    height: auto;
+    min-height: 120px;
+    max-height: none;
+    resize: vertical;
+  }
   /* Week header: yellow hatched like spreadsheet */
   #weeklyTable thead th.wk-week{
     background:
@@ -2927,9 +2933,9 @@ function renderWeeklyPage(){
         return `
           <div>
             <label>課題</label>
-            <textarea id="wk_issues_${idp}" class="memo-edit" rows="4">${issues}</textarea>
+            <textarea id="wk_issues_${idp}" class="memo-edit wk-weekly-memo" rows="4">${issues}</textarea>
             <label style="margin-top:0px;">実施</label>
-            <textarea id="wk_done_${idp}" class="memo-edit" rows="4">${done}</textarea>
+            <textarea id="wk_done_${idp}" class="memo-edit wk-weekly-memo" rows="4">${done}</textarea>
             <div class="toolbar" style="justify-content:flex-end; margin-top:6px;">
               <button onclick="saveWeeklyForUserProjectWeek('${escapeJsSq(uid)}','${escapeJsSq(pid)}','${escapeJsSq(ws)}')">保存</button>
             </div>

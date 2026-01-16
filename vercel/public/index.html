@@ -166,6 +166,7 @@
   #weeklyTable .wk-week { min-width: 360px; }
   #weeklyTable .wk-user-name{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #weeklyTable .wk-proj-name{ font-size: 15px; font-weight: 700; }
+  #weeklyTable .wk-proj-memo{ margin-top:6px; font-size:12px; color: var(--muted); white-space: pre-wrap; }
   /* Week header: yellow hatched like spreadsheet */
   #weeklyTable thead th.wk-week{
     background:
@@ -255,6 +256,14 @@
   /* 期限列（タスク一覧）を中央寄せ */
   #taskTable th:nth-child(1),
   #taskTable td.cell-due { text-align: center; }
+
+  /* プロジェクト一覧の期間列は幅を抑えてメモ列を広く */
+  #projTable th:nth-child(8),
+  #projTable td:nth-child(8){
+    width: 120px;
+    max-width: 120px;
+    white-space: nowrap;
+  }
 
   /* gantt visibility guard */
   #view-gantt[style*="display:none"] { pointer-events:none; height:0; overflow:hidden; }
@@ -1280,7 +1289,7 @@ button.link:hover { opacity: .8; }
               <table id="taskTable">
                 <thead>
                   <tr>
-                    <th>期限</th><th>タイトル</th><th>種別</th><th>担当</th><th>優先度</th><th>状態</th><th>メモ</th><th></th>
+                    <th>期限</th><th>タイトル</th><th>担当</th><th>優先度</th><th>状態</th><th>メモ</th><th></th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -2881,8 +2890,7 @@ function renderWeeklyPage(){
         ? openTasksForUser.filter(t=>String(t.projectId||'')===String(pid))
         : openTasksForUser.filter(t=>!String(t.projectId||'').trim());
 
-      const taskSource = openTasks.length ? openTasks : openTasksForUser;
-      const taskLines = taskSource
+      const taskLines = (openTasks.length ? openTasks : [])
         .slice()
         .sort((a,b)=>String(a.dueDate||'9999-12-31').localeCompare(String(b.dueDate||'9999-12-31')))
         .slice(0, 30)
@@ -2898,6 +2906,8 @@ function renderWeeklyPage(){
         <div class="muted" style="font-size:12px; margin-top:2px;">未完了: ${openTasksForUser.length}</div>
       `;
 
+      const projMemo = pid ? String((projById(pid)?.memoText)||'') : '';
+      const projMemoHtml = projMemo ? `<div class="wk-proj-memo">${escapeHtml(projMemo)}</div>` : '';
       const projCell = `
         <div class="wk-proj-name">
           ${escapeHtml(projNameById(pid))}
@@ -2905,6 +2915,7 @@ function renderWeeklyPage(){
           ${projPriorityLabel(pid) ? `<span class="wk-prio-badge ${projPriorityClass(pid)}" style="margin-left:4px;">優先度: ${escapeHtml(projPriorityLabel(pid))}</span>` : ''}
         </div>
         <div class="muted" style="font-size:12px; margin-top:2px;">今週: ${escapeHtml(fmtHours(wkHoursMap[weeklyUserProjectKey(uid, pid)]||0))} / 累計: ${escapeHtml(fmtHours(totalHoursMap[weeklyUserProjectKey(uid, pid)]||0))}</div>
+        ${projMemoHtml}
         <div style="margin-top:6px; max-height:120px; overflow:auto;">${taskLines}</div>
       `;
 
@@ -4453,7 +4464,6 @@ function renderTasksTable() {
         ${docBadges} ${attBadge}
         <div class="muted" style="font-size:12px;">${escapeHtml(nameByProjectId(r.projectId||''))}</div>
       </td>
-      <td${bg}><span class="pill">${r.type||''}</span></td>
       <td${bg}>${escapeHtml(assignees||'')}</td>
       <td class="cell-prio ${prc?('prio-'+prc):''}" data-field="priority">
         <span class="pill prio-badge ${prc?('prio-'+prc):''}">${escapeHtml(prioLabel)}</span>
@@ -4798,8 +4808,52 @@ function renderProjects() {
 
   tb.innerHTML = '';
   let rows = safeArr(DATA.projects)
-    .filter(p => String(p.status||'').toLowerCase() !== 'archived')
-    .slice(0,500);
+    .filter(p => String(p.status||'').toLowerCase() !== 'archived');
+
+  const f = (typeof FILTERS === 'object' && FILTERS) ? FILTERS : {};
+  const kw = String(f.keyword||'').trim().toLowerCase();
+  const pidFilter = String(f.project||'').trim();
+  const assignee = String(f.assignee||'').trim();
+  const dept = String(f.department||'').trim();
+  const userDeptById = new Map(safeArr(DATA.users).map(u => [String(u.id||''), String(u.department||'').trim()]));
+  const projectMemberIds = (p)=> String(p.members || p.assignees || p.memberIds || '')
+    .split(',').map(s=>s.trim()).filter(Boolean);
+  const projectMatchesKeyword = (p)=>{
+    const ownerName = nameByUserId(p.ownerUserId||'') || '';
+    const memberNames = projectMemberIds(p).map(id=>nameByUserId(id) || displayUser(id) || id).join(' ');
+    const hay = (p.name||'') + ' ' + (p.memoText||'') + ' ' + ownerName + ' ' + memberNames;
+    return hay.toLowerCase().includes(kw);
+  };
+
+  if (pidFilter) rows = rows.filter(p=>String(p.id||'') === pidFilter);
+  if (kw) rows = rows.filter(projectMatchesKeyword);
+  if (assignee) {
+    rows = rows.filter(p=>{
+      if (String(p.ownerUserId||'') === assignee) return true;
+      const members = projectMemberIds(p);
+      if (members.includes(assignee)) return true;
+      return safeArr(DATA.tasks).some(t=>{
+        if (String(t.projectId||'') !== String(p.id||'')) return false;
+        const ids = String(t.assignees||'').split(',').map(s=>s.trim()).filter(Boolean);
+        return ids.includes(assignee);
+      });
+    });
+  }
+  if (dept) {
+    rows = rows.filter(p=>{
+      const ownerId = String(p.ownerUserId||'');
+      if (userDeptById.get(ownerId) === dept) return true;
+      const members = projectMemberIds(p);
+      if (members.some(id=>userDeptById.get(id) === dept)) return true;
+      return safeArr(DATA.tasks).some(t=>{
+        if (String(t.projectId||'') !== String(p.id||'')) return false;
+        const ids = String(t.assignees||'').split(',').map(s=>s.trim()).filter(Boolean);
+        return ids.some(id=>userDeptById.get(id) === dept);
+      });
+    });
+  }
+
+  rows = rows.slice(0,500);
 
   for (const r of rows) {
     const prioLabel = normPriority(r.priority || '');
@@ -7132,7 +7186,11 @@ function renderProjectsPage(){
     if (own && String(p.ownerUserId||'') !== own) return false;
     if (pri && normPriority(p.priority||'') !== pri) return false;
     if (kw){
-      const hay = (p.name||'') + ' ' + (p.memoText||'');
+      const ownerName = nameByUserId(p.ownerUserId||'') || '';
+      const memberIds = String(p.members || p.assignees || p.memberIds || '')
+        .split(',').map(s=>s.trim()).filter(Boolean);
+      const memberNames = memberIds.map(id=>nameByUserId(id) || displayUser(id) || id).join(' ');
+      const hay = (p.name||'') + ' ' + (p.memoText||'') + ' ' + ownerName + ' ' + memberNames;
       if (!hay.toLowerCase().includes(kw)) return false;
     }
     return true;

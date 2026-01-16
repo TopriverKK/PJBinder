@@ -979,32 +979,33 @@ button.link:hover { opacity: .8; }
             <button class="secondary" onclick="resetFacilityForm()">クリア</button>
           </div>
           </div>
-          <div class="card" style="margin:0;">
-            <div class="body">
-              <div class="toolbar" style="gap:8px; margin-bottom:8px;">
-                <button class="secondary" onclick="shiftFacilityWeek(-7)">←前週</button>
-                <input id="fac_week_start" type="date"/>
-                <button class="secondary" onclick="shiftFacilityWeek(7)">次週→</button>
-                <button class="secondary" onclick="setFacilityWeekToday()">今週</button>
-                <button onclick="renderFacilityGantt()">更新</button>
+          <div>
+            <div class="card" style="margin:0 0 12px 0;">
+              <div class="body">
+                <div class="toolbar" style="gap:8px; margin-bottom:8px;">
+                  <button class="secondary" onclick="shiftFacilityWeek(-7)">←前週</button>
+                  <input id="fac_week_start" type="date"/>
+                  <button class="secondary" onclick="shiftFacilityWeek(7)">次週→</button>
+                  <button class="secondary" onclick="setFacilityWeekToday()">今週</button>
+                  <button onclick="renderFacilityGantt()">更新</button>
+                </div>
+                <div id="facility-gantt"></div>
               </div>
-              <div id="facility-gantt"></div>
+            </div>
+            <div class="card" style="margin:0;">
+              <h2>今日の予約一覧</h2>
+              <div class="body">
+                <table id="facilityTable">
+                  <thead>
+                    <tr>
+                      <th>期間</th><th>設備</th><th>場所</th><th>予約名</th><th>予約者</th><th>プロジェクト</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div class="card facility-panel active" data-facility-tab="reservations">
-        <h2>予約一覧</h2>
-        <div class="body">
-          <table id="facilityTable">
-            <thead>
-              <tr>
-                <th>期間</th><th>設備</th><th>場所</th><th>予約名</th><th>予約者</th><th>プロジェクト</th><th></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
         </div>
       </div>
 
@@ -5884,6 +5885,11 @@ function renderFacilityPage(){
   tb.innerHTML = '';
   const facilityMap = new Map(safeArr(DATA.facilityAssets).map(f=>[String(f.id), f]));
   const rows = safeArr(DATA.facilityReservations).slice()
+    .filter(r=>{
+      const st = r.startDate || '';
+      const ed = r.endDate || r.startDate || '';
+      return st && ed && st <= today && ed >= today;
+    })
     .sort((a,b)=>String(a.startDate||'').localeCompare(String(b.startDate||'')));
   rows.forEach(r=>{
     const tr = document.createElement('tr');

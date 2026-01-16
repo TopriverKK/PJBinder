@@ -2897,7 +2897,18 @@ function renderWeeklyPage(){
     };
     collectFromMap(wkHoursMap);
     collectFromMap(totalHoursMap);
-    const orderedProjectIds = [''].concat(Array.from(projectIdsSet).sort((a,b)=>projNameById(a).localeCompare(projNameById(b), 'ja')));
+    const priorityRank = (pid)=>{
+      const pr = projPriorityLabel(pid);
+      return pr === '高' ? 0 : pr === '中' ? 1 : pr === '低' ? 2 : 3;
+    };
+    const orderedProjectIds = [''].concat(
+      Array.from(projectIdsSet).sort((a,b)=>{
+        const ra = priorityRank(a);
+        const rb = priorityRank(b);
+        if (ra !== rb) return ra - rb;
+        return projNameById(a).localeCompare(projNameById(b), 'ja');
+      })
+    );
 
     orderedProjectIds.forEach((pid, idx)=>{
       const openTasks = pid

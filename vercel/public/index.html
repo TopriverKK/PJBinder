@@ -4326,7 +4326,7 @@ function renderTasksTable() {
                : prioLabel==='低' ? 'low' : '';
     const attN = countAttachments('task', r.id);
     const attBadge = attN
-  ? `<span class="doc-badge" title="添付 ${attN}件" onclick="toggleAttachmentList('task','${r.id}', this)">📎${attN}</span>`
+  ? `<span class="doc-badge" data-tip="添付一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('task','${r.id}', this)">📎${attN}添付を表示</span>`
   : '';
 
     const bg = ` style="background:${theme.bg}"`;
@@ -4351,7 +4351,7 @@ function renderTasksTable() {
         <button class="secondary" data-tip="この項目を編集します" onclick="editTask('${r.id}')">編集</button>
         <button class="secondary" onclick="moveStatus('${r.id}','doing')">→進行中</button>
         <button class="secondary" onclick="moveStatus('${r.id}','done')">✓完了</button>
-        <button class="secondary" onclick="toggleAttachmentList('task','${r.id}', this)">📎</button>
+        <button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">📎添付を追加</button>
         <button class="secondary" onclick="delTask('${r.id}')">削除</button>
       </td>
     `;
@@ -4694,14 +4694,14 @@ function renderProjects() {
     // Docs の URL（未定義対策）
     const pDocUrl = getProjectDocUrl(r.id);
 
-    const attBtn = `<button class="secondary" data-tip="添付一覧を表示します。" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">📎</button>`;
+    const attBtn = `<button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">📎添付を追加</button>`;
     const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">📄Doc</span>' : '';
 
     const tr = document.createElement('tr');
 
     const attN = countProjectAttachmentsDeep(r.id);
     const attBadge = attN
-      ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">📎${attN}</span>`
+      ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">📎${attN}添付を表示</span>`
       : '';
 
     // 親プロジェクト名（オプショナルチェイニングなし）
@@ -6748,7 +6748,7 @@ function renderProjectsPage(){
     const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄Doc</span>` : '';
     const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJ Doc</button>` : '';
     const attN    = countProjectAttachmentsDeep(r.id);
-    const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">📎${attN}</span>` : '';
+    const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">📎${attN}添付を表示</span>` : '';
 
     const theme = themeFor(r.id, null);
     const bg = ` style="background:${theme.bg}"`;

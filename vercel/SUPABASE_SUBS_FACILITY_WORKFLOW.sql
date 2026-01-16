@@ -14,7 +14,7 @@ create table if not exists public.subscriptions (
   "cycle" text,
   "nextBillDate" text,
   "autoJournal" boolean,
-  "memoText" text,
+  "memo" text,
   "createdAt" text,
   "updatedAt" text
 );

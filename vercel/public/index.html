@@ -693,7 +693,7 @@ button.link:hover { opacity: .8; }
             <div><label>税込み？</label><select id="s_taxIncl"><option value="true">税込</option><option value="false">税抜</option></select></div>
           </div>
           <div class="row">
-            <div><label>税区分</label><input id="s_taxCode" placeholder="例: 10%"/></div>
+            <div><label>税率</label><input id="s_taxCode" placeholder="例: 10%"/></div>
             <div><label>勘定科目</label><input id="s_account" placeholder="例: サブスク費用"/></div>
           </div>
           <div class="row">
@@ -5253,7 +5253,7 @@ function addSubscription(){
     cycle: sel('s_cycle')||'monthly',
     nextBillDate: val('s_nextBill'),
     autoJournal: (sel('s_autoJournal')==='true'),
-    memoText: val('s_memo')
+    memo: val('s_memo')
   };
   if (!s.serviceName){ alert('サービス名は必須です'); return; }
   gsr().withSuccessHandler(()=>{
@@ -5302,7 +5302,7 @@ function editSubscription(id){
   if (el('s_nextBill')) el('s_nextBill').value = s.nextBillDate || '';
   if (el('s_project')) el('s_project').value = s.projectId || '';
   if (el('s_autoJournal')) el('s_autoJournal').value = String(!!s.autoJournal);
-  if (el('s_memo')) el('s_memo').value = s.memoText || '';
+  if (el('s_memo')) el('s_memo').value = s.memo || s.memoText || '';
 }
 
 function resetFacilityForm(){

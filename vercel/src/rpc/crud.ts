@@ -87,6 +87,17 @@ export async function rpcUpsertFacilityReservation(r: any) {
   return Array.isArray(results) ? results[0] : results;
 }
 
+export async function rpcUpsertFacilityAsset(a: any) {
+  a.updatedAt = isoDate(new Date());
+  if (!a.id) {
+    a.id = `fa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    a.createdAt = a.updatedAt;
+  }
+
+  const results = await sbUpsert('facility_assets', a, 'id');
+  return Array.isArray(results) ? results[0] : results;
+}
+
 export async function rpcUpsertPaymentRequest(r: any) {
   r.updatedAt = isoDate(new Date());
   if (!r.id) {
@@ -95,6 +106,29 @@ export async function rpcUpsertPaymentRequest(r: any) {
   }
 
   const results = await sbUpsert('payment_requests', r, 'id');
+  return Array.isArray(results) ? results[0] : results;
+}
+
+export async function rpcUpsertWorkflowRequest(r: any) {
+  r.updatedAt = isoDate(new Date());
+  if (!r.id) {
+    r.id = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    r.createdAt = r.updatedAt;
+  }
+
+  const results = await sbUpsert('workflow_requests', r, 'id');
+  return Array.isArray(results) ? results[0] : results;
+}
+
+export async function rpcAddWorkflowApproval(a: any) {
+  a.updatedAt = isoTimestamp(new Date());
+  if (!a.id) {
+    a.id = `wfa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    a.createdAt = a.updatedAt;
+  }
+  if (!a.actedAt) a.actedAt = a.updatedAt;
+
+  const results = await sbUpsert('workflow_approvals', a, 'id');
   return Array.isArray(results) ? results[0] : results;
 }
 
@@ -249,9 +283,23 @@ export async function rpcDeleteFacilityReservation(id: string) {
   return { ok: true, id };
 }
 
+export async function rpcDeleteFacilityAsset(id: string) {
+  await sbDelete('facility_assets', id);
+  return { ok: true, id };
+}
+
 export async function rpcDeletePaymentRequest(id: string) {
   await sbDelete('payment_requests', id);
   return { ok: true, id };
+}
+
+export async function rpcDeleteWorkflowRequest(id: string) {
+  const wid = String(id || '').trim();
+  if (wid) {
+    await sbDeleteWhere('workflow_approvals', `workflowId=eq.${encodeURIComponent(wid)}`);
+    await sbDelete('workflow_requests', wid);
+  }
+  return { ok: true, id: wid };
 }
 
 export async function rpcDeleteLedgerEntry(id: string) {

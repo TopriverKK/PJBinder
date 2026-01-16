@@ -195,6 +195,24 @@
   }
   .tab { padding:8px 12px; border-radius:10px 10px 0 0; background:#e5e7eb; cursor:pointer; }
   .tab.active { background:var(--card); border:1px solid var(--border); border-bottom:1px solid var(--card); }
+  .fac-gantt { border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .fac-gantt-head{ display:grid; grid-template-columns: 64px repeat(7,1fr); background:#f8fafc; border-bottom:1px solid var(--border); }
+  .fac-gantt-head .cell{ padding:6px 8px; font-size:12px; color:var(--muted); border-right:1px solid var(--border); }
+  .fac-gantt-body{ display:grid; grid-template-columns: 64px repeat(7,1fr); }
+  .fac-gantt-timecol{ border-right:1px solid var(--border); background:#fff; }
+  .fac-gantt-timecol .time{ height:48px; padding:2px 6px; font-size:11px; color:var(--muted); border-bottom:1px solid #f3f4f6; }
+  .fac-day-col{ position:relative; height:768px; border-right:1px solid var(--border); background:
+      repeating-linear-gradient(to bottom, rgba(0,0,0,.06) 0, rgba(0,0,0,.06) 1px, transparent 1px, transparent 48px); }
+  .fac-day-col.today{ background:
+      linear-gradient(rgba(14,165,233,.08), rgba(14,165,233,.08)),
+      repeating-linear-gradient(to bottom, rgba(0,0,0,.06) 0, rgba(0,0,0,.06) 1px, transparent 1px, transparent 48px); }
+  .fac-event{ position:absolute; left:4px; right:4px; border-radius:8px; padding:6px; color:#fff; font-size:11px; line-height:1.3; overflow:hidden; box-shadow: var(--shadow); }
+  .fac-event .meta{ font-size:10px; opacity:.9; }
+  #page-facility .facility-grid.single{ grid-template-columns: 1fr; }
+  #page-facility .facility-panel{ display:none; }
+  #page-facility .facility-panel.active{ display:block; }
+  #page-facility .facility-tabs{ margin-bottom:10px; }
+  #facility-gantt{ overflow-x:auto; }
 
   /* ===== Usage docs (Markdown) ===== */
   .md-docs-nav{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px 0; }
@@ -656,7 +674,7 @@ button.link:hover { opacity: .8; }
     <button id="nav-ledger"  onclick="goto('ledger')">入出金</button>
     <button id="nav-projects" onclick="goto('projects')">プロジェクト</button>
     <button id="nav-facility" onclick="goto('facility')">設備予約</button>
-    <button id="nav-workflow" onclick="goto('workflow')">決済申請</button>
+    <button id="nav-workflow" onclick="goto('workflow')">ワークフロー</button>
     <button id="nav-debug"   onclick="goto('debug')">デバッグ</button>
   </nav>
 </header>
@@ -858,13 +876,48 @@ button.link:hover { opacity: .8; }
   </section>
 
   <section class="page" id="page-facility">
-    <div class="grid">
-      <div class="card">
+    <div class="tabs facility-tabs" id="facility-tabs">
+      <div class="tab active" data-tab="reservations" onclick="setFacilityTab('reservations')">予約</div>
+      <div class="tab" data-tab="assets" onclick="setFacilityTab('assets')">設備一覧</div>
+      <div class="tab" data-tab="gantt" onclick="setFacilityTab('gantt')">週次ガント</div>
+    </div>
+    <div class="grid facility-grid" id="facility-grid">
+      <div class="card facility-panel" data-facility-tab="assets">
+        <h2>設備一覧</h2>
+        <div class="body">
+          <input type="hidden" id="fa_editing_id"/>
+          <div class="row">
+            <div><label>設備名</label><input id="fa_name" placeholder="例: 会議室A"/></div>
+            <div><label>色</label><input id="fa_color" type="color" value="#60a5fa"/></div>
+          </div>
+          <div class="row">
+            <div><label>表示順</label><input id="fa_sort" type="number" placeholder="例: 10"/></div>
+            <div><label>有効</label>
+              <select id="fa_active">
+                <option value="true">有効</option>
+                <option value="false">無効</option>
+              </select>
+            </div>
+          </div>
+          <div class="toolbar" style="margin-top:8px;">
+            <button onclick="addFacilityAsset()">登録</button>
+            <button class="secondary" onclick="resetFacilityAssetForm()">クリア</button>
+          </div>
+          <div class="body list" style="padding:0; margin-top:10px;">
+            <table id="facilityAssetTable">
+              <thead><tr><th>色</th><th>設備名</th><th>表示順</th><th>有効</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card facility-panel active" data-facility-tab="reservations">
         <h2>設備予約</h2>
         <div class="body">
           <input type="hidden" id="fac_editing_id"/>
           <div class="row">
-            <div><label>設備名</label><input id="fac_name" placeholder="例: 会議室A"/></div>
+            <div><label>設備名</label><select id="fac_facility"></select></div>
             <div><label>予約名</label><input id="fac_title" placeholder="例: 定例MTG"/></div>
           </div>
           <div class="row">
@@ -901,17 +954,31 @@ button.link:hover { opacity: .8; }
         </div>
       </div>
 
-      <div class="card">
+      <div class="card facility-panel active" data-facility-tab="reservations">
         <h2>予約一覧</h2>
         <div class="body">
           <table id="facilityTable">
             <thead>
               <tr>
-                <th>期間</th><th>設備</th><th>予約名</th><th>予約者</th><th>ステータス</th><th>プロジェクト</th><th></th>
+                <th>期間</th><th>設備</th><th>場所</th><th>予約名</th><th>予約者</th><th>ステータス</th><th>プロジェクト</th><th></th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="card facility-panel" data-facility-tab="gantt">
+        <h2>予約状況（週次）</h2>
+        <div class="body">
+          <div class="toolbar" style="gap:8px; margin-bottom:8px;">
+            <button class="secondary" onclick="shiftFacilityWeek(-7)">←前週</button>
+            <input id="fac_week_start" type="date"/>
+            <button class="secondary" onclick="shiftFacilityWeek(7)">次週→</button>
+            <button class="secondary" onclick="setFacilityWeekToday()">今週</button>
+            <button onclick="renderFacilityGantt()">更新</button>
+          </div>
+          <div id="facility-gantt"></div>
         </div>
       </div>
     </div>
@@ -920,25 +987,25 @@ button.link:hover { opacity: .8; }
   <section class="page" id="page-workflow">
     <div class="grid">
       <div class="card">
-        <h2>決済申請</h2>
+        <h2>ワークフロー申請</h2>
         <div class="body">
-          <input type="hidden" id="pay_editing_id"/>
+          <input type="hidden" id="wf_editing_id"/>
           <div class="row">
-            <div><label>件名</label><input id="pay_title" placeholder="例: 1月 サーバー費"/></div>
-            <div><label>申請者</label><select id="pay_user"></select></div>
+            <div><label>件名</label><input id="wf_title" placeholder="例: 1月 サーバー費"/></div>
+            <div><label>申請者</label><select id="wf_requester"></select></div>
           </div>
           <div class="row">
-            <div><label>金額</label><input id="pay_amount" type="number" min="0"/></div>
-            <div><label>支払期日</label><input id="pay_due" type="date"/></div>
+            <div><label>金額</label><input id="wf_amount" type="number" min="0"/></div>
+            <div><label>支払期日</label><input id="wf_due" type="date"/></div>
           </div>
           <div class="row">
-            <div><label>相手先</label><input id="pay_vendor" placeholder="例: 〇〇株式会社"/></div>
-            <div><label>勘定科目</label><input id="pay_account" placeholder="例: 広告費"/></div>
+            <div><label>相手先</label><input id="wf_vendor" placeholder="例: 〇〇株式会社"/></div>
+            <div><label>勘定科目</label><input id="wf_account" placeholder="例: 広告費"/></div>
           </div>
           <div class="row">
-            <div><label>プロジェクト</label><select id="pay_project"></select></div>
+            <div><label>プロジェクト</label><select id="wf_project"></select></div>
             <div><label>ステータス</label>
-              <select id="pay_status">
+              <select id="wf_status">
                 <option value="draft">下書き</option>
                 <option value="pending">申請中</option>
                 <option value="approved">承認</option>
@@ -948,23 +1015,27 @@ button.link:hover { opacity: .8; }
             </div>
           </div>
           <div class="row">
-            <div><label>メモ</label><input id="pay_memo"/></div>
+            <div>
+              <label>承認ルート（順番）</label>
+              <select id="wf_approvers" multiple size="4"></select>
+            </div>
+            <div><label>メモ</label><input id="wf_memo"/></div>
             <div></div>
           </div>
           <div class="toolbar" style="margin-top:8px;">
-            <button onclick="addPaymentRequest()">登録</button>
-            <button class="secondary" onclick="resetPaymentForm()">クリア</button>
+            <button onclick="addWorkflowRequest()">登録</button>
+            <button class="secondary" onclick="resetWorkflowForm()">クリア</button>
           </div>
         </div>
       </div>
 
       <div class="card">
-        <h2>申請一覧</h2>
+        <h2>申請一覧（承認履歴）</h2>
         <div class="body">
-          <table id="paymentTable">
+          <table id="workflowTable">
             <thead>
               <tr>
-                <th>件名</th><th>金額</th><th>申請者</th><th>支払期日</th><th>ステータス</th><th>プロジェクト</th><th></th>
+                <th>件名</th><th>金額</th><th>申請者</th><th>承認ルート</th><th>支払期日</th><th>ステータス</th><th>履歴</th><th></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -1919,7 +1990,7 @@ function gotoDashboardTab(tab){
 }
 
 // --- Data & Filters ---
-let DATA = {users:[], projects:[], tasks:[], subs:[], ledger:[], ledgerPlans:[], credentials:[], attachments:[], minutes:[], dailyReports:[], shareds:[], facilityReservations:[], paymentRequests:[]};
+let DATA = {users:[], projects:[], tasks:[], subs:[], ledger:[], ledgerPlans:[], credentials:[], attachments:[], minutes:[], dailyReports:[], shareds:[], facilityAssets:[], facilityReservations:[], workflowRequests:[], workflowApprovals:[], paymentRequests:[]};
 let FILTERS = { keyword:'', project:'', assignee:'', department:'', from:'', to:'', priority:'', status:'' };
 let PAGE = 'dashboard';
 let ACTIVE_TAB = 'list';
@@ -1983,7 +2054,7 @@ const PRIORITY_IN = { 'High':'高', 'Middle':'中', 'Medium':'中', 'Low':'低',
 function normPriority(p){ return PRIORITY_IN[String(p||'').trim()] || String(p||''); }
 function labelStatus(code){ return STATUS_LABELS[String(code||'').toLowerCase()] || String(code||''); }
 
-function emptyData(){ return {users:[], projects:[], tasks:[], subs:[], ledger:[], credentials:[], facilityReservations:[], paymentRequests:[]}; }
+function emptyData(){ return {users:[], projects:[], tasks:[], subs:[], ledger:[], credentials:[], facilityAssets:[], facilityReservations:[], workflowRequests:[], workflowApprovals:[], paymentRequests:[]}; }
 function safeArr(a){ return Array.isArray(a) ? a : []; }
 
 // --- Busy indicator ---
@@ -2004,6 +2075,28 @@ function refresh() {
       const d0 = (raw && typeof raw==='object') ? raw : {};
       const d = Object.fromEntries(Object.entries(d0).map(([k,v])=>[String(k).toLowerCase(), v]));
       const pick = (...keys)=> { for (const k of keys){ const v = d[String(k).toLowerCase()]; if (Array.isArray(v)) return v; } return []; };
+      const workflowRequests = pick('workflowRequests','workflow_requests','workflowrequests');
+      const workflowApprovals = pick('workflowApprovals','workflow_approvals','workflowapprovals');
+      const paymentRequests = pick('paymentRequests','payment_requests','paymentrequests');
+      const workflowFallback = (!workflowRequests.length && paymentRequests.length)
+        ? paymentRequests.map(r=>({
+          id: r.id,
+          title: r.title,
+          requesterId: r.userId,
+          amount: r.amount,
+          dueDate: r.dueDate,
+          vendor: r.vendor,
+          account: r.account,
+          projectId: r.projectId,
+          status: r.status,
+          memoText: r.memoText,
+          approverIds: '',
+          currentStep: 0,
+          requestDate: r.requestDate,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+        }))
+        : workflowRequests;
 
       DATA = {
         users:        pick('users'),
@@ -2018,8 +2111,11 @@ function refresh() {
         dailyReports: pick('dailyreports','daily_reports','daily'),
         attendanceWorklogs: [], // lazy load on weekly view
         shareds:      safeArr(d.shareds ?? d.Shareds ?? d.shared),
+        facilityAssets:       pick('facilityAssets','facility_assets','facilityassets'),
         facilityReservations: pick('facilityReservations','facility_reservations','facilityreservations'),
-        paymentRequests:      pick('paymentRequests','payment_requests','paymentrequests'),
+        workflowRequests:     workflowFallback,
+        workflowApprovals:    workflowApprovals,
+        paymentRequests:      paymentRequests,
       };
       ATT_WORKLOGS_LOADED = false;
       hydrateSelects();
@@ -2069,6 +2165,7 @@ function hydrateSelects(){
   const users     = safeArr(DATA.users);
   const projects  = safeArr(DATA.projects);
   const activePjs = projects.filter(p => String(p.status||'').toLowerCase() !== 'archived');
+  const facilities = safeArr(DATA.facilityAssets).filter(f => String(f.active||'true') !== 'false');
   const departments = Array.from(new Set(users.map(u=>String(u.department||'').trim()).filter(Boolean)));
 
   // 汎用: セレクトへ流し込み（空=プレイスホルダー文言を表示）
@@ -2096,15 +2193,34 @@ function hydrateSelects(){
   };
 
   // --- プロジェクト選択（フォーム系は非アーカイブのみ） ---
-  ['p_parent_select','t_project_select','s_project','l_project','lp_project','m_project','dr_project','fac_project','pay_project']
+  ['p_parent_select','t_project_select','s_project','l_project','lp_project','m_project','dr_project','fac_project','wf_project']
     .forEach(id => set(id, activePjs, {empty:true, label:p=>p.name||p.id, value:p=>p.id}));
 
   // 検索フィルタは全件（過去参照のため）
   set('f_project', projects, {empty:true, label:p=>p.name||p.id, value:p=>p.id});
 
   // --- ユーザー系 ---
-  ['p_owner_select','t_owner_select','f_assignee','dr_user','sh_owner','c_owner','fac_user','pay_user']
+  ['p_owner_select','t_owner_select','f_assignee','dr_user','sh_owner','c_owner','fac_user','wf_requester']
     .forEach(id => set(id, users, {empty:true, label:u=>u.name||u.email||u.id, value:u=>u.id}));
+
+  // --- 設備 ---
+  (function setFacilities(){
+    const items = facilities.slice().sort((a,b)=>{
+      const ao = Number(a.sortOrder||0);
+      const bo = Number(b.sortOrder||0);
+      if (ao !== bo) return ao - bo;
+      return String(a.name||'').localeCompare(String(b.name||''),'ja');
+    });
+    set('fac_facility', items, {empty:true, label:f=>f.name||f.id, value:f=>f.id});
+  })();
+
+  // ワークフロー承認者（順番）
+  const wfMulti = document.getElementById('wf_approvers');
+  if (wfMulti){
+    while(wfMulti.options.length) wfMulti.remove(0);
+    users.forEach(u => wfMulti.add(new Option(u.name||u.email||u.id, u.id)));
+    wfMulti.size = Math.min(Math.max(users.length, 3), 8);
+  }
   // 部署フィルタ
   (function setDeptFilter(){
     const el = document.getElementById('f_department');
@@ -5356,9 +5472,100 @@ function editSubscription(id){
   if (el('s_memo')) el('s_memo').value = s.memo || s.memoText || '';
 }
 
+let FACILITY_TAB = 'reservations';
+try { const ft = localStorage.getItem('facility_tab'); if (ft) FACILITY_TAB = ft; } catch(_){ }
+
+function applyFacilityTabState(){
+  if (PAGE !== 'facility') return;
+  const grid = el('facility-grid');
+  if (grid) grid.classList.toggle('single', FACILITY_TAB !== 'reservations');
+  document.querySelectorAll('#facility-tabs .tab').forEach(btn=>{
+    const t = btn.getAttribute('data-tab');
+    btn.classList.toggle('active', t === FACILITY_TAB);
+  });
+  document.querySelectorAll('#page-facility .facility-panel').forEach(panel=>{
+    const t = panel.getAttribute('data-facility-tab');
+    panel.classList.toggle('active', t === FACILITY_TAB);
+  });
+  if (FACILITY_TAB === 'assets') renderFacilityAssets();
+  if (FACILITY_TAB === 'gantt') renderFacilityGantt();
+}
+
+function setFacilityTab(tab){
+  FACILITY_TAB = tab || 'reservations';
+  try { localStorage.setItem('facility_tab', FACILITY_TAB); } catch(_){ }
+  applyFacilityTabState();
+}
+
+function resetFacilityAssetForm(){
+  if (el('fa_editing_id')) el('fa_editing_id').value = '';
+  if (el('fa_name')) el('fa_name').value = '';
+  if (el('fa_color')) el('fa_color').value = '#60a5fa';
+  if (el('fa_sort')) el('fa_sort').value = '';
+  if (el('fa_active')) el('fa_active').value = 'true';
+}
+
+function addFacilityAsset(){
+  const id = val('fa_editing_id');
+  const payload = {
+    id: id || undefined,
+    name: val('fa_name'),
+    color: val('fa_color'),
+    sortOrder: val('fa_sort') ? Number(val('fa_sort')) : null,
+    active: (sel('fa_active') === 'true'),
+  };
+  if (!payload.name){ alert('設備名は必須です'); return; }
+  gsr().withSuccessHandler(()=>{
+    resetFacilityAssetForm();
+    refresh();
+  }).upsertFacilityAsset(payload);
+}
+
+function editFacilityAsset(id){
+  const r = safeArr(DATA.facilityAssets).find(x=>String(x.id)===String(id));
+  if (!r) return;
+  if (el('fa_editing_id')) el('fa_editing_id').value = r.id || '';
+  if (el('fa_name')) el('fa_name').value = r.name || '';
+  if (el('fa_color')) el('fa_color').value = (r.color && /^#[0-9a-fA-F]{6}$/.test(r.color)) ? r.color : '#60a5fa';
+  if (el('fa_sort')) el('fa_sort').value = r.sortOrder != null ? r.sortOrder : '';
+  if (el('fa_active')) el('fa_active').value = String(r.active !== false);
+}
+
+function delFacilityAsset(id){
+  if(!confirmDel('設備')) return;
+  gsr().withSuccessHandler(()=>refresh()).deleteFacilityAsset(id);
+}
+
+function renderFacilityAssets(){
+  if (PAGE !== 'facility') return;
+  const tb = document.querySelector('#facilityAssetTable tbody'); if (!tb) return;
+  tb.innerHTML = '';
+  const rows = safeArr(DATA.facilityAssets).slice().sort((a,b)=>{
+    const ao = Number(a.sortOrder||0);
+    const bo = Number(b.sortOrder||0);
+    if (ao !== bo) return ao - bo;
+    return String(a.name||'').localeCompare(String(b.name||''),'ja');
+  });
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    const color = (r.color && /^#[0-9a-fA-F]{6}$/.test(r.color)) ? r.color : '#9ca3af';
+    tr.innerHTML = `
+      <td><span class="color-swatch" style="background:${color}"></span></td>
+      <td>${escapeHtml(r.name||'')}</td>
+      <td>${escapeHtml(String(r.sortOrder??''))}</td>
+      <td>${r.active === false ? '無効' : '有効'}</td>
+      <td style="white-space:nowrap;">
+        <button class="secondary" onclick="editFacilityAsset('${escapeJsSq(String(r.id||''))}')">編集</button>
+        <button class="secondary" onclick="delFacilityAsset('${escapeJsSq(String(r.id||''))}')">削除</button>
+      </td>
+    `;
+    tb.appendChild(tr);
+  });
+}
+
 function resetFacilityForm(){
   if (el('fac_editing_id')) el('fac_editing_id').value = '';
-  if (el('fac_name')) el('fac_name').value = '';
+  if (el('fac_facility')) el('fac_facility').value = '';
   if (el('fac_title')) el('fac_title').value = '';
   if (el('fac_user')) el('fac_user').value = '';
   if (el('fac_status')) el('fac_status').value = 'pending';
@@ -5378,9 +5585,13 @@ function facilityStatusLabel(status){
 
 function addFacilityReservation(){
   const id = val('fac_editing_id');
+  const facilityId = sel('fac_facility');
+  const facility = safeArr(DATA.facilityAssets).find(f=>String(f.id)===String(facilityId));
+  const facilityName = facility ? (facility.name || facility.id) : '';
   const payload = {
     id: id || undefined,
-    facilityName: val('fac_name'),
+    facilityId: facilityId || '',
+    facilityName: facilityName || '',
     title: val('fac_title'),
     userId: sel('fac_user'),
     status: sel('fac_status') || 'pending',
@@ -5392,7 +5603,7 @@ function addFacilityReservation(){
     projectId: sel('fac_project'),
     memoText: val('fac_memo'),
   };
-  if (!payload.facilityName){ alert('設備名は必須です'); return; }
+  if (!payload.facilityId || !payload.facilityName){ alert('設備名は必須です'); return; }
   if (!payload.startDate){ alert('開始日は必須です'); return; }
   gsr().withSuccessHandler(()=>{
     resetFacilityForm();
@@ -5404,7 +5615,7 @@ function editFacilityReservation(id){
   const r = safeArr(DATA.facilityReservations).find(x=>String(x.id)===String(id));
   if (!r) return;
   if (el('fac_editing_id')) el('fac_editing_id').value = r.id || '';
-  if (el('fac_name')) el('fac_name').value = r.facilityName || '';
+  if (el('fac_facility')) el('fac_facility').value = r.facilityId || '';
   if (el('fac_title')) el('fac_title').value = r.title || '';
   if (el('fac_user')) el('fac_user').value = r.userId || '';
   if (el('fac_status')) el('fac_status').value = r.status || 'pending';
@@ -5426,18 +5637,24 @@ function renderFacilityPage(){
   if (PAGE !== 'facility') return;
   const tb = document.querySelector('#facilityTable tbody'); if (!tb) return;
   tb.innerHTML = '';
+  const facilityMap = new Map(safeArr(DATA.facilityAssets).map(f=>[String(f.id), f]));
   const rows = safeArr(DATA.facilityReservations).slice()
     .sort((a,b)=>String(a.startDate||'').localeCompare(String(b.startDate||'')));
   rows.forEach(r=>{
     const tr = document.createElement('tr');
     const date = r.startDate || '';
-    const dateEnd = r.endDate && r.endDate !== r.startDate ? `〜${r.endDate}` : '';
+    const dateEnd = r.endDate && r.endDate !== r.startDate ? ` - ${r.endDate}` : '';
     const timeStart = r.startTime || '';
     const timeEnd = r.endTime ? `-${r.endTime}` : '';
     const period = [date + dateEnd, (timeStart || timeEnd) ? (timeStart + timeEnd) : ''].filter(Boolean).join(' ');
+    const fac = facilityMap.get(String(r.facilityId||'')) || null;
+    const facColor = (fac && fac.color && /^#[0-9a-fA-F]{6}$/.test(fac.color)) ? fac.color : '#9ca3af';
+    const facName = fac ? (fac.name || fac.id) : (r.facilityName || '');
+    const loc = r.location || '';
     tr.innerHTML = `
       <td>${escapeHtml(period)}</td>
-      <td>${escapeHtml(r.facilityName||'')}</td>
+      <td><span class="color-swatch" style="background:${facColor}"></span>${escapeHtml(facName)}</td>
+      <td>${escapeHtml(loc)}</td>
       <td>${escapeHtml(r.title||'')}</td>
       <td>${escapeHtml(nameByUserId(r.userId||''))}</td>
       <td>${escapeHtml(facilityStatusLabel(r.status))}</td>
@@ -5449,94 +5666,274 @@ function renderFacilityPage(){
     `;
     tb.appendChild(tr);
   });
+  applyFacilityTabState();
 }
 
-function resetPaymentForm(){
-  if (el('pay_editing_id')) el('pay_editing_id').value = '';
-  if (el('pay_title')) el('pay_title').value = '';
-  if (el('pay_user')) el('pay_user').value = '';
-  if (el('pay_amount')) el('pay_amount').value = '';
-  if (el('pay_due')) el('pay_due').value = '';
-  if (el('pay_vendor')) el('pay_vendor').value = '';
-  if (el('pay_account')) el('pay_account').value = '';
-  if (el('pay_project')) el('pay_project').value = '';
-  if (el('pay_status')) el('pay_status').value = 'draft';
-  if (el('pay_memo')) el('pay_memo').value = '';
+const FAC_GANTT = { startHour: 6, endHour: 22, hourHeight: 48 };
+
+function ensureFacilityWeekInput(){
+  const input = el('fac_week_start');
+  if (!input) return '';
+  if (!input.value) input.value = mondayStart(todayStr());
+  return input.value;
 }
 
-function paymentStatusLabel(status){
+function shiftFacilityWeek(days){
+  const input = el('fac_week_start'); if (!input) return;
+  const base = input.value || mondayStart(todayStr());
+  input.value = addDaysKey(base, Number(days||0));
+  renderFacilityGantt();
+}
+
+function setFacilityWeekToday(){
+  const input = el('fac_week_start'); if (!input) return;
+  input.value = mondayStart(todayStr());
+  renderFacilityGantt();
+}
+
+function minutesFromTime(t){
+  if (!t) return null;
+  const m = String(t).split(':').map(v=>Number(v));
+  if (m.length < 2 || Number.isNaN(m[0]) || Number.isNaN(m[1])) return null;
+  return (m[0] * 60) + m[1];
+}
+
+function ymdLocal(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function renderFacilityGantt(){
+  if (PAGE !== 'facility') return;
+  const host = el('facility-gantt'); if (!host) return;
+  const ws = ensureFacilityWeekInput();
+  if (!ws) return;
+
+  const days = Array.from({length:7}, (_,i)=>addDaysKey(ws, i));
+  const dayNames = ['日','月','火','水','木','金','土'];
+  const head = ['<div class="cell"></div>'].concat(days.map(d=>{
+    const dt = new Date(`${d}T00:00:00`);
+    const label = `${dt.getMonth()+1}/${dt.getDate()}(${dayNames[dt.getDay()]})`;
+    return `<div class="cell">${escapeHtml(label)}</div>`;
+  })).join('');
+
+  const hours = [];
+  for (let h = FAC_GANTT.startHour; h < FAC_GANTT.endHour; h++){
+    hours.push(`<div class="time">${String(h).padStart(2,'0')}:00</div>`);
+  }
+  const body = days.map(d=>`<div class="fac-day-col${d===todayStr()?' today':''}" data-date="${d}"></div>`).join('');
+
+  host.innerHTML = `
+    <div class="fac-gantt">
+      <div class="fac-gantt-head">${head}</div>
+      <div class="fac-gantt-body">
+        <div class="fac-gantt-timecol">${hours.join('')}</div>
+        ${body}
+      </div>
+    </div>
+  `;
+
+  const colMap = {};
+  host.querySelectorAll('.fac-day-col').forEach(col=>{
+    const key = col.getAttribute('data-date');
+    if (key) colMap[key] = col;
+  });
+
+  const facilityMap = new Map(safeArr(DATA.facilityAssets).map(f=>[String(f.id), f]));
+  const reservations = safeArr(DATA.facilityReservations);
+  const dayStartMin = FAC_GANTT.startHour * 60;
+  const dayEndMin = FAC_GANTT.endHour * 60;
+
+  reservations.forEach(r=>{
+    if (!r.startDate) return;
+    const startDate = r.startDate;
+    const endDate = r.endDate || r.startDate;
+    const start = new Date(`${startDate}T00:00:00`);
+    const end = new Date(`${endDate}T00:00:00`);
+    if (!(end >= start)) return;
+    for (let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+      const dateKey = ymdLocal(d);
+      if (!colMap[dateKey]) continue;
+      let startMin = dayStartMin;
+      let endMin = dayEndMin;
+      const st = minutesFromTime(r.startTime);
+      const et = minutesFromTime(r.endTime);
+      if (dateKey === startDate && st != null) startMin = Math.max(dayStartMin, st);
+      if (dateKey === endDate && et != null) endMin = Math.min(dayEndMin, et);
+      if (endMin <= startMin) {
+        if (st != null && et == null) endMin = Math.min(dayEndMin, startMin + 60);
+      }
+      if (endMin <= startMin) continue;
+
+      const fac = facilityMap.get(String(r.facilityId||'')) || null;
+      const color = (fac && fac.color && /^#[0-9a-fA-F]{6}$/.test(fac.color)) ? fac.color : '#64748b';
+      const facName = fac ? (fac.name || fac.id) : (r.facilityName || '');
+      const who = nameByUserId(r.userId||'') || '';
+      const loc = r.location ? ` / ${r.location}` : '';
+      const labelTime = `${String(Math.floor(startMin/60)).padStart(2,'0')}:${String(startMin%60).padStart(2,'0')}-${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
+
+      const ev = document.createElement('div');
+      ev.className = 'fac-event';
+      ev.style.background = color;
+      ev.style.top = `${((startMin - dayStartMin) / 60) * FAC_GANTT.hourHeight}px`;
+      ev.style.height = `${((endMin - startMin) / 60) * FAC_GANTT.hourHeight}px`;
+      if (String(r.status||'') === 'rejected' || String(r.status||'') === 'canceled') {
+        ev.style.opacity = '0.4';
+      }
+      ev.innerHTML = `
+        <div>${escapeHtml(facName)} ${escapeHtml(r.title||'')}</div>
+        <div class="meta">${escapeHtml(labelTime)} ${escapeHtml(who)}${escapeHtml(loc)}</div>
+      `;
+      colMap[dateKey].appendChild(ev);
+    }
+  });
+}
+
+function resetWorkflowForm(){
+  if (el('wf_editing_id')) el('wf_editing_id').value = '';
+  if (el('wf_title')) el('wf_title').value = '';
+  if (el('wf_requester')) el('wf_requester').value = '';
+  if (el('wf_amount')) el('wf_amount').value = '';
+  if (el('wf_due')) el('wf_due').value = '';
+  if (el('wf_vendor')) el('wf_vendor').value = '';
+  if (el('wf_account')) el('wf_account').value = '';
+  if (el('wf_project')) el('wf_project').value = '';
+  if (el('wf_status')) el('wf_status').value = 'draft';
+  if (el('wf_memo')) el('wf_memo').value = '';
+  if (el('wf_approvers')) Array.from(el('wf_approvers').options).forEach(o=>o.selected=false);
+}
+
+function workflowStatusLabel(status){
   const map = { draft:'下書き', pending:'申請中', approved:'承認', rejected:'却下', paid:'支払済' };
   return map[String(status||'').toLowerCase()] || String(status||'');
 }
 
-function addPaymentRequest(){
-  const id = val('pay_editing_id');
-  const existing = id ? safeArr(DATA.paymentRequests).find(x=>String(x.id)===String(id)) : null;
+function addWorkflowRequest(){
+  const id = val('wf_editing_id');
+  const existing = id ? safeArr(DATA.workflowRequests).find(x=>String(x.id)===String(id)) : null;
+  const approvers = selMulti('wf_approvers').join(',');
   const payload = {
     id: id || undefined,
-    title: val('pay_title'),
-    userId: sel('pay_user'),
-    amount: Number(val('pay_amount')||0),
-    dueDate: val('pay_due'),
-    vendor: val('pay_vendor'),
-    account: val('pay_account'),
-    projectId: sel('pay_project'),
-    status: sel('pay_status') || 'draft',
-    memoText: val('pay_memo'),
+    title: val('wf_title'),
+    requesterId: sel('wf_requester'),
+    amount: Number(val('wf_amount')||0),
+    dueDate: val('wf_due'),
+    vendor: val('wf_vendor'),
+    account: val('wf_account'),
+    projectId: sel('wf_project'),
+    status: sel('wf_status') || 'draft',
+    memoText: val('wf_memo'),
+    approverIds: approvers,
+    currentStep: existing?.currentStep ?? 0,
     requestDate: existing?.requestDate || todayStr(),
   };
   if (!payload.title){ alert('件名は必須です'); return; }
-  if (!payload.userId){ alert('申請者は必須です'); return; }
+  if (!payload.requesterId){ alert('申請者は必須です'); return; }
   gsr().withSuccessHandler(()=>{
-    resetPaymentForm();
+    resetWorkflowForm();
     refresh();
-  }).upsertPaymentRequest(payload);
+  }).upsertWorkflowRequest(payload);
 }
 
-function editPaymentRequest(id){
-  const r = safeArr(DATA.paymentRequests).find(x=>String(x.id)===String(id));
+function editWorkflowRequest(id){
+  const r = safeArr(DATA.workflowRequests).find(x=>String(x.id)===String(id));
   if (!r) return;
-  if (el('pay_editing_id')) el('pay_editing_id').value = r.id || '';
-  if (el('pay_title')) el('pay_title').value = r.title || '';
-  if (el('pay_user')) el('pay_user').value = r.userId || '';
-  if (el('pay_amount')) el('pay_amount').value = r.amount != null ? r.amount : '';
-  if (el('pay_due')) el('pay_due').value = r.dueDate || '';
-  if (el('pay_vendor')) el('pay_vendor').value = r.vendor || '';
-  if (el('pay_account')) el('pay_account').value = r.account || '';
-  if (el('pay_project')) el('pay_project').value = r.projectId || '';
-  if (el('pay_status')) el('pay_status').value = r.status || 'draft';
-  if (el('pay_memo')) el('pay_memo').value = r.memoText || '';
+  if (el('wf_editing_id')) el('wf_editing_id').value = r.id || '';
+  if (el('wf_title')) el('wf_title').value = r.title || '';
+  if (el('wf_requester')) el('wf_requester').value = r.requesterId || '';
+  if (el('wf_amount')) el('wf_amount').value = r.amount != null ? r.amount : '';
+  if (el('wf_due')) el('wf_due').value = r.dueDate || '';
+  if (el('wf_vendor')) el('wf_vendor').value = r.vendor || '';
+  if (el('wf_account')) el('wf_account').value = r.account || '';
+  if (el('wf_project')) el('wf_project').value = r.projectId || '';
+  if (el('wf_status')) el('wf_status').value = r.status || 'draft';
+  if (el('wf_memo')) el('wf_memo').value = r.memoText || '';
+  if (el('wf_approvers')) {
+    const arr = String(r.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean);
+    Array.from(el('wf_approvers').options).forEach(o=>{ o.selected = arr.includes(o.value); });
+  }
 }
 
-function delPaymentRequest(id){
-  if(!confirmDel('決済申請')) return;
-  gsr().withSuccessHandler(()=>refresh()).deletePaymentRequest(id);
+function delWorkflowRequest(id){
+  if(!confirmDel('ワークフロー申請')) return;
+  gsr().withSuccessHandler(()=>refresh()).deleteWorkflowRequest(id);
+}
+
+function addWorkflowApproval(id, action){
+  const selId = `wf_user_${safeId(id)}`;
+  const approverId = el(selId)?.value || '';
+  if (!approverId) { alert('承認者を選択してください'); return; }
+  const comment = prompt(action==='approve' ? '承認コメント（任意）' : '却下理由（任意）') || '';
+  const approvals = safeArr(DATA.workflowApprovals).filter(a=>String(a.workflowId)===String(id));
+  const step = approvals.length + 1;
+  const req = safeArr(DATA.workflowRequests).find(r=>String(r.id)===String(id));
+  const approverIds = String(req?.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const nextStatus = action==='reject' ? 'rejected' : (step >= approverIds.length ? 'approved' : 'pending');
+  Busy.push();
+  gsr().withSuccessHandler(()=>{
+    gsr().withSuccessHandler(()=>refresh()).upsertWorkflowRequest({
+      id,
+      status: nextStatus,
+      currentStep: step,
+    });
+    Busy.pop();
+  }).addWorkflowApproval({
+    workflowId: id,
+    step,
+    approverId,
+    action,
+    comment,
+    actedAt: new Date().toISOString(),
+  });
 }
 
 function renderWorkflowPage(){
   if (PAGE !== 'workflow') return;
-  const tb = document.querySelector('#paymentTable tbody'); if (!tb) return;
+  const tb = document.querySelector('#workflowTable tbody'); if (!tb) return;
   tb.innerHTML = '';
-  const rows = safeArr(DATA.paymentRequests).slice()
+  const rows = safeArr(DATA.workflowRequests).slice()
     .sort((a,b)=>String(a.dueDate||'').localeCompare(String(b.dueDate||'')));
+  const approvals = safeArr(DATA.workflowApprovals);
+  const users = safeArr(DATA.users);
+  const userOptions = ['<option value="">承認者</option>'].concat(users.map(u=>`<option value="${escapeHtml(u.id)}">${escapeHtml(u.name||u.email||u.id)}</option>`)).join('');
   rows.forEach(r=>{
     const tr = document.createElement('tr');
+    const route = String(r.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean)
+      .map(id=>escapeHtml(nameByUserId(id)||id)).join(' → ');
+    const hist = approvals
+      .filter(a=>String(a.workflowId)===String(r.id))
+      .sort((a,b)=>Number(a.step||0)-Number(b.step||0))
+      .map(a=>{
+        const who = nameByUserId(a.approverId||'') || a.approverId || '';
+        const when = a.actedAt ? attFormatMDHM(a.actedAt) : '';
+        const label = a.action === 'approve' ? '承認' : (a.action === 'reject' ? '却下' : (a.action||''));
+        const note = a.comment ? `(${escapeHtml(a.comment)})` : '';
+        return `<div style="font-size:11px;">${escapeHtml(when)} ${escapeHtml(who)} ${escapeHtml(label)} ${note}</div>`;
+      }).join('') || '<div class="muted" style="font-size:11px;">履歴なし</div>';
+
     tr.innerHTML = `
       <td>${escapeHtml(r.title||'')}</td>
       <td>${Number(r.amount||0).toLocaleString()}</td>
-      <td>${escapeHtml(nameByUserId(r.userId||''))}</td>
+      <td>${escapeHtml(nameByUserId(r.requesterId||''))}</td>
+      <td>${route ? route : '<span class="muted">未設定</span>'}</td>
       <td>${escapeHtml(r.dueDate||'')}</td>
-      <td>${escapeHtml(paymentStatusLabel(r.status))}</td>
-      <td>${escapeHtml(nameByProjectId(r.projectId||''))}</td>
+      <td>${escapeHtml(workflowStatusLabel(r.status))}</td>
+      <td>${hist}</td>
       <td style="white-space:nowrap;">
-        <button class="secondary" onclick="editPaymentRequest('${escapeJsSq(String(r.id||''))}')">編集</button>
-        <button class="secondary" onclick="delPaymentRequest('${escapeJsSq(String(r.id||''))}')">削除</button>
+        <select id="wf_user_${safeId(r.id)}" style="margin-bottom:4px;">${userOptions}</select>
+        <div class="toolbar" style="gap:6px;">
+          <button class="secondary" onclick="addWorkflowApproval('${escapeJsSq(String(r.id||''))}','approve')">承認</button>
+          <button class="secondary" onclick="addWorkflowApproval('${escapeJsSq(String(r.id||''))}','reject')">却下</button>
+          <button class="secondary" onclick="editWorkflowRequest('${escapeJsSq(String(r.id||''))}')">編集</button>
+          <button class="secondary" onclick="delWorkflowRequest('${escapeJsSq(String(r.id||''))}')">削除</button>
+        </div>
       </td>
     `;
     tb.appendChild(tr);
   });
 }
-
 // --- Gantt ---
 // 日幅は固定（ズーム廃止）
 const GANTT_DAY_W = 40;
@@ -8526,3 +8923,4 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+

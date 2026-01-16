@@ -15,7 +15,10 @@ export type AllData = {
   dailyReports: any[];
   attendanceWorklogs: any[];
   shareds: any[];
+  facilityAssets: any[];
   facilityReservations: any[];
+  workflowRequests: any[];
+  workflowApprovals: any[];
   paymentRequests: any[];
 };
 
@@ -34,7 +37,10 @@ export async function rpcGetAllData(): Promise<AllData> {
     dailyReports,
     attendanceWorklogs,
     shareds,
+    facilityAssets,
     facilityReservations,
+    workflowRequests,
+    workflowApprovals,
     paymentRequests,
   ] = await Promise.all([
     sbSelectAllSafe('users'),
@@ -49,7 +55,10 @@ export async function rpcGetAllData(): Promise<AllData> {
     sbSelectAllSafe('dailyreports'),
     sbSelectAllSafe('attendance_worklogs'),
     sbSelectAllSafe('shareds'),
+    sbSelectAllSafe('facility_assets'),
     sbSelectAllSafe('facility_reservations'),
+    sbSelectAllSafe('workflow_requests'),
+    sbSelectAllSafe('workflow_approvals'),
     sbSelectAllSafe('payment_requests'),
   ]);
 
@@ -67,7 +76,10 @@ export async function rpcGetAllData(): Promise<AllData> {
     dailyReports,
     attendanceWorklogs,
     shareds,
+    facilityAssets,
     facilityReservations,
+    workflowRequests,
+    workflowApprovals,
     paymentRequests,
   };
 }
@@ -277,7 +289,10 @@ export async function rpcPing() {
       subs: d.subs.length,
       ledger: d.ledger.length,
       credentials: d.credentials.length,
+      facilityAssets: d.facilityAssets.length,
       facilityReservations: d.facilityReservations.length,
+      workflowRequests: d.workflowRequests.length,
+      workflowApprovals: d.workflowApprovals.length,
       paymentRequests: d.paymentRequests.length,
     },
     now: new Date().toISOString(),

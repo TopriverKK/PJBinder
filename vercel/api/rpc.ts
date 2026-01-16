@@ -167,9 +167,21 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const crud = await getCrudMod();
     return await (crud as any).rpcUpsertFacilityReservation(args[0]);
   },
+  async upsertFacilityAsset(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcUpsertFacilityAsset(args[0]);
+  },
   async upsertPaymentRequest(...args: any[]) {
     const crud = await getCrudMod();
     return await (crud as any).rpcUpsertPaymentRequest(args[0]);
+  },
+  async upsertWorkflowRequest(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcUpsertWorkflowRequest(args[0]);
+  },
+  async addWorkflowApproval(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcAddWorkflowApproval(args[0]);
   },
   async upsertLedgerEntry(...args: any[]) {
     const crud = await getCrudMod();
@@ -233,9 +245,17 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const crud = await getCrudMod();
     return await (crud as any).rpcDeleteFacilityReservation(String(args[0]));
   },
+  async deleteFacilityAsset(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcDeleteFacilityAsset(String(args[0]));
+  },
   async deletePaymentRequest(...args: any[]) {
     const crud = await getCrudMod();
     return await (crud as any).rpcDeletePaymentRequest(String(args[0]));
+  },
+  async deleteWorkflowRequest(...args: any[]) {
+    const crud = await getCrudMod();
+    return await (crud as any).rpcDeleteWorkflowRequest(String(args[0]));
   },
   async deleteLedgerEntry(...args: any[]) {
     const crud = await getCrudMod();

@@ -52,13 +52,18 @@
       background: #0f172a;
       color: #fff;
       display: flex;
-      gap: 12px;
+      gap: 8px 12px;
       align-items: center;
+      flex-wrap: wrap;
       position: sticky;
       top: 0;
       z-index: 30;
       width: 100%;
   }
+  header > * { min-width: 0; }
+  header h1{ display:flex; align-items:center; gap:8px; white-space:nowrap; }
+  .toolbar{ flex-wrap: wrap; }
+  nav { flex-wrap: wrap; }
   :root{
     /* 行の基本高さと上下パディング（お好みで調整） */
     --row-h: 44px;

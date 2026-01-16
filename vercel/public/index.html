@@ -284,6 +284,12 @@
   .modal-panel{ background:var(--card); border-radius:12px; padding:16px; max-width:760px; width:calc(100% - 32px); box-shadow:0 10px 40px rgba(0,0,0,.25); max-height:80vh; overflow:auto; }
   .modal-panel h3{ margin-top:0; margin-bottom:8px; }
   .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+  #updates-modal .modal-panel{ max-width:860px; }
+  #updates-body{ font-family:'Segoe UI', sans-serif; font-size:13px; line-height:1.35; }
+  #updates-modal .md-docs{ line-height:1.35; }
+  #updates-modal details{ margin:6px 0; }
+  #updates-modal summary{ cursor:pointer; }
+  #updates-modal details:not([open]) > *:not(summary){ display:none; }
   .att-modal-row{ display:grid; grid-template-columns: 1fr 1.2fr auto; gap:6px; align-items:center; margin-bottom:6px; }
   .att-modal-row input{ width:100%; }
   .att-modal-row button{ white-space:nowrap; }
@@ -8332,11 +8338,22 @@ function openUsageGuide(initial){
   });
 }
 
+let UPDATES_MODAL_BOUND = false;
+function bindUpdatesModalClose(){
+  const modal = el('updates-modal');
+  if (!modal || UPDATES_MODAL_BOUND) return;
+  modal.addEventListener('click', (e)=>{
+    if (e.target === modal) closeUpdatesModal();
+  });
+  UPDATES_MODAL_BOUND = true;
+}
+
 async function openUpdatesModal(){
   const modal = el('updates-modal');
   const body = el('updates-body');
   if (body) body.innerHTML = '<div class="muted">読み込み中...</div>';
   if (modal) modal.style.display = 'flex';
+  bindUpdatesModalClose();
   try{
     const resp = await fetch('/update.md');
     if (!resp.ok) throw new Error('update.md を取得できませんでした');
@@ -8981,7 +8998,7 @@ function closestSafe(target, selector){
 <div class="modal-backdrop" id="updates-modal">
   <div class="modal-panel">
     <h3>アップデート</h3>
-    <div id="updates-body" style="white-space:pre-wrap; font-family:'Segoe UI', sans-serif; font-size:13px;"></div>
+    <div id="updates-body"></div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeUpdatesModal()">閉じる</button>
     </div>

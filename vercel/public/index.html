@@ -5635,7 +5635,7 @@ if (FACILITY_TAB !== 'reservations' && FACILITY_TAB !== 'assets') FACILITY_TAB =
 function applyFacilityTabState(){
   if (PAGE !== 'facility') return;
   const grid = el('facility-grid');
-  if (grid) grid.classList.toggle('single', FACILITY_TAB !== 'reservations');
+  if (grid) grid.classList.toggle('single', FACILITY_TAB === 'reservations' || FACILITY_TAB === 'assets');
   document.querySelectorAll('#facility-tabs .tab').forEach(btn=>{
     const t = btn.getAttribute('data-tab');
     btn.classList.toggle('active', t === FACILITY_TAB);

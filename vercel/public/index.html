@@ -226,8 +226,12 @@
   #page-facility .facility-panel{ display:none; }
   #page-facility .facility-panel.active{ display:block; }
   #page-facility .facility-tabs{ margin-bottom:10px; }
-  #facility-gantt{ overflow-x:auto; }
-  #page-facility .facility-resv-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  #facility-gantt{ overflow-x:auto; width:100%; }
+  #page-facility .facility-resv-grid{ display:grid; grid-template-columns: minmax(360px, 420px) minmax(0, 1fr); gap:16px; align-items:start; }
+  #page-facility .facility-resv-grid > div{ min-width:0; }
+  #page-facility .fac-gantt{ width:100%; }
+  #page-facility .fac-gantt-head,
+  #page-facility .fac-gantt-body{ min-width:100%; }
   @media (max-width: 1200px){
     #page-facility .facility-resv-grid{ grid-template-columns: 1fr; }
   }

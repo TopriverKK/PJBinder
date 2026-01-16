@@ -166,8 +166,10 @@
   #weeklyTable .wk-week { min-width: 360px; }
   #weeklyTable .wk-user-name{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #weeklyTable .wk-proj-name{ font-size: 15px; font-weight: 700; }
-  #weeklyTable .wk-proj-memo{ margin-top:6px; font-size:12px; color: var(--muted); white-space: pre-wrap; }
+  #weeklyTable .wk-proj-memo{ margin-top:6px; font-size:12px; color: #111827; white-space: pre-wrap; }
   #weeklyTable .wk-weekly-memo{
+    color: #111827;
+    font-family: "BIZ UDPGothic","BIZ UDGothic","Yu Gothic","Meiryo",sans-serif;
     height: auto;
     min-height: 120px;
     max-height: none;
@@ -4304,6 +4306,7 @@ window.addEventListener('hashchange', ()=>{
   applyHash();
   renderTasksTable();
   renderKanban();
+  renderProjects();
   if (ACTIVE_TAB==='gantt') renderGantt();
 });
 
@@ -4321,6 +4324,7 @@ function applyFilters() {
   };
   renderTasksTable();
   renderKanban();
+  renderProjects();
   if (ACTIVE_TAB==='gantt') renderGantt();
   saveFiltersToLS();
   updateHashFromState();
@@ -4330,7 +4334,7 @@ function quickOverdue(){
   ['f_from','f_to','f_status'].forEach(id=>{ const e=el(id); if(e) e.value=''; });
   saveFiltersToLS();
   updateHashFromState();
-  renderTasksTable(); renderKanban(); if (ACTIVE_TAB==='gantt') renderGantt();
+  renderTasksTable(); renderKanban(); renderProjects(); if (ACTIVE_TAB==='gantt') renderGantt();
 }
 function clearFilters() {
   ['f_keyword','f_project','f_assignee','f_department','f_from','f_to','f_priority','f_status'].forEach(id=>{ const elx=document.getElementById(id); if (elx) elx.value=''; });

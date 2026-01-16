@@ -285,9 +285,11 @@
   .modal-panel h3{ margin-top:0; margin-bottom:8px; }
   .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
   #updates-modal .modal-panel{ max-width:860px; }
-  #updates-body{ font-family:'Segoe UI', sans-serif; font-size:13px; line-height:1.35; }
-  #updates-modal .md-docs{ line-height:1.35; }
-  #updates-modal details{ margin:6px 0; }
+  #updates-body{ font-family:'Segoe UI', sans-serif; font-size:13px; line-height:1.25; }
+  #updates-modal .md-docs{ line-height:1.25; }
+  #updates-modal .md-docs ul{ margin:4px 0 6px 18px; }
+  #updates-modal .md-docs li{ margin:2px 0; }
+  #updates-modal details{ margin:4px 0; }
   #updates-modal summary{ cursor:pointer; }
   #updates-modal details:not([open]) > *:not(summary){ display:none; }
   .att-modal-row{ display:grid; grid-template-columns: 1fr 1.2fr auto; gap:6px; align-items:center; margin-bottom:6px; }
@@ -8339,6 +8341,7 @@ function openUsageGuide(initial){
 }
 
 let UPDATES_MODAL_BOUND = false;
+let UPDATES_ESC_BOUND = false;
 function bindUpdatesModalClose(){
   const modal = el('updates-modal');
   if (!modal || UPDATES_MODAL_BOUND) return;
@@ -8347,6 +8350,15 @@ function bindUpdatesModalClose(){
   });
   UPDATES_MODAL_BOUND = true;
 }
+function bindUpdatesEscClose(){
+  if (UPDATES_ESC_BOUND) return;
+  document.addEventListener('keydown', (e)=>{
+    if (e.key !== 'Escape') return;
+    const modal = el('updates-modal');
+    if (modal && modal.style.display === 'flex') closeUpdatesModal();
+  });
+  UPDATES_ESC_BOUND = true;
+}
 
 async function openUpdatesModal(){
   const modal = el('updates-modal');
@@ -8354,6 +8366,7 @@ async function openUpdatesModal(){
   if (body) body.innerHTML = '<div class="muted">読み込み中...</div>';
   if (modal) modal.style.display = 'flex';
   bindUpdatesModalClose();
+  bindUpdatesEscClose();
   try{
     const resp = await fetch('/update.md');
     if (!resp.ok) throw new Error('update.md を取得できませんでした');

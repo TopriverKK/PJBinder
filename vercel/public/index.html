@@ -2761,6 +2761,19 @@ function normalizeWeeklyRowIds(row, knownUsers, knownProjects){
   return { uid, pid };
 }
 
+function normalizeWeeklySaveIds(uid, pid){
+  let outUid = String(uid||'').trim();
+  let outPid = String(pid||'').trim();
+  const m = outUid.match(/^(.*)_pj_(.+)$/);
+  if (m) {
+    outUid = m[1];
+    if (outPid && !outPid.startsWith('pj_')) {
+      outPid = 'pj_' + m[2] + '_' + outPid;
+    }
+  }
+  return { uid: outUid, pid: outPid };
+}
+
 function weeklyDomPart(s){
   // Keep ids stable and safe for querySelector/getElementById.
   return String(s ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -2825,17 +2838,25 @@ async function saveWeeklyForUserProjectWeek(userId, projectId, weekStart){
     if(!ws){ alert('週開始日が不正です'); return; }
     if(!uid){ alert('userId が不正です'); return; }
 
-    const idp = weeklyDomPart(uid) + '_' + weeklyDomPart(pid) + '_' + weeklyDomPart(ws);
+    const rawUid = uid;
+    const rawPid = pid;
+    const idp = weeklyDomPart(rawUid) + '_' + weeklyDomPart(rawPid) + '_' + weeklyDomPart(ws);
     const issuesEl = el('wk_issues_'+idp);
     const doneEl = el('wk_done_'+idp);
     const issues = issuesEl ? String(issuesEl.value||'') : '';
     const done = doneEl ? String(doneEl.value||'') : '';
+    const normalized = normalizeWeeklySaveIds(rawUid, rawPid);
+    const saveUid = normalized.uid;
+    const savePid = normalized.pid;
 
     Busy.push();
     try{
-      const saved = await gas('upsertWeeklyReport', { weekStart: ws, userId: uid, projectId: pid, issues, done });
+      const saved = await gas('upsertWeeklyReport', { weekStart: ws, userId: saveUid, projectId: savePid, issues, done });
       if (!WEEKLY.rowsByKey) WEEKLY.rowsByKey = {};
-      WEEKLY.rowsByKey[weeklyKey(ws, uid, pid)] = Object.assign({}, saved, { weekStart: ws, userId: uid, projectId: pid });
+      if (rawUid !== saveUid || rawPid !== savePid) {
+        delete WEEKLY.rowsByKey[weeklyKey(ws, rawUid, rawPid)];
+      }
+      WEEKLY.rowsByKey[weeklyKey(ws, saveUid, savePid)] = Object.assign({}, saved, { weekStart: ws, userId: saveUid, projectId: savePid });
     }finally{
       Busy.pop();
     }

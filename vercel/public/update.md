@@ -1,4 +1,14 @@
 ﻿# アップデート
+## 2026-01-19 (v1.34e)
+- 概要: 週次の保存時にuserId/projectIdの混入を防止
+<details>
+<summary>個別の変更内容</summary>
+<ul>
+<li>保存時にuserIdとprojectIdを正規化</li>
+<li>壊れたキーの上書き保存で正しいキーへ更新</li>
+</ul>
+</details>
+
 ## 2026-01-19 (v1.34d)
 - 概要: 週次メモの表示欠落を修正
 <details>

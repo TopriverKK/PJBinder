@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html> 
+<!DOCTYPE html> 
 <html lang="ja">
 <head>
 <meta charset="utf-8"/>
@@ -773,7 +773,7 @@ button.link:hover { opacity: .8; }
       </div>
     </div>
   </section>
-  <div id="busy-indicator" class="busy" aria-live="polite" style="display:none">⏳️Loading...</div>
+  <div id="busy-indicator" class="busy" aria-live="polite" style="display:none">⏳ Loading...</div>
 
 
   <section class="page" id="page-subs">
@@ -5142,7 +5142,7 @@ function renderTasksTable() {
     const tDocUrl = getTaskDocUrl(r.id);
     const pDocUrl = getProjectDocUrl(r.projectId||'');
     const docsBtns = [
-      tDocUrl ? `<button class="secondary" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📜タスクDoc</button>` : '',
+      tDocUrl ? `<button class="secondary" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📄タスクDoc</button>` : '',
       pDocUrl ? `<button class="secondary" data-tip="プロジェクト共通のドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄PJ Doc</button>` : ''
     ].filter(Boolean).join(' ');
 
@@ -5150,7 +5150,7 @@ function renderTasksTable() {
     tr.dataset.id = r.id;
 
     const docBadges = [
-      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📜タスクDoc</span>` : '',
+      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📄タスクDoc</span>` : '',
       pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄PJDoc</span>` : ''
     ].join('');
 
@@ -5162,7 +5162,7 @@ function renderTasksTable() {
                : prioLabel==='低' ? 'low' : '';
     const attN = countAttachments('task', r.id);
     const attBadge = attN
-  ? `<span class="doc-badge" data-tip="添付一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('task','${r.id}', this)">??${attN}添付を表示</span>`
+  ? `<span class="doc-badge" data-tip="添付一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('task','${r.id}', this)">📎${attN}添付を表示</span>`
   : '';
 
     const bg = ` style="background:${theme.bg}"`;
@@ -5185,7 +5185,7 @@ function renderTasksTable() {
       <td style="white-space:nowrap;">
         <button class="secondary" data-tip="この項目を編集します" onclick="editTask('${r.id}')">編集</button>
         <button class="secondary" onclick="moveStatus('${r.id}','doing')">→進行中</button>
-        <button class="secondary" onclick="moveStatus('${r.id}','done')">✔完了</button>
+        <button class="secondary" onclick="moveStatus('${r.id}','done')">✅完了</button>
         <button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">📎添付を追加</button>
         <button class="secondary" onclick="delTask('${r.id}')">削除</button>
       </td>
@@ -5227,8 +5227,8 @@ function attachTaskInlineEditHandlers(){
     }
     const ctl = document.createElement('span');
     ctl.className = 'inline-ctl';
-    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='??';
-    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='??';
+    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='?';
+    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='?';
     const wrap = document.createElement('span');
     wrap.appendChild(input); wrap.appendChild(ctl);
     ctl.appendChild(ok); ctl.appendChild(ng);
@@ -5280,8 +5280,8 @@ function attachTaskInlineEditHandlers(){
 
     const ctl = document.createElement('span');
     ctl.className = 'inline-ctl';
-    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='??';
-    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='??';
+    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='?';
+    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='?';
 
     const wrap = document.createElement('div');
     wrap.appendChild(ta);
@@ -5421,7 +5421,7 @@ function renderKanban() {
 
     const attN = countAttachments('task', r.id);
     const attBadge = attN
-      ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${r.id}')">??${attN}</span>`
+      ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${r.id}')">📎${attN}</span>`
       : '';
 
     const card = document.createElement('div');
@@ -5526,7 +5526,7 @@ function renderKanban() {
 
       // 4カラムの骨組み
       wrap.innerHTML = `
-        <h3 style="margin:0 0 6px 0;">?? ${escapeHtml(lane.name)}</h3>
+        <h3 style="margin:0 0 6px 0;">👤 ${escapeHtml(lane.name)}</h3>
         <div class="kanban" style="grid-template-columns:repeat(4,1fr); gap:8px;">
           ${cols.map(c => {
             const sid = `lane_${safeId(lane.key)}_${c}`;
@@ -5630,7 +5630,7 @@ function renderProjects() {
 
     const attN = countProjectAttachmentsDeep(r.id);
     const attBadge = attN
-      ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">??${attN}添付を表示</span>`
+      ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">📎${attN}添付を表示</span>`
       : '';
 
     // 親プロジェクト名（オプショナルチェイニングなし）
@@ -5891,7 +5891,7 @@ function delMinute(id) { gsr().withSuccessHandler(()=>{ dropRow('minutes', id); 
 function deleteProjectHard(id){
   const p = safeArr(DATA.projects).find(x=>String(x.id)===String(id));
   const name = p ? (p.name||p.id) : String(id);
-  const ok = confirm(`➕️ プロジェクト「${name}」を完全削除します。\n関連タスク/添付URLも削除され、元に戻せません。\n\n本当に削除しますか？`);
+  const ok = confirm(`⚠️ プロジェクト「${name}」を完全削除します。\n関連タスク/添付URLも削除され、元に戻せません。\n\n本当に削除しますか？`);
   if(!ok) return;
 
   gsr()
@@ -7096,7 +7096,7 @@ function renderGantt(forceDefaults){
       : '';
     const attNP = countAttachments('project', pid);
     const attBadgeP = attNP
-      ? `<span class="doc-badge" title="添付 ${attNP}件" onclick="openAttachmentManager('project','${pid}')">??${attNP}</span>`
+      ? `<span class="doc-badge" title="添付 ${attNP}件" onclick="openAttachmentManager('project','${pid}')">📎${attNP}</span>`
       : '';
 
     labelHtml.push(
@@ -7136,7 +7136,7 @@ function renderGantt(forceDefaults){
       const docBadge = tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">📄PJDoc</span>` : '';
       const attN = countAttachments('task', t.id);
 
-      const attBadge = attN ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">??${attN}</span>` : '';
+      const attBadge = attN ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">📎${attN}</span>` : '';
 
       labelHtml.push(
         `<div style="height:24px; line-height:24px; padding:0 8px; border-bottom:1px solid var(--border); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
@@ -7749,7 +7749,7 @@ function renderMinutesPage(){
       .filter(Boolean).join(', ');
     const link = m.docUrl ? `<button class="secondary" onclick="window.open('${m.docUrl}','_blank')">Docs</button>` : '';
     const attN = countAttachments('minute', m.id||'');
-    const attB = attN? `<button class="secondary" onclick="openAttachmentManager('minute','${m.id}')">??${attN}</button>`:'';
+    const attB = attN? `<button class="secondary" onclick="openAttachmentManager('minute','${m.id}')">📎${attN}</button>`:'';
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${m.date||''}</td>
       <td>${escapeHtml(m.title||'')}</td>
@@ -8004,7 +8004,7 @@ function toggleAttachmentList(kind, id, anchor){
       const html = items.map(a=>{
         const href = attachmentHref(a);
         const title = escapeHtml(a.title || href || '(無題)');
-        return `<div style="margin:4px 0;">?? <a href="${escapeHtml(href)}" target="_blank" rel="noopener">${title}</a></div>`;
+        return `<div style="margin:4px 0;">📎 <a href="${escapeHtml(href)}" target="_blank" rel="noopener">${title}</a></div>`;
       }).join('');
       td.innerHTML = `<div class="inline-attachments slide">${html}</div>`;
     }
@@ -8062,8 +8062,8 @@ function toggleProjectTaskList(projectId, anchor){
                         .split(',').filter(Boolean).map(nameByUserId).join(', ');
         const tDoc  = getTaskDocUrl(t.id);
         const attN  = countAttachments('task', t.id);
-        const docLink = tDoc ? `<a href="${tDoc}" target="_blank" rel="noopener">??</a>` : '';
-        const attBtn  = attN ? `<button class="secondary mini" onclick="openAttachmentManager('task','${t.id}')">??${attN}</button>` : '';
+        const docLink = tDoc ? `<a href="${tDoc}" target="_blank" rel="noopener">📄</a>` : '';
+        const attBtn  = attN ? `<button class="secondary mini" onclick="openAttachmentManager('task','${t.id}')">📎${attN}</button>` : '';
         return `
           <div style="display:flex; gap:8px; align-items:center; padding:2px 0;">
             <span style="min-width:72px;" class="muted">${escapeHtml(st)}</span>
@@ -8111,7 +8111,7 @@ function toggleProjectTasks(projectId, anchor){
       const pr = normPriority(t.priority||'');
       const tDoc = getTaskDocUrl(t.id);
       const attN = countAttachments('task', t.id);
-      const att = attN ? ` <span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">??${attN}</span>` : '';
+      const att = attN ? ` <span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">📎${attN}</span>` : '';
       const doc = tDoc ? ` <span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">📄PJDoc</span>` : '';
       return `<div style="padding:2px 0;">
         <span class="pill" style="margin-right:6px;">${labelStatus(st)}</span>
@@ -8164,7 +8164,7 @@ function renderProjectsPage(){
     const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJDoc</span>` : '';
     const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJ Doc</button>` : '';
     const attN    = countProjectAttachmentsDeep(r.id);
-    const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">??${attN}添付を表示</span>` : '';
+    const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">📎${attN}添付を表示</span>` : '';
 
     const theme = themeFor(r.id, null);
     const bg = ` style="background:${theme.bg}"`;
@@ -8471,7 +8471,7 @@ function renderShareds(){
     const attN  = countAttachments('shared', r.id);   // parentType 'shared' を使う
 
     const attBadge = attN
-      ? `<span class="doc-badge" title="添付 ${attN}件" onclick="toggleAttachmentList('shared','${r.id}', this)">??${attN}</span>`
+      ? `<span class="doc-badge" title="添付 ${attN}件" onclick="toggleAttachmentList('shared','${r.id}', this)">📎${attN}</span>`
       : '';
 
     // 状態は任意で：active/archived などがあれば表示、なければ空
@@ -8487,7 +8487,7 @@ function renderShareds(){
       <td>${escapeHtml(state)}</td>
       <td style="white-space:nowrap;">
         <button class="secondary" data-tip="この項目を編集します" onclick="editShared('${r.id}')">編集</button>
-        <button class="secondary" onclick="openAttachmentManager('shared','${r.id}')">??管理</button>
+        <button class="secondary" onclick="openAttachmentManager('shared','${r.id}')">📎管理</button>
         <button class="secondary" onclick="delShared('${r.id}')">削除</button>
       </td>`;
     tb.appendChild(tr);
@@ -8497,11 +8497,11 @@ function renderShareds(){
 function renderAttachmentInline(list){
   if(!list.length) return '';
   const icon = (a)=>{
-    if (a.type === 'drive' || a.fileId) return '??';
+    if (a.type === 'drive' || a.fileId) return '📎';
     const u = String(a.url||'').toLowerCase();
-    if (/\.(png|jpe?g|gif|webp|svg)$/.test(u)) return '???';
-    if (/\.(pdf)$/.test(u)) return '??';
-    return '??';
+    if (/\.(png|jpe?g|gif|webp|svg)$/.test(u)) return '🖼️';
+    if (/\.(pdf)$/.test(u)) return '📎';
+    return '📎';
   };
   return list.map(a=>{
     const href = a.url || (a.fileId ? `https://drive.google.com/file/d/${a.fileId}/view` : '#');
@@ -8907,7 +8907,7 @@ function submitFlyoutTask(){
     ['tab-list',"タスクを表形式で確認・インライン編集できます"],
     ['tab-board',"ドラッグ＆ドロップで状態を移動できます"],
     ['tab-board',"担当者別スイムレーンはチェックで切替"],
-    ['tab-board',"カードの??でDocs、??で添付を開きます"],
+    ['tab-board',"カードの📄でDocs、📎で添付を開きます"],
     ['tab-list',"右上のCSVでエクスポートできます"],
     ['f_keyword',"タイトル・メモを横断検索"],
     ['f_project',"プロジェクトで絞り込み"],
@@ -9896,8 +9896,8 @@ function closestSafe(target, selector){
         <div class="body">
           <div class="toolbar">
             <button class="secondary tooltip-host" data-tip="今日以前が期限で未完了のタスクを抽出">? 遅延だけ</button>
-            <button class="secondary tooltip-host" data-tip="カンバンに切替" onclick="gotoDashboardTab('board')">?? カンバン</button>
-            <button class="secondary tooltip-host" data-tip="ガントに切替" onclick="gotoDashboardTab('gantt')">?? ガント</button>
+            <button class="secondary tooltip-host" data-tip="カンバンに切替" onclick="gotoDashboardTab('board')">🗂️ カンバン</button>
+            <button class="secondary tooltip-host" data-tip="ガントに切替" onclick="gotoDashboardTab('gantt')">📅 ガント</button>
           </div>
           <p class="hint">ヒント: Enterで「タスク作成」を実行できます。</p>
         </div>
@@ -9913,10 +9913,10 @@ function closestSafe(target, selector){
 <!-- ===== 右下フローティングボタン ===== -->
 <div id="fab-stack" aria-live="polite" >
   <button class="fab-btn" id="btn_add_project" onclick="openProjectFormModal()" data-tip="新しいプロジェクトを右側のフライアウトから素早く作成します">
-    ➕️ プロジェクト追加
+    ➕ プロジェクト追加
   </button>
   <button class="fab-btn" id="btn_add_task" onclick="openTaskFormModal()" data-tip="選択したプロジェクトにタスクを追加します">
-    ☑ タスク追加
+    ? タスク追加
   </button>
 </div>
 <div id="flyout-mask" class="flyout-mask" onclick="closeFlyout()"></div>
@@ -9967,6 +9967,7 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
 
 
 

@@ -9,7 +9,7 @@ import {
   replaceDocWithMemo,
   setDocLinkShare,
 } from '../google/driveDocs.js';
-import { sbSelectOneById, sbUpsert } from '../supabase/rest.js';
+import { sbSelect, sbSelectOneById, sbUpsert } from '../supabase/rest.js';
 import { getSetting } from '../supabase/settings.js';
 
 function sanitizeName(s: string) {
@@ -22,6 +22,20 @@ function todayYMD() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dd}`;
+}
+
+async function getSettingWithTemplate(key: string): Promise<string | null> {
+  const value = await getSetting(key);
+  if (value && String(value).trim()) return String(value).trim();
+  try {
+    const rows = await sbSelect('settings_template', `select=key,value&key=eq.${encodeURIComponent(key)}&limit=1`);
+    const row = Array.isArray(rows) ? rows[0] : null;
+    const fallback = row?.value;
+    if (fallback && String(fallback).trim()) return String(fallback).trim();
+  } catch (_) {
+    // ignore fallback failures
+  }
+  return null;
 }
 
 export async function rpcGetLogoDataUrl() {
@@ -80,7 +94,7 @@ export async function rpcCreateProjectDoc(projectId: string) {
   const folderId = base ? await ensureFolderPath(base, ['プロジェクトDocs', sanitizeName(p.name || p.id)]) : undefined;
   const title = `プロジェクト ${p.name || p.id}`;
 
-  const templateId = await getSetting('PROJECT_TEMPLATE_ID');
+  const templateId = await getSettingWithTemplate('PROJECT_TEMPLATE_ID');
 
   const periodLabel = `${p.startDate || '-'}〜${p.endDate || '-'}`;
   const ownerLabel = owner ? (owner.name || owner.email || owner.id) : (p.ownerUserId || '-');
@@ -152,7 +166,7 @@ export async function rpcCreateTaskDoc(taskId: string) {
 
   const title = `${proj ? `${proj.name || proj.id} - ` : ''}タスク ${t.title || t.id}`;
 
-  const templateId = await getSetting('TASK_TEMPLATE_ID');
+  const templateId = await getSettingWithTemplate('TASK_TEMPLATE_ID');
 
   const periodLabel = String(t.dueDate || proj?.endDate || proj?.startDate || '-');
   const ownerLabel = owner ? (owner.name || owner.email || owner.id) : (t.ownerUserId || '-');
@@ -245,7 +259,7 @@ export async function rpcCreateMinuteDoc(input: any) {
   }
 
   // Template (settings) or fallback
-  const templateId = await getSetting('MINUTES_TEMPLATE_ID');
+  const templateId = await getSettingWithTemplate('MINUTES_TEMPLATE_ID');
 
   let docId: string | null = null;
   let url: string | null = null;
@@ -352,7 +366,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
   const folderId = base ? await ensureFolderPath(base, ['日報', sanitizeName(uname), yyyy]) : undefined;
   const fileTitle = `日報 ${dateStr} ${uname}`;
 
-  const templateId = await getSetting('DAILY_TEMPLATE_ID');
+  const templateId = await getSettingWithTemplate('DAILY_TEMPLATE_ID');
   const hours = Number(r?.hours || 0);
   const projectId = String(r?.projectId || '').trim();
   const body = String(r?.body || '');

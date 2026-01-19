@@ -1,4 +1,24 @@
 ﻿# アップデート
+## 2026-01-19 (v1.40r)
+- 概要: ドキュメント作成と絵文字表示の修正
+<details>
+<summary>個別の変更内容</summary>
+<ul>
+<li>settingsのテンプレートIDを読み込む処理を安定化</li>
+<li>UI内の置換文字(??)を絵文字に復元</li>
+</ul>
+</details>
+
+## 2026-01-19 (v1.40r)
+- 概要: ドキュメント設定と表示の修正
+<details>
+<summary>個別の変更内容</summary>
+<ul>
+<li>ドキュメントテンプレートIDをsettings_templateからも補完</li>
+<li>添付/Docsのアイコン表示を復旧</li>
+</ul>
+</details>
+
 ## 2026-01-19 (v1.40q)
 - 概要: 設定の不具合を修正
 <details>

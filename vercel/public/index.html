@@ -2440,7 +2440,9 @@ function renderTenantSettings(){
   }
   tbody.innerHTML = rows.map(r=>{
     const key = escapeHtml(r?.key || '');
-    const value = escapeHtml(r?.value || '');
+    const rawValue = String(r?.value || '');
+    const maskedValue = rawValue.length <= 8 ? rawValue : `${rawValue.slice(0, 8)}***`;
+    const value = escapeHtml(maskedValue);
     const updated = escapeHtml(r?.updatedAt || '');
     const editKey = escapeJsSq(r?.key || '');
     const editValue = escapeJsSq(r?.value || '');

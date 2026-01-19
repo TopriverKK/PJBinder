@@ -1,12 +1,22 @@
 ﻿# アップデート
-## 2026-01-19 (v1.40m)
-- 概要: settings補完の自動チェックを強化
+## 2026-01-19 (v1.40o)
+- 概要: 設定値のマスク表示を追加
+<details>
+<summary>個別の変更内容</summary>
+<ul>
+<li>設定一覧のvalueを先頭8文字のみ表示し、それ以降はマスク</li>
+</ul>
+</details>
+
+## 2026-01-19 (v1.40n)
+- 概要: settingsキーの整理とロゴ設定の統一
 <details>
 <summary>個別の変更内容</summary>
 <ul>
 <li>settings_templateをテナント非依存テーブルとして扱うよう更新</li>
 <li>settings保存時のupsertをテナント対応に統一</li>
 <li>settings取得時もテンプレート不足分を補完</li>
+<li>ロゴ設定をGOOGLE_LOGO_FILE_IDへ統一</li>
 </ul>
 </details>
 

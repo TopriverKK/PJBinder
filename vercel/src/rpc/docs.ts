@@ -27,12 +27,34 @@ function todayYMD() {
 export async function rpcGetLogoDataUrl() {
   const url = await getSetting('LOGO_URL');
   const trimmed = String(url || '').trim();
-  if (trimmed) {
-    if (/^https?:\/\//i.test(trimmed)) return trimmed;
-    const fileId = trimmed.replace(/\s+/g, '');
-    return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
-  }
+  if (trimmed) return normalizeLogoUrl(trimmed);
   return getLogoDataUrl();
+}
+
+function normalizeLogoUrl(input: string): string {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  if (/^data:/i.test(raw)) return raw;
+  if (/^https?:\/\//i.test(raw)) {
+    const driveId = extractDriveId(raw);
+    if (driveId) return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(driveId)}`;
+    return raw;
+  }
+  const fileId = raw.replace(/\s+/g, '');
+  return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
+}
+
+function extractDriveId(url: string): string {
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match && match[1]) return match[1];
+  try {
+    const u = new URL(url);
+    const id = u.searchParams.get('id');
+    if (id) return id;
+  } catch (_) {
+    // ignore
+  }
+  return '';
 }
 
 export async function rpcSetDocLinkShare(docId: string, role: 'viewer' | 'commenter' | 'editor') {

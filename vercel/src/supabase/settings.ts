@@ -25,7 +25,16 @@ export async function getSetting(key: string): Promise<string | null> {
 export async function setSetting(key: string, value: string): Promise<void> {
   const { sbUpsert } = await import('./rest.js');
   const updatedAt = new Date().toISOString();
-  await sbUpsert('settings', { key, value, updatedAt }, 'tenant_id,key');
+  try {
+    await sbUpsert('settings', { key, value, updatedAt }, 'tenant_id,key');
+  } catch (e: any) {
+    const msg = String(e?.message || e || '');
+    if (/no unique|unique constraint|on_conflict/i.test(msg)) {
+      await sbUpsert('settings', { key, value, updatedAt });
+    } else {
+      throw e;
+    }
+  }
   
   // Invalidate cache
   const tenantId = requireTenantId('settings');

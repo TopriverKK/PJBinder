@@ -1156,6 +1156,33 @@ button.link:hover { opacity: .8; }
         </div>
       </div>
     </div>
+    <div class="card">
+      <h2>テナント設定（Supabase）</h2>
+      <div class="body">
+        <div class="row">
+          <div>
+            <label>キー</label>
+            <input id="ts_key" placeholder="例: DAILY_TEMPLATE_ID"/>
+          </div>
+          <div>
+            <label>値</label>
+            <input id="ts_value" placeholder="例: 1u_..."/>
+          </div>
+        </div>
+        <div class="toolbar" style="justify-content:flex-end; margin-top:8px;">
+          <input type="hidden" id="ts_editing_key"/>
+          <button onclick="saveTenantSetting()">保存</button>
+          <button class="secondary" onclick="resetTenantSettingForm()">クリア</button>
+          <button class="secondary" onclick="loadTenantSettings()">再読み込み</button>
+        </div>
+        <div class="body list" style="padding:0; margin-top:8px;">
+          <table id="tenantSettingsTable">
+            <thead><tr><th>キー</th><th>値</th><th>更新日</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section id="page-debug" class="page">
@@ -2202,6 +2229,7 @@ const DEFAULT_SETTINGS = {
 let APP_SETTINGS = { ...DEFAULT_SETTINGS };
 let TOOLTIPS_ENABLED = true;
 const dayMs = 24*60*60*1000; // グローバル日ミリ秒（ガント/日付計算で使用）
+let TENANT_SETTINGS = [];
 
 function loadAppSettings(){
   try{
@@ -2354,6 +2382,75 @@ function resetAppSettings(){
   syncSettingsForm();
   applyAppSettings({ respectRoute: false });
   try { showToast('ok', '設定を初期化しました'); } catch(_){}
+}
+
+async function loadTenantSettings(){
+  try{
+    const rows = await rpc('getSettingsEntries');
+    TENANT_SETTINGS = Array.isArray(rows) ? rows : [];
+    renderTenantSettings();
+  }catch(e){
+    try { showToast('ng', '設定の取得に失敗しました'); } catch(_){}
+  }
+}
+
+function renderTenantSettings(){
+  const tbody = document.querySelector('#tenantSettingsTable tbody');
+  if (!tbody) return;
+  const rows = safeArr(TENANT_SETTINGS).slice().sort((a,b)=>{
+    const ak = String(a?.key || '');
+    const bk = String(b?.key || '');
+    return ak.localeCompare(bk);
+  });
+  if (!rows.length){
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">データなし</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r=>{
+    const key = escapeHtml(r?.key || '');
+    const value = escapeHtml(r?.value || '');
+    const updated = escapeHtml(r?.updatedAt || '');
+    const editKey = escapeJsSq(r?.key || '');
+    const editValue = escapeJsSq(r?.value || '');
+    return `<tr>
+      <td>${key}</td>
+      <td>${value}</td>
+      <td>${updated}</td>
+      <td><button class="secondary mini" onclick="editTenantSetting('${editKey}','${editValue}')">編集</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function editTenantSetting(key, value){
+  const keyEl = document.getElementById('ts_key');
+  const valueEl = document.getElementById('ts_value');
+  const editing = document.getElementById('ts_editing_key');
+  if (keyEl) keyEl.value = String(key || '');
+  if (valueEl) valueEl.value = String(value || '');
+  if (editing) editing.value = String(key || '');
+}
+
+function resetTenantSettingForm(){
+  const keyEl = document.getElementById('ts_key');
+  const valueEl = document.getElementById('ts_value');
+  const editing = document.getElementById('ts_editing_key');
+  if (keyEl) keyEl.value = '';
+  if (valueEl) valueEl.value = '';
+  if (editing) editing.value = '';
+}
+
+async function saveTenantSetting(){
+  const key = String(val('ts_key') || '').trim();
+  const value = String(val('ts_value') || '');
+  if (!key) { alert('キーを入力してください'); return; }
+  try{
+    await rpc('setSettingEntry', key, value);
+    await loadTenantSettings();
+    resetTenantSettingForm();
+    try { showToast('ok', '設定を保存しました'); } catch(_){}
+  }catch(e){
+    alert('設定の保存に失敗しました: ' + (e && e.message ? e.message : e));
+  }
 }
 
 function saveFiltersToLS(){
@@ -7348,6 +7445,7 @@ document.addEventListener('DOMContentLoaded', function(){
   loadTenantLabel();
   loadAppSettings();
   syncSettingsForm();
+  loadTenantSettings();
 // --- RRULE helpers ---
 function rruleFromMode(mode, baseDate){
   // baseDate: 'YYYY-MM-DD' or ''

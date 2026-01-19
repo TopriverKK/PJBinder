@@ -10,12 +10,14 @@ type CrudMod = typeof import('../src/rpc/crud.js');
 type DocsMod = typeof import('../src/rpc/docs.js');
 type AttendanceMod = typeof import('../src/rpc/attendance.js');
 type WeeklyMod = typeof import('../src/rpc/weekly.js');
+type SettingsMod = typeof import('../src/supabase/settings.js');
 
 let _dataMod: Promise<DataMod> | null = null;
 let _crudMod: Promise<CrudMod> | null = null;
 let _docsMod: Promise<DocsMod> | null = null;
 let _attendanceMod: Promise<AttendanceMod> | null = null;
 let _weeklyMod: Promise<WeeklyMod> | null = null;
+let _settingsMod: Promise<SettingsMod> | null = null;
 
 function getDataMod(): Promise<DataMod> {
   return (_dataMod ||= import('../src/rpc/data.js'));
@@ -31,6 +33,9 @@ function getAttendanceMod(): Promise<AttendanceMod> {
 }
 function getWeeklyMod(): Promise<WeeklyMod> {
   return (_weeklyMod ||= import('../src/rpc/weekly.js'));
+}
+function getSettingsMod(): Promise<SettingsMod> {
+  return (_settingsMod ||= import('../src/supabase/settings.js'));
 }
 
 type RpcRequestBody = {
@@ -162,6 +167,18 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const rows = await sbSelect('tenants', `select=id,name,host&limit=1&id=eq.${encodeURIComponent(id)}`);
     const row = Array.isArray(rows) ? rows[0] ?? null : null;
     return row ?? { id };
+  },
+  async getSettingsEntries() {
+    const { sbSelectAllSafe } = await import('../src/supabase/selectAll.js');
+    return await sbSelectAllSafe('settings', 'select=id,key,value,updatedAt');
+  },
+  async setSettingEntry(...args: any[]) {
+    const key = String(args[0] ?? '').trim();
+    const value = String(args[1] ?? '');
+    if (!key) throw new Error('key is required');
+    const settings = await getSettingsMod();
+    await settings.setSetting(key, value);
+    return { ok: true };
   },
 
   // Weekly progress

@@ -24,7 +24,8 @@ export async function getSetting(key: string): Promise<string | null> {
 
 export async function setSetting(key: string, value: string): Promise<void> {
   const { sbUpsert } = await import('./rest');
-  await sbUpsert('settings', { key, value }, 'tenant_id,key');
+  const updatedAt = new Date().toISOString();
+  await sbUpsert('settings', { key, value, updatedAt }, 'tenant_id,key');
   
   // Invalidate cache
   const tenantId = requireTenantId('settings');

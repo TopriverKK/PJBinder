@@ -737,7 +737,7 @@ button.link:hover { opacity: .8; }
       </div>
     </div>
   </section>
-  <div id="busy-indicator" class="busy" aria-live="polite" style="display:none">Loading...</div>
+  <div id="busy-indicator" class="busy" aria-live="polite" style="display:none">⏳️Loading...</div>
 
 
   <section class="page" id="page-subs">
@@ -1170,7 +1170,7 @@ button.link:hover { opacity: .8; }
               <div class="toolbar">
                 <button class="secondary" onclick="openUsageGuide()">使い方</button>
                 <button onclick="openProjectDoc()">Docsを開く</button>
-                <button class="secondary" onclick="openAttachDialog('project')">??添付</button>
+                <button class="secondary" onclick="openAttachDialog('project')">📎添付</button>
               </div>
               <div class="muted" id="p_doc_status">未作成</div>
             </div>
@@ -1257,7 +1257,7 @@ button.link:hover { opacity: .8; }
               <div class="toolbar">
 
                 <button onclick="openTaskDoc()">Docsを開く</button>
-                <button class="secondary" onclick="openAttachDialog('task')">??添付</button>
+                <button class="secondary" onclick="openAttachDialog('task')">📎添付</button>
               </div>
               <div class="muted" id="t_doc_status">未作成</div>
             </div>
@@ -1517,7 +1517,7 @@ button.link:hover { opacity: .8; }
             <div>
               <label>添付URL</label>
               <div class="toolbar">
-                <button class="secondary" onclick="openAttachDialog('shared')">??添付</button>
+                <button class="secondary" onclick="openAttachDialog('shared')">📎添付</button>
               </div>
               <div class="muted">Drive/URL を登録（Docs自動作成はありません）</div>
             </div>
@@ -1542,7 +1542,7 @@ button.link:hover { opacity: .8; }
             <tbody></tbody>
           </table>
         </div>
-        <div class="muted" style="margin-top:6px;">??アイコンで添付のインライン一覧をトグル表示できます。</div>
+        <div class="muted" style="margin-top:6px;">📎アイコンで添付のインライン一覧をトグル表示できます。</div>
       </div>
     </div>
   </section>
@@ -4696,16 +4696,16 @@ function renderTasksTable() {
     const tDocUrl = getTaskDocUrl(r.id);
     const pDocUrl = getProjectDocUrl(r.projectId||'');
     const docsBtns = [
-      tDocUrl ? `<button class="secondary" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">??タスクDoc</button>` : '',
-      pDocUrl ? `<button class="secondary" data-tip="プロジェクト共通のドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">??PJ Doc</button>` : ''
+      tDocUrl ? `<button class="secondary" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📜タスクDoc</button>` : '',
+      pDocUrl ? `<button class="secondary" data-tip="プロジェクト共通のドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄PJ Doc</button>` : ''
     ].filter(Boolean).join(' ');
 
     const tr = document.createElement('tr');
     tr.dataset.id = r.id;
 
     const docBadges = [
-      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">??タスクDoc</span>` : '',
-      pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">??PJDoc</span>` : ''
+      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📜タスクDoc</span>` : '',
+      pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄PJDoc</span>` : ''
     ].join('');
 
     // ★ ここで先にテーマ色を計算する
@@ -4739,8 +4739,8 @@ function renderTasksTable() {
       <td style="white-space:nowrap;">
         <button class="secondary" data-tip="この項目を編集します" onclick="editTask('${r.id}')">編集</button>
         <button class="secondary" onclick="moveStatus('${r.id}','doing')">→進行中</button>
-        <button class="secondary" onclick="moveStatus('${r.id}','done')">?完了</button>
-        <button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">??添付を追加</button>
+        <button class="secondary" onclick="moveStatus('${r.id}','done')">✔完了</button>
+        <button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">📎添付を追加</button>
         <button class="secondary" onclick="delTask('${r.id}')">削除</button>
       </td>
     `;
@@ -5177,7 +5177,7 @@ function renderProjects() {
     // Docs の URL（未定義対策）
     const pDocUrl = getProjectDocUrl(r.id);
 
-    const attBtn = `<button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">??添付を追加</button>`;
+    const attBtn = `<button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">📎添付を追加</button>`;
     const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">??Doc</span>' : '';
 
     const tr = document.createElement('tr');
@@ -5445,7 +5445,7 @@ function delMinute(id) { gsr().withSuccessHandler(()=>{ dropRow('minutes', id); 
 function deleteProjectHard(id){
   const p = safeArr(DATA.projects).find(x=>String(x.id)===String(id));
   const name = p ? (p.name||p.id) : String(id);
-  const ok = confirm(`? プロジェクト「${name}」を完全削除します。\n関連タスク/添付URLも削除され、元に戻せません。\n\n本当に削除しますか？`);
+  const ok = confirm(`➕️ プロジェクト「${name}」を完全削除します。\n関連タスク/添付URLも削除され、元に戻せません。\n\n本当に削除しますか？`);
   if(!ok) return;
 
   gsr()
@@ -7711,7 +7711,7 @@ function renderProjectsPage(){
   for (const r of rows){
     const pDocUrl = getProjectDocUrl(r.id);
     const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">??Doc</span>` : '';
-    const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">??PJ Doc</button>` : '';
+    const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJ Doc</button>` : '';
     const attN    = countProjectAttachmentsDeep(r.id);
     const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">??${attN}添付を表示</span>` : '';
 
@@ -9061,7 +9061,7 @@ function showProjectModal(id){
       <div>
         <label>添付</label>
         <div class="toolbar">
-          <button class="secondary" onclick="openAttachDialogFor('project','${escapeHtml(p.id)}')">??添付を追加</button>
+          <button class="secondary" onclick="openAttachDialogFor('project','${escapeHtml(p.id)}')">📎添付を追加</button>
           <button class="secondary" onclick="openAttachmentManager('project','${escapeHtml(p.id)}')">添付一覧</button>
         </div>
         <div class="muted"></div>
@@ -9159,7 +9159,7 @@ function showTaskModal(id){
       <div>
         <label>添付</label>
         <div class="toolbar">
-          <button class="secondary" onclick="openAttachDialogFor('task','${escapeHtml(t.id)}')">??添付を追加</button>
+          <button class="secondary" onclick="openAttachDialogFor('task','${escapeHtml(t.id)}')">📎添付を追加</button>
           <button class="secondary" onclick="openAttachmentManager('task','${escapeHtml(t.id)}')">添付一覧</button>
         </div>
         <div class="muted"></div>
@@ -9461,10 +9461,10 @@ function closestSafe(target, selector){
 <!-- ===== 右下フローティングボタン ===== -->
 <div id="fab-stack" aria-live="polite" >
   <button class="fab-btn" id="btn_add_project" onclick="openProjectFormModal()" data-tip="新しいプロジェクトを右側のフライアウトから素早く作成します">
-    ? プロジェクト追加
+    ➕️ プロジェクト追加
   </button>
   <button class="fab-btn" id="btn_add_task" onclick="openTaskFormModal()" data-tip="選択したプロジェクトにタスクを追加します">
-    ? タスク追加
+    ☑ タスク追加
   </button>
 </div>
 <div id="flyout-mask" class="flyout-mask" onclick="closeFlyout()"></div>
@@ -9502,7 +9502,7 @@ function closestSafe(target, selector){
 <!-- アップデート表示モーダル -->
 <div class="modal-backdrop" id="updates-modal">
   <div class="modal-panel">
-    <h3>アップデート</h3>
+    <h3>アップデート履歴</h3>
     <div id="updates-body"></div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeUpdatesModal()">閉じる</button>

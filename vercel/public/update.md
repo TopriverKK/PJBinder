@@ -1,4 +1,23 @@
 ﻿# アップデート
+## 2026-01-19 (v1.40k)
+- 概要: settings_templateのテナント除外を追加
+<details>
+<summary>個別の変更内容</summary>
+<ul>
+<li>settings_templateをテナント非依存テーブルとして扱うよう更新</li>
+</ul>
+</details>
+
+## 2026-01-19 (v1.40j)
+- 概要: Google認証情報をsettings管理へ一本化
+<details>
+<summary>個別の変更内容</summary>
+<ul>
+<li>Googleサービスアカウント情報をsettingsから読み込むよう変更</li>
+<li>settings_templateにGoogle関連キーを追加</li>
+</ul>
+</details>
+
 ## 2026-01-19 (v1.40i)
 - 概要: LOGO_URLをDrive APIで取得する方式に統一
 <details>
@@ -437,6 +456,7 @@
 - 出勤状況の業務時間から休憩時間を除外
 - サブスクに税込/税抜金額の保存列を追加し、税率から計算して保存
 - 添付ボタンを「📎n添付を表示」と「📎添付を追加」に分離（一覧はインライン表示、追加はモーダル）
+
 
 
 

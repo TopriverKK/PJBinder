@@ -174,33 +174,59 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   },
   async ensureTenantSettings() {
     const { sbSelectAllSafe } = await import('../src/supabase/selectAll.js');
-    const templateRows = await sbSelectAllSafe('settings_template', 'select=key,value');
-    const templates = Array.isArray(templateRows)
-      ? templateRows
-          .map((row) => ({
-            key: String(row?.key || '').trim(),
-            value: row?.value == null ? '' : String(row?.value),
-          }))
-          .filter((row) => row.key)
-      : [];
-    if (!templates.length) return { ok: true, created: 0, keys: 0 };
+    const fallbackTemplates = [
+      { key: 'DAILY_TEMPLATE_ID', value: '' },
+      { key: 'MINUTES_TEMPLATE_ID', value: '' },
+      { key: 'NOTES_FOLDER_ID', value: '' },
+      { key: 'PROJECT_TEMPLATE_ID', value: '' },
+      { key: 'TASK_TEMPLATE_ID', value: '' },
+      { key: 'LOGO_URL', value: '' },
+      { key: 'GOOGLE_CLIENT_EMAIL', value: '' },
+      { key: 'GOOGLE_PRIVATE_KEY', value: '' },
+      { key: 'GOOGLE_DRIVE_ID', value: '' },
+      { key: 'GOOGLE_BASE_FOLDER_ID', value: '' },
+      { key: 'GOOGLE_PROJECT_DOCS_FOLDER_ID', value: '' },
+      { key: 'GOOGLE_MINUTES_FOLDER_ID', value: '' },
+      { key: 'GOOGLE_DAILY_REPORTS_FOLDER_ID', value: '' },
+      { key: 'GOOGLE_LOGO_FILE_ID', value: '' },
+    ];
 
-    const currentRows = await sbSelectAllSafe('settings', 'select=key');
-    const currentKeys = new Set(
-      Array.isArray(currentRows)
-        ? currentRows.map((row) => String(row?.key || '').trim()).filter(Boolean)
-        : []
-    );
+    try {
+      const templateRows = await sbSelectAllSafe('settings_template', 'select=key,value');
+      const templates = Array.isArray(templateRows)
+        ? templateRows
+            .map((row) => ({
+              key: String(row?.key || '').trim(),
+              value: row?.value == null ? '' : String(row?.value),
+            }))
+            .filter((row) => row.key)
+        : [];
+      const seeds = templates.length ? templates : fallbackTemplates;
 
-    const missing = templates.filter((row) => !currentKeys.has(row.key));
-    if (missing.length) {
-      const settings = await getSettingsMod();
-      for (const row of missing) {
-        await settings.setSetting(row.key, row.value);
+      const currentRows = await sbSelectAllSafe('settings', 'select=key');
+      const currentKeys = new Set(
+        Array.isArray(currentRows)
+          ? currentRows.map((row) => String(row?.key || '').trim()).filter(Boolean)
+          : []
+      );
+
+      const missing = seeds.filter((row) => !currentKeys.has(row.key));
+      if (missing.length) {
+        const settings = await getSettingsMod();
+        for (const row of missing) {
+          try {
+            await settings.setSetting(row.key, row.value);
+          } catch (e) {
+            console.warn('[RPC] ensureTenantSettings failed for key:', row.key, e);
+          }
+        }
       }
-    }
 
-    return { ok: true, created: missing.length, keys: templates.length };
+      return { ok: true, created: missing.length, keys: seeds.length };
+    } catch (e) {
+      console.warn('[RPC] ensureTenantSettings failed:', e);
+      return { ok: true, created: 0, keys: fallbackTemplates.length };
+    }
   },
   async setSettingEntry(...args: any[]) {
     const key = String(args[0] ?? '').trim();

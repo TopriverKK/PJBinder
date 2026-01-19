@@ -72,7 +72,7 @@ export async function rpcCreateProjectDoc(projectId: string) {
   const owner = p.ownerUserId ? await sbSelectOneById('users', String(p.ownerUserId)) : null;
   const parent = p.parentProjectId ? await sbSelectOneById('projects', String(p.parentProjectId)) : null;
 
-  const env = loadGoogleEnv();
+  const env = await loadGoogleEnv();
   const base = env.projectDocsFolderId || env.baseFolderId;
 
   // GAS: ['プロジェクトDocs', projectName]
@@ -137,7 +137,7 @@ export async function rpcCreateTaskDoc(taskId: string) {
   const proj = t.projectId ? await sbSelectOneById('projects', String(t.projectId)) : null;
   const owner = t.ownerUserId ? await sbSelectOneById('users', String(t.ownerUserId)) : null;
 
-  const env = loadGoogleEnv();
+  const env = await loadGoogleEnv();
   const base = env.projectDocsFolderId || env.baseFolderId;
 
   // GAS: ['プロジェクトDocs', projName, 'タスクDocs']
@@ -212,7 +212,7 @@ function normalizeCsv(v: any): string {
 export async function rpcCreateMinuteDoc(input: any) {
   if (!input || !input.date || !input.title) throw new Error('date と title は必須です');
 
-  const env = loadGoogleEnv();
+  const env = await loadGoogleEnv();
   const base = env.minutesFolderId || env.baseFolderId;
 
   const dateStr = String(input.date);
@@ -335,7 +335,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
   const userId = String(r?.userId || '').trim();
   if (!userId) throw new Error('userId は必須です');
 
-  const env = loadGoogleEnv();
+  const env = await loadGoogleEnv();
   const base = env.dailyReportsFolderId || env.baseFolderId;
 
   // ユーザー名（無ければ userId）

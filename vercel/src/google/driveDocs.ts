@@ -4,8 +4,8 @@ import { loadGoogleEnv } from './env.js';
 const GOOGLE_DOC_MIME = 'application/vnd.google-apps.document';
 const GOOGLE_FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-function driveParams() {
-  const { driveId } = loadGoogleEnv();
+async function driveParams() {
+  const { driveId } = await loadGoogleEnv();
   return driveId
     ? {
         supportsAllDrives: true,
@@ -21,8 +21,8 @@ function driveParams() {
 }
 
 async function findFolderId(parentId: string, name: string): Promise<string | null> {
-  const { drive } = getGoogleClients();
-  const params = driveParams();
+  const { drive } = await getGoogleClients();
+  const params = await driveParams();
 
   const q = [
     `mimeType='${GOOGLE_FOLDER_MIME}'`,
@@ -42,8 +42,8 @@ async function findFolderId(parentId: string, name: string): Promise<string | nu
 }
 
 async function createFolder(parentId: string, name: string): Promise<string> {
-  const { drive } = getGoogleClients();
-  const params = driveParams();
+  const { drive } = await getGoogleClients();
+  const params = await driveParams();
 
   const res = await drive.files.create({
     ...params,
@@ -72,8 +72,8 @@ export async function ensureFolderPath(parentId: string, parts: string[]): Promi
 export type DocShareRole = 'viewer' | 'commenter' | 'editor';
 
 export async function setDocLinkShare(docId: string, role: DocShareRole) {
-  const { drive } = getGoogleClients();
-  const params = driveParams();
+  const { drive } = await getGoogleClients();
+  const params = await driveParams();
 
   const driveRole = role === 'editor' ? 'writer' : role === 'commenter' ? 'commenter' : 'reader';
 
@@ -104,8 +104,8 @@ export async function createGoogleDocInFolder(opts: {
   shareRole?: DocShareRole;
   initialText?: string;
 }) {
-  const { drive, docs } = getGoogleClients();
-  const params = driveParams();
+  const { drive, docs } = await getGoogleClients();
+  const params = await driveParams();
 
   // 1) create doc
   const created = await docs.documents.create({ requestBody: { title: opts.title } });
@@ -161,7 +161,7 @@ export async function createGoogleDocInFolder(opts: {
 }
 
 export async function prependDocText(docId: string, text: string) {
-  const { docs } = getGoogleClients();
+  const { docs } = await getGoogleClients();
   const t = String(text || '');
   if (!t.trim()) return true;
 
@@ -192,8 +192,8 @@ export async function copyDocTemplate(opts: {
   shareRole?: DocShareRole;
   replacements?: Record<string, string>;
 }): Promise<{ docId: string; url: string }> {
-  const { drive, docs } = getGoogleClients();
-  const params = driveParams();
+  const { drive, docs } = await getGoogleClients();
+  const params = await driveParams();
 
   // Copy the template
   const copyRes = await drive.files.copy({
@@ -244,7 +244,7 @@ export async function copyDocTemplate(opts: {
 }
 
 export async function replaceDocWithMemo(docId: string, memoText: string) {
-  const { docs } = getGoogleClients();
+  const { docs } = await getGoogleClients();
   const text = String(memoText || '');
 
   // 1) try placeholder replacement
@@ -297,7 +297,7 @@ export async function replaceDocWithMemo(docId: string, memoText: string) {
 }
 
 export async function appendDocWithMemo(docId: string, memoText: string) {
-  const { docs } = getGoogleClients();
+  const { docs } = await getGoogleClients();
   const text = String(memoText || '');
 
   const doc = await docs.documents.get({ documentId: docId });
@@ -323,12 +323,12 @@ export async function appendDocWithMemo(docId: string, memoText: string) {
 
 export async function getLogoDataUrl(overrideFileId?: string | null) {
   try {
-    const { drive } = getGoogleClients();
-    const { logoFileId } = loadGoogleEnv();
+    const { drive } = await getGoogleClients();
+    const { logoFileId } = await loadGoogleEnv();
     const fileId = String(overrideFileId || '').trim() || logoFileId;
     if (!fileId) return null;
 
-    const params = driveParams();
+    const params = await driveParams();
 
     // `alt=media` returns binary; googleapis gives it back in `data`.
     const res: any = await drive.files.get(

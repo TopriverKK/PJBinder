@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import type { drive_v3, docs_v1 } from 'googleapis';
 import { loadGoogleEnv } from './env.js';
+import { getTenantId } from '../supabase/tenant.js';
 
 const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive',
@@ -14,12 +15,13 @@ export type GoogleClients = {
   docs: docs_v1.Docs;
 };
 
-let cachedClients: GoogleClients | null = null;
+const cachedClients: Record<string, GoogleClients> = {};
 
-export function getGoogleClients(): GoogleClients {
-  if (cachedClients) return cachedClients;
+export async function getGoogleClients(): Promise<GoogleClients> {
+  const tenantId = getTenantId() || 'default';
+  if (cachedClients[tenantId]) return cachedClients[tenantId];
 
-  const env = loadGoogleEnv();
+  const env = await loadGoogleEnv();
 
   const auth = new google.auth.JWT({
     email: env.clientEmail,
@@ -27,10 +29,10 @@ export function getGoogleClients(): GoogleClients {
     scopes: [...new Set([...DRIVE_SCOPES, ...DOCS_SCOPES])],
   });
 
-  cachedClients = {
+  cachedClients[tenantId] = {
     drive: google.drive({ version: 'v3', auth }),
     docs: google.docs({ version: 'v1', auth }),
   };
 
-  return cachedClients;
+  return cachedClients[tenantId];
 }

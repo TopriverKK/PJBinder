@@ -494,7 +494,7 @@
     opacity: var(--wm-opacity, 0.03);
     filter: grayscale(1);
     mix-blend-mode: normal;
-    z-index: 0; /* 前景は header の z-index で十分上に来る */
+    z-index: 999; /* 透かしを最前面に表示 */
   }
   /* 追加 */
   #view-board .kanban.is-swim{
@@ -1145,6 +1145,13 @@ button.link:hover { opacity: .8; }
         <div class="row">
           <div><label class="checkline"><input type="checkbox" id="set_show_watermark">透かしロゴを表示</label></div>
           <div><label class="checkline"><input type="checkbox" id="set_show_tooltips">ツールチップを表示</label></div>
+        </div>
+        <div class="row">
+          <div>
+            <label>透かしロゴの透明度</label>
+            <input id="set_watermark_opacity" type="number" min="0" max="0.2" step="0.01" placeholder="例: 0.03"/>
+          </div>
+          <div></div>
         </div>
         <div class="row">
           <div><label class="checkline"><input type="checkbox" id="set_show_fab">右下の追加ボタンを表示</label></div>
@@ -2166,6 +2173,9 @@ function goto(page, opts) {
   PAGE = page;
   try { renderAll(); } catch (e) {}
   try { setTimeout(syncStickyOffsets, 0); } catch(_){ }
+  if (page === 'settings') {
+    try { ensureTenantSettings(); } catch(_){ }
+  }
   if (page === 'attendance') {
     applyAttendanceViewUi();
     try { loadAttendanceSettings?.(); } catch (e) {}
@@ -2223,6 +2233,7 @@ const DEFAULT_SETTINGS = {
   menuPosition: 'top',
   menuFixed: true,
   showWatermark: true,
+  watermarkOpacity: 0.03,
   showTooltips: true,
   showFab: true,
 };
@@ -2251,6 +2262,7 @@ function syncSettingsForm(){
   const menuPosition = document.getElementById('set_menu_position');
   const menuFixed = document.getElementById('set_menu_fixed');
   const wm = document.getElementById('set_show_watermark');
+  const wmOpacity = document.getElementById('set_watermark_opacity');
   const tips = document.getElementById('set_show_tooltips');
   const fab = document.getElementById('set_show_fab');
   if (density) density.value = APP_SETTINGS.density || 'standard';
@@ -2259,6 +2271,7 @@ function syncSettingsForm(){
   if (menuPosition) menuPosition.value = APP_SETTINGS.menuPosition || 'top';
   if (menuFixed) menuFixed.checked = !!APP_SETTINGS.menuFixed;
   if (wm) wm.checked = !!APP_SETTINGS.showWatermark;
+  if (wmOpacity) wmOpacity.value = String(APP_SETTINGS.watermarkOpacity ?? 0.03);
   if (tips) tips.checked = !!APP_SETTINGS.showTooltips;
   if (fab) fab.checked = !!APP_SETTINGS.showFab;
 }
@@ -2314,7 +2327,13 @@ function applyAppSettings(opts){
   applyDensity(APP_SETTINGS.density);
 
   const wm = document.getElementById('watermark');
-  if (wm) wm.style.display = APP_SETTINGS.showWatermark ? '' : 'none';
+  if (wm) {
+    wm.style.display = APP_SETTINGS.showWatermark ? '' : 'none';
+    const opacity = Number(APP_SETTINGS.watermarkOpacity);
+    if (Number.isFinite(opacity) && opacity >= 0) {
+      wm.style.setProperty('--wm-opacity', String(Math.min(opacity, 0.2)));
+    }
+  }
 
   TOOLTIPS_ENABLED = !!APP_SETTINGS.showTooltips;
   if (!TOOLTIPS_ENABLED) {
@@ -2354,6 +2373,9 @@ function readSettingsForm(){
   const ganttScale = (document.getElementById('set_gantt_scale') || {}).value;
   const menuPosition = (document.getElementById('set_menu_position') || {}).value;
   const menuFixed = (document.getElementById('set_menu_fixed') || {}).checked;
+  const watermarkOpacityRaw = (document.getElementById('set_watermark_opacity') || {}).value;
+  const watermarkOpacityNum = Number(watermarkOpacityRaw);
+  const watermarkOpacity = Number.isFinite(watermarkOpacityNum) ? Math.max(0, Math.min(0.2, watermarkOpacityNum)) : 0.03;
   const showWatermark = (document.getElementById('set_show_watermark') || {}).checked;
   const showTooltips = (document.getElementById('set_show_tooltips') || {}).checked;
   const showFab = (document.getElementById('set_show_fab') || {}).checked;
@@ -2363,6 +2385,7 @@ function readSettingsForm(){
     ganttScale: ganttScale || 'day',
     menuPosition: menuPosition || 'top',
     menuFixed: !!menuFixed,
+    watermarkOpacity,
     showWatermark: !!showWatermark,
     showTooltips: !!showTooltips,
     showFab: !!showFab,
@@ -2392,6 +2415,15 @@ async function loadTenantSettings(){
   }catch(e){
     try { showToast('ng', '設定の取得に失敗しました'); } catch(_){}
   }
+}
+
+async function ensureTenantSettings(){
+  try{
+    await rpc('ensureTenantSettings');
+  }catch(e){
+    try { showToast('ng', '設定テンプレートの作成に失敗しました'); } catch(_){}
+  }
+  await loadTenantSettings();
 }
 
 function renderTenantSettings(){
@@ -7445,7 +7477,7 @@ document.addEventListener('DOMContentLoaded', function(){
   loadTenantLabel();
   loadAppSettings();
   syncSettingsForm();
-  loadTenantSettings();
+  // Settings are loaded when the Settings page opens.
 // --- RRULE helpers ---
 function rruleFromMode(mode, baseDate){
   // baseDate: 'YYYY-MM-DD' or ''

@@ -172,6 +172,35 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const { sbSelectAllSafe } = await import('../src/supabase/selectAll.js');
     return await sbSelectAllSafe('settings', 'select=id,key,value,updatedAt');
   },
+  async ensureTenantSettings() {
+    const { sbSelectAllSafe } = await import('../src/supabase/selectAll.js');
+    const allRows = await sbSelectAllSafe('settings', 'select=key&tenant_id=not.is.null');
+    const allKeys = Array.from(
+      new Set(
+        Array.isArray(allRows)
+          ? allRows.map((row) => String(row?.key || '').trim()).filter(Boolean)
+          : []
+      )
+    );
+    if (!allKeys.length) return { ok: true, created: 0, keys: 0 };
+
+    const currentRows = await sbSelectAllSafe('settings', 'select=key');
+    const currentKeys = new Set(
+      Array.isArray(currentRows)
+        ? currentRows.map((row) => String(row?.key || '').trim()).filter(Boolean)
+        : []
+    );
+
+    const missing = allKeys.filter((key) => !currentKeys.has(key));
+    if (missing.length) {
+      const settings = await getSettingsMod();
+      for (const key of missing) {
+        await settings.setSetting(key, '');
+      }
+    }
+
+    return { ok: true, created: missing.length, keys: allKeys.length };
+  },
   async setSettingEntry(...args: any[]) {
     const key = String(args[0] ?? '').trim();
     const value = String(args[1] ?? '');

@@ -25,6 +25,8 @@ function todayYMD() {
 }
 
 export async function rpcGetLogoDataUrl() {
+  const url = await getSetting('LOGO_URL');
+  if (url) return url;
   return getLogoDataUrl();
 }
 

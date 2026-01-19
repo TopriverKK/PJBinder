@@ -1,4 +1,13 @@
 ﻿# アップデート
+## 2026-01-19 (v1.34j)
+- 概要: 使い方表示の正規表現エラーを修正
+<details>
+<summary>個別の変更内容</summary>
+<ul>
+<li>Shift_JIS判定用の正規表現を修正</li>
+</ul>
+</details>
+
 ## 2026-01-19 (v1.34i)
 - 概要: GAS依存を撤去してRPCに統一
 <details>

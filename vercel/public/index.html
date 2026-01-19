@@ -8705,7 +8705,7 @@ async function fetchDocsMarkdown(name){
       try{
         const buf = await resp.arrayBuffer();
         const countReplacement = (s)=>{
-          try { return (String(s||'').match(/\uFFFD|?/g) || []).length; } catch(_){ return 0; }
+          try { return (String(s||'').match(/\uFFFD|\?/g) || []).length; } catch(_){ return 0; }
         };
         const tryDecode = (enc)=>{
           try { return new TextDecoder(enc).decode(buf); } catch(_){ return null; }

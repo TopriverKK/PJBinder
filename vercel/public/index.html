@@ -35,6 +35,22 @@
     --muted:#6b7280; --accent:#0ea5e9; --pill:#eef2ff; --pill-ink:#3730a3;
     --shadow: 0 1px 2px rgba(0,0,0,.05);
     --ui-scale: 0.95;
+    --ui-font: 14px;
+    --ui-pad-y: 6px;
+    --ui-pad-x: 10px;
+    --ui-input-pad-y: 6px;
+    --ui-input-pad-x: 8px;
+    --ui-radius: 8px;
+    --ui-card-pad: 12px;
+    --ui-card-radius: 10px;
+    --ui-gap: 8px;
+    --ui-pill-pad-y: 2px;
+    --ui-pill-pad-x: 6px;
+    --ui-pill-font: 12px;
+    --ui-mini-pad-y: 4px;
+    --ui-mini-pad-x: 8px;
+    --ui-mini-font: 12px;
+    --ui-mini-radius: 6px;
 
     /* Weekly schedule sheet-like colors */
     --weekly-name-bg: #dbeafe; /* light blue */
@@ -48,7 +64,7 @@
   }
   select { background-color: #fff; }
   html, body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif; margin:0; background:var(--bg); color:var(--ink); }
-  body { zoom: var(--ui-scale); }
+  body { font-size: var(--ui-font); }
   body.density-relaxed { text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
   header {
       padding: 6px 6px;
@@ -280,14 +296,13 @@
   backdrop-filter: blur(4px);
   }
   /* compact density */
-  body { font-size: 14px; }
-  .card { padding: 12px; border-radius: 10px; }
-  .toolbar { gap: 8px; }
-  button, .tab { padding: 6px 10px; border-radius: 8px; }
-  input, select, textarea { padding: 6px 8px; }
-  .filters > * { margin-right: 6px; }
-  .cardlet { padding: 8px; }
-  .pill { padding: 2px 6px; font-size: 12px; }
+  .card { padding: var(--ui-card-pad); border-radius: var(--ui-card-radius); }
+  .toolbar { gap: var(--ui-gap); }
+  button, .tab { padding: var(--ui-pad-y) var(--ui-pad-x); border-radius: var(--ui-radius); }
+  input, select, textarea { padding: var(--ui-input-pad-y) var(--ui-input-pad-x); }
+  .filters > * { margin-right: var(--ui-pad-x); }
+  .cardlet { padding: var(--ui-pad-y); }
+  .pill { padding: var(--ui-pill-pad-y) var(--ui-pill-pad-x); font-size: var(--ui-pill-font); }
 
   /* 期限列（タスク一覧）を中央寄せ */
   #taskTable th:nth-child(1),
@@ -326,7 +341,7 @@
   .doc-badge:hover{ opacity:1; transform: translateY(-1px); }
 
   /* ツールボタンの詰め */
-  .toolbar .mini{ padding:4px 8px; font-size:12px; border-radius:6px; }
+  .toolbar .mini{ padding:var(--ui-mini-pad-y) var(--ui-mini-pad-x); font-size:var(--ui-mini-font); border-radius:var(--ui-mini-radius); }
   /* ヘッダーロゴ */
   #brandmark{
     height:22px; margin-left:8px; object-fit:contain;
@@ -2176,6 +2191,13 @@ function goto(page, opts) {
   PAGE = page;
   try { renderAll(); } catch (e) {}
   try { setTimeout(syncStickyOffsets, 0); } catch(_){ }
+  if (page === 'dashboard') {
+    const params = readRouteParams();
+    const hasRouteTab = !!params.tab || !!location.hash;
+    if (!hasRouteTab) {
+      try { switchTab(APP_SETTINGS.dashboardView || 'list'); } catch(_){ }
+    }
+  }
   if (page === 'settings') {
     try { ensureTenantSettings(); } catch(_){ }
   }
@@ -2287,8 +2309,24 @@ function applyDensity(value){
   const isRelaxed = d === 'relaxed';
   const scale = isCompact ? 0.75 : (isRelaxed ? 1 : 0.95);
   root.style.setProperty('--ui-scale', String(scale));
-  root.style.setProperty('--row-h', '44px');
-  root.style.setProperty('--cell-py', '6px');
+  root.style.setProperty('--ui-font', `${Math.max(10, Math.round(14 * scale))}px`);
+  root.style.setProperty('--ui-pad-y', `${Math.max(4, Math.round(6 * scale))}px`);
+  root.style.setProperty('--ui-pad-x', `${Math.max(6, Math.round(10 * scale))}px`);
+  root.style.setProperty('--ui-input-pad-y', `${Math.max(4, Math.round(6 * scale))}px`);
+  root.style.setProperty('--ui-input-pad-x', `${Math.max(6, Math.round(8 * scale))}px`);
+  root.style.setProperty('--ui-radius', `${Math.max(6, Math.round(8 * scale))}px`);
+  root.style.setProperty('--ui-card-pad', `${Math.max(8, Math.round(12 * scale))}px`);
+  root.style.setProperty('--ui-card-radius', `${Math.max(8, Math.round(10 * scale))}px`);
+  root.style.setProperty('--ui-gap', `${Math.max(6, Math.round(8 * scale))}px`);
+  root.style.setProperty('--ui-pill-pad-y', `${Math.max(2, Math.round(2 * scale))}px`);
+  root.style.setProperty('--ui-pill-pad-x', `${Math.max(4, Math.round(6 * scale))}px`);
+  root.style.setProperty('--ui-pill-font', `${Math.max(10, Math.round(12 * scale))}px`);
+  root.style.setProperty('--ui-mini-pad-y', `${Math.max(3, Math.round(4 * scale))}px`);
+  root.style.setProperty('--ui-mini-pad-x', `${Math.max(6, Math.round(8 * scale))}px`);
+  root.style.setProperty('--ui-mini-font', `${Math.max(10, Math.round(12 * scale))}px`);
+  root.style.setProperty('--ui-mini-radius', `${Math.max(4, Math.round(6 * scale))}px`);
+  root.style.setProperty('--row-h', `${Math.max(32, Math.round(44 * scale))}px`);
+  root.style.setProperty('--cell-py', `${Math.max(4, Math.round(6 * scale))}px`);
   document.body.classList.toggle('density-compact', isCompact);
   document.body.classList.toggle('density-standard', !isCompact && !isRelaxed);
   document.body.classList.toggle('density-relaxed', isRelaxed);

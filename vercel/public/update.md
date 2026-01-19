@@ -1,10 +1,12 @@
 ﻿# アップデート
-## 2026-01-19 (v1.40k)
-- 概要: settings_templateのテナント除外を追加
+## 2026-01-19 (v1.40m)
+- 概要: settings補完の自動チェックを強化
 <details>
 <summary>個別の変更内容</summary>
 <ul>
 <li>settings_templateをテナント非依存テーブルとして扱うよう更新</li>
+<li>settings保存時のupsertをテナント対応に統一</li>
+<li>settings取得時もテンプレート不足分を補完</li>
 </ul>
 </details>
 

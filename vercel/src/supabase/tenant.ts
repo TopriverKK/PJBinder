@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 type TenantContext = { tenantId: string };
 
-const TENANTLESS_TABLES = new Set(['tenants']);
+const TENANTLESS_TABLES = new Set(['tenants', 'settings_template']);
 const storage = new AsyncLocalStorage<TenantContext>();
 
 export function runWithTenant<T>(tenantId: string, fn: () => T): T {

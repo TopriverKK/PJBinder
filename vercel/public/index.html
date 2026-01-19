@@ -2723,6 +2723,44 @@ function weeklyRow(ws, uid, projectId){
   return (WEEKLY.rowsByKey && WEEKLY.rowsByKey[k]) ? WEEKLY.rowsByKey[k] : null;
 }
 
+function normalizeWeeklyRowIds(row, knownUsers, knownProjects){
+  let uid = String(row && row.userId ? row.userId : '').trim();
+  let pid = String(row && row.projectId ? row.projectId : '').trim();
+  if (!uid) return { uid, pid };
+  const hasUser = knownUsers && knownUsers.has(uid);
+  if (!hasUser) {
+    const pjIdx = uid.indexOf('_pj_');
+    if (pjIdx > 0) {
+      const candidateUid = uid.slice(0, pjIdx);
+      const candidatePid = uid.slice(pjIdx + 4);
+      if (candidateUid && knownUsers && knownUsers.has(candidateUid)) {
+        uid = candidateUid;
+        if ((!pid || (knownProjects && !knownProjects.has(pid))) && candidatePid) {
+          if (knownProjects && knownProjects.has(candidatePid)) {
+            pid = candidatePid;
+          } else if (knownProjects && knownProjects.has('pj_' + candidatePid)) {
+            pid = 'pj_' + candidatePid;
+          }
+        }
+      }
+    }
+    if (knownUsers && !knownUsers.has(uid)) {
+      for (const known of knownUsers) {
+        if (!known) continue;
+        if (uid.startsWith(known + '_')) {
+          const rest = uid.slice(known.length + 1);
+          uid = known;
+          if ((!pid || (knownProjects && !knownProjects.has(pid))) && rest) {
+            if (knownProjects && knownProjects.has(rest)) pid = rest;
+          }
+          break;
+        }
+      }
+    }
+  }
+  return { uid, pid };
+}
+
 function weeklyDomPart(s){
   // Keep ids stable and safe for querySelector/getElementById.
   return String(s ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -2739,13 +2777,16 @@ async function loadWeekly(){
 
     Busy.push();
     try{
-      const results = await Promise.all(weeks.map(ws => gas('getWeeklyReports', ws)));
+    const results = await Promise.all(weeks.map(ws => gas('getWeeklyReports', ws)));
       const rowsByKey = {};
+      const knownUsers = new Set(safeArr(DATA.users).map(u=>String(u.id||'').trim()).filter(Boolean));
+      const knownProjects = new Set(safeArr(DATA.projects).map(p=>String(p.id||'').trim()).filter(Boolean));
       weeks.forEach((ws, i)=>{
         const rows = Array.isArray(results[i]) ? results[i] : [];
         rows.forEach(r=>{
-          const uid = String(r.userId||'').trim();
-          const pid = String(r.projectId||'').trim();
+          const normalized = normalizeWeeklyRowIds(r, knownUsers, knownProjects);
+          const uid = String(normalized.uid||'').trim();
+          const pid = String(normalized.pid||'').trim();
           if(!uid) return;
           rowsByKey[weeklyKey(ws, uid, pid)] = Object.assign({}, r, { weekStart: ws, userId: uid, projectId: pid });
         });
@@ -2922,6 +2963,13 @@ function renderWeeklyPage(){
     };
     collectFromMap(wkHoursMap);
     collectFromMap(totalHoursMap);
+    Object.keys(WEEKLY.rowsByKey||{}).forEach(k=>{
+      const parts = String(k||'').split('|');
+      if (parts.length < 3) return;
+      const kUid = parts[1];
+      const kPid = parts[2];
+      if (String(kUid) === uid) markProject(kPid);
+    });
     const priorityRank = (pid)=>{
       const pr = projPriorityLabel(pid);
       return pr === '高' ? 0 : pr === '中' ? 1 : pr === '低' ? 2 : 3;
@@ -2977,9 +3025,9 @@ function renderWeeklyPage(){
         return `
           <div>
             <label>課題</label>
-            <textarea id="wk_issues_${idp}" class="memo-edit wk-weekly-memo" rows="3">${issues}</textarea>
+            <textarea id="wk_issues_${idp}" class="memo-edit wk-weekly-memo" rows="3" data-uid="${escapeHtml(uid)}" data-pid="${escapeHtml(pid)}" data-ws="${escapeHtml(ws)}">${issues}</textarea>
             <label style="margin-top:0px;">実施</label>
-            <textarea id="wk_done_${idp}" class="memo-edit wk-weekly-memo" rows="3">${done}</textarea>
+            <textarea id="wk_done_${idp}" class="memo-edit wk-weekly-memo" rows="3" data-uid="${escapeHtml(uid)}" data-pid="${escapeHtml(pid)}" data-ws="${escapeHtml(ws)}">${done}</textarea>
           </div>
         `;
       };
@@ -3023,14 +3071,20 @@ function renderWeeklyPage(){
       if (ta.dataset.bound==='1') return;
       ta.dataset.bound='1';
       ta.addEventListener('blur', ()=>{
-        const id = ta.id || '';
-        const m = id.match(/^wk_(issues|done)_(.+)$/);
-        if (!m) return;
-        const parts = m[2].split('_');
-        if (parts.length < 3) return;
-        const ws = parts.pop();
-        const pid = parts.pop();
-        const uid = parts.join('_');
+        let uid = String(ta.dataset.uid||'');
+        let pid = String(ta.dataset.pid||'');
+        let ws = String(ta.dataset.ws||'');
+        if (!uid || !ws) {
+          const id = ta.id || '';
+          const m = id.match(/^wk_(issues|done)_(.+)$/);
+          if (!m) return;
+          const parts = m[2].split('_');
+          if (parts.length < 3) return;
+          ws = parts.pop();
+          pid = parts.pop();
+          uid = parts.join('_');
+        }
+        if (!uid || !ws) return;
         saveWeeklyForUserProjectWeek(uid, pid, ws);
       });
     });

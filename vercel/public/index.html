@@ -2456,6 +2456,24 @@ let WEEKLY_FILTER = {
   department: '', // '' | '__unset__' | deptName
   userId: '',
 };
+const WEEKLY_FILTER_KEY = 'weekly_filters_v1';
+function loadWeeklyFilterFromLS(){
+  try{
+    const raw = localStorage.getItem(WEEKLY_FILTER_KEY);
+    if (!raw) return;
+    const f = JSON.parse(raw) || {};
+    WEEKLY_FILTER.department = String(f.department||'');
+    WEEKLY_FILTER.userId = String(f.userId||'');
+  }catch(_){}
+}
+function saveWeeklyFilterToLS(){
+  const payload = {
+    department: String(WEEKLY_FILTER.department||''),
+    userId: String(WEEKLY_FILTER.userId||''),
+  };
+  try{ localStorage.setItem(WEEKLY_FILTER_KEY, JSON.stringify(payload)); }catch(_){}
+}
+loadWeeklyFilterFromLS();
 
 function weeklyUserDept(u){
   return String((u && u.department) ? u.department : '').trim();
@@ -2507,6 +2525,7 @@ function ensureWeeklyFilterControls(baseUsers){
           try { userSel.value = ''; } catch(_){ }
         }
       }
+      saveWeeklyFilterToLS();
       renderWeeklyPage();
     });
     deptSel.dataset.bound = '1';
@@ -2514,6 +2533,7 @@ function ensureWeeklyFilterControls(baseUsers){
   if (!userSel.dataset.bound) {
     userSel.addEventListener('change', ()=>{
       WEEKLY_FILTER.userId = String(userSel.value||'');
+      saveWeeklyFilterToLS();
       renderWeeklyPage();
     });
     userSel.dataset.bound = '1';
@@ -2541,6 +2561,7 @@ function ensureWeeklyFilterControls(baseUsers){
   );
   setSelectOptions(userSel, userOptions, WEEKLY_FILTER.userId);
   WEEKLY_FILTER.userId = String(userSel.value||'');
+  saveWeeklyFilterToLS();
 }
 
 function fmtYMDLocal(d){

@@ -2,7 +2,7 @@
 // Do not import app modules at top-level.
 // If any optional module (e.g., Google/Docs) fails to load, Vercel will return
 // FUNCTION_INVOCATION_FAILED and ALL RPCs break. We lazy-load per RPC instead.
-import { runWithTenant } from '../src/supabase/tenant.js';
+import { runWithTenant, getTenantId } from '../src/supabase/tenant.js';
 import { sbSelect } from '../src/supabase/rest.js';
 
 type DataMod = typeof import('../src/rpc/data.js');
@@ -155,6 +155,13 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   async ping() {
     const m = await getDataMod();
     return await m.rpcPing();
+  },
+  async getTenantInfo() {
+    const id = getTenantId();
+    if (!id) return null;
+    const rows = await sbSelect('tenants', `select=id,name,host&limit=1&id=eq.${encodeURIComponent(id)}`);
+    const row = Array.isArray(rows) ? rows[0] ?? null : null;
+    return row ?? { id };
   },
 
   // Weekly progress

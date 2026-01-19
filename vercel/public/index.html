@@ -62,6 +62,11 @@
   }
   header > * { min-width: 0; }
   header h1{ display:flex; align-items:center; gap:8px; white-space:nowrap; }
+  #tenant-label{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:2px 8px; border-radius:999px; border:1px solid #334155;
+    background:#1f2937; color:#e2e8f0; font-size:12px; font-weight:600;
+  }
   .toolbar{ flex-wrap: wrap; }
   nav { flex-wrap: wrap; }
   :root{
@@ -689,6 +694,7 @@ button.link:hover { opacity: .8; }
   <div id="watermark"></div>
 <header>
   <h1>
+    <span id="tenant-label" style="display:none;"></span>
     PJバインダー
     <span id="app-version" class="muted" style="font-weight:500; margin-left:8px;"></span>
     <img id="brandmark" alt="" />
@@ -1774,6 +1780,36 @@ function initTenantFromUrl(){
     const stored = String(localStorage.getItem('tenant_id') || '').trim();
     if (stored) window.PJBINDER_TENANT_ID = stored;
   } catch(_){}
+}
+
+function setTenantLabel(value){
+  const el = document.getElementById('tenant-label');
+  if (!el) return;
+  const text = String(value || '').trim();
+  el.textContent = text;
+  el.style.display = text ? 'inline-flex' : 'none';
+}
+
+function shortTenantId(value){
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.length > 12 ? `${text.slice(0, 8)}...` : text;
+}
+
+async function loadTenantLabel(){
+  try{
+    const info = await rpc('getTenantInfo');
+    if (info && info.name) {
+      setTenantLabel(info.name);
+      return;
+    }
+    if (info && info.id) {
+      setTenantLabel(shortTenantId(info.id));
+      return;
+    }
+  }catch(_){}
+  const fallback = String(window.PJBINDER_TENANT_ID || localStorage.getItem('tenant_id') || '').trim();
+  if (fallback) setTenantLabel(shortTenantId(fallback));
 }
 
 function createRpcRunner(){
@@ -7065,6 +7101,7 @@ window.addEventListener('error', (e)=>{
 
 document.addEventListener('DOMContentLoaded', function(){
   initTenantFromUrl();
+  loadTenantLabel();
 // --- RRULE helpers ---
 function rruleFromMode(mode, baseDate){
   // baseDate: 'YYYY-MM-DD' or ''

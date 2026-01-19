@@ -1,23 +1,25 @@
 import { sbSelectAllSafe } from './selectAll.js';
+import { requireTenantId } from './tenant.js';
 
-let settingsCache: Record<string, string> | null = null;
-let cacheTime = 0;
+const settingsCache: Record<string, Record<string, string>> = {};
+const cacheTime: Record<string, number> = {};
 const CACHE_TTL = 60000; // 1 minute
 
 export async function getSetting(key: string): Promise<string | null> {
+  const tenantId = requireTenantId('settings');
   const now = Date.now();
   
   // Refresh cache if expired
-  if (!settingsCache || now - cacheTime > CACHE_TTL) {
+  if (!settingsCache[tenantId] || now - (cacheTime[tenantId] || 0) > CACHE_TTL) {
     const rows = await sbSelectAllSafe('settings');
-    settingsCache = {};
+    settingsCache[tenantId] = {};
     for (const row of rows) {
-      settingsCache[row.key] = row.value;
+      settingsCache[tenantId][row.key] = row.value;
     }
-    cacheTime = now;
+    cacheTime[tenantId] = now;
   }
   
-  return settingsCache[key] || null;
+  return settingsCache[tenantId]?.[key] || null;
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
@@ -25,5 +27,7 @@ export async function setSetting(key: string, value: string): Promise<void> {
   await sbUpsert('settings', { key, value }, 'key');
   
   // Invalidate cache
-  settingsCache = null;
+  const tenantId = requireTenantId('settings');
+  delete settingsCache[tenantId];
+  delete cacheTime[tenantId];
 }

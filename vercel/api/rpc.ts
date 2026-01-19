@@ -2,6 +2,8 @@
 // Do not import app modules at top-level.
 // If any optional module (e.g., Google/Docs) fails to load, Vercel will return
 // FUNCTION_INVOCATION_FAILED and ALL RPCs break. We lazy-load per RPC instead.
+import { runWithTenant } from '../src/supabase/tenant.js';
+import { sbSelect } from '../src/supabase/rest.js';
 
 type DataMod = typeof import('../src/rpc/data.js');
 type CrudMod = typeof import('../src/rpc/crud.js');
@@ -34,6 +36,7 @@ function getWeeklyMod(): Promise<WeeklyMod> {
 type RpcRequestBody = {
   name?: unknown;
   args?: unknown;
+  tenantId?: unknown;
 };
 
 type RpcResponse =
@@ -97,6 +100,42 @@ async function readJsonBody(req: any): Promise<RpcRequestBody> {
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   return typeof e === 'string' ? e : JSON.stringify(e);
+}
+
+function headerValue(value: unknown): string {
+  if (Array.isArray(value)) return headerValue(value[0]);
+  return String(value ?? '').trim();
+}
+
+function normalizeHost(value: unknown): string {
+  if (Array.isArray(value)) return normalizeHost(value[0]);
+  const host = String(value ?? '').trim().toLowerCase();
+  if (!host) return '';
+  const base = host.split(',')[0]?.trim() ?? '';
+  return base.replace(/:\d+$/, '');
+}
+
+async function resolveTenantId(req: any, body: RpcRequestBody): Promise<string> {
+  const fromBody = typeof body?.tenantId === 'string' ? body.tenantId.trim() : '';
+  if (fromBody) return fromBody;
+
+  const headerId = headerValue(req?.headers?.['x-tenant-id']);
+  if (headerId) return headerId;
+
+  const host = normalizeHost(req?.headers?.['x-forwarded-host'] ?? req?.headers?.host);
+  if (host) {
+    try {
+      const rows = await sbSelect('tenants', `select=id,host&host=eq.${encodeURIComponent(host)}&limit=1`);
+      const match = Array.isArray(rows) ? rows[0] : null;
+      const id = match && typeof (match as any).id === 'string' ? String((match as any).id).trim() : '';
+      if (id) return id;
+    } catch (e) {
+      console.warn('[RPC] tenant host lookup failed:', e);
+    }
+  }
+
+  const fallback = String(process.env.DEFAULT_TENANT_ID || process.env.TENANT_ID || '').trim();
+  return fallback;
 }
 
 const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
@@ -367,7 +406,7 @@ export default async function handler(req: any, res: any) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Tenant-Id');
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 200;
@@ -398,8 +437,17 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    const tenantId = await resolveTenantId(req, body);
+    if (!tenantId) {
+      res.statusCode = 400;
+      const out: RpcResponse = { ok: false, error: 'tenant_id is required' };
+      res.setHeader('content-type', 'application/json; charset=utf-8');
+      res.end(JSON.stringify(out));
+      return;
+    }
+
     console.log(`[RPC] Calling ${name} with args:`, JSON.stringify(args));
-    const result = await fn(...args);
+    const result = await runWithTenant(tenantId, () => fn(...args));
     console.log(`[RPC] ${name} succeeded`);
     res.statusCode = 200;
     const out: RpcResponse = { ok: true, result };

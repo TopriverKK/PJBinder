@@ -1,3 +1,5 @@
+import { requireTenantId, isTenantScoped } from './tenant.js';
+
 type SupabaseEnv = {
   url: string;
   serviceRoleKey: string;
@@ -48,6 +50,19 @@ function headers(extra?: Record<string, string>) {
   };
 }
 
+function hasTenantFilter(query: string): boolean {
+  return /(^|&)tenant_id=/.test(query);
+}
+
+function withTenantQuery(table: string, query: string): string {
+  const q = String(query || '').trim();
+  if (!isTenantScoped(table)) return q;
+  if (hasTenantFilter(q)) return q;
+  const tenantId = requireTenantId(table);
+  const filter = `tenant_id=eq.${encodeURIComponent(tenantId)}`;
+  return q ? `${q}&${filter}` : filter;
+}
+
 async function sbFetch(path: string, init?: RequestInit) {
   const { url } = getEnv();
   const res = await fetch(`${url}/rest/v1/${path.replace(/^\/+/, '')}`, {
@@ -60,30 +75,35 @@ async function sbFetch(path: string, init?: RequestInit) {
 }
 
 export async function sbSelect(table: string, query: string) {
-  const q = String(query || '').trim();
+  const q = withTenantQuery(table, String(query || '').trim());
   const suffix = q ? `?${q}` : '';
   return await sbFetch(`${encodeURIComponent(table)}${suffix}`, { method: 'GET' });
 }
 
 export async function sbSelectOneById(table: string, id: string) {
-  const rows = await sbFetch(`${encodeURIComponent(table)}?select=*&id=eq.${encodeURIComponent(id)}&limit=1`, {
+  const q = withTenantQuery(table, `select=*&id=eq.${encodeURIComponent(id)}&limit=1`);
+  const rows = await sbFetch(`${encodeURIComponent(table)}?${q}`, {
     method: 'GET',
   });
   return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
 export async function sbUpsert(table: string, row: Record<string, any>, onConflict?: string) {
+  const rowWithTenant = isTenantScoped(table)
+    ? { ...row, tenant_id: requireTenantId(table) }
+    : row;
   const qs = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : '';
   const rows = await sbFetch(`${encodeURIComponent(table)}${qs}`, {
     method: 'POST',
     headers: headers({ Prefer: 'resolution=merge-duplicates,return=representation' }),
-    body: JSON.stringify([row]),
+    body: JSON.stringify([rowWithTenant]),
   });
   return Array.isArray(rows) ? rows[0] ?? null : rows;
 }
 
 export async function sbDelete(table: string, id: string) {
-  await sbFetch(`${encodeURIComponent(table)}?id=eq.${encodeURIComponent(id)}`, {
+  const q = withTenantQuery(table, `id=eq.${encodeURIComponent(id)}`);
+  await sbFetch(`${encodeURIComponent(table)}?${q}`, {
     method: 'DELETE',
     headers: headers({ Prefer: 'return=minimal' }),
   });
@@ -91,7 +111,7 @@ export async function sbDelete(table: string, id: string) {
 }
 
 export async function sbDeleteWhere(table: string, query: string) {
-  const q = String(query || '').trim();
+  const q = withTenantQuery(table, String(query || '').trim());
   if (!q) throw new Error('sbDeleteWhere: query is required');
   await sbFetch(`${encodeURIComponent(table)}?${q}`, {
     method: 'DELETE',

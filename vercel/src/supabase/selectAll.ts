@@ -1,3 +1,5 @@
+import { requireTenantId, isTenantScoped } from './tenant.js';
+
 // Cache environment variables to avoid repeated reads
 let cachedEnv: { url: string; serviceRoleKey: string } | null = null;
 
@@ -45,6 +47,19 @@ function baseHeaders(extra?: Record<string, string>) {
     Accept: 'application/json',
     ...(extra || {}),
   };
+}
+
+function hasTenantFilter(query: string): boolean {
+  return /(^|&)tenant_id=/.test(query);
+}
+
+function withTenantQuery(table: string, query: string): string {
+  const q = String(query || '').trim();
+  if (!isTenantScoped(table)) return q;
+  if (hasTenantFilter(q)) return q;
+  const tenantId = requireTenantId(table);
+  const filter = `tenant_id=eq.${encodeURIComponent(tenantId)}`;
+  return q ? `${q}&${filter}` : filter;
 }
 
 // Retry helper with exponential backoff
@@ -100,7 +115,8 @@ export async function sbSelectAll(table: string, query = 'select=*', pageSize = 
     const from = offset;
     const to = offset + pageSize - 1;
 
-    const path = `${encodeURIComponent(table)}?${query}`;
+    const q = withTenantQuery(table, query);
+    const path = `${encodeURIComponent(table)}?${q}`;
     const fullUrl = `${url}/rest/v1/${path}`;
     
     try {

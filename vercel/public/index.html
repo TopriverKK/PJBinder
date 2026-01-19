@@ -1744,10 +1744,13 @@ button.link:hover { opacity: .8; }
 <script>
 // --- RPC runner (no legacy script dependency) ---
 async function rpcRequest(name, args){
+  const tenantId = String(window.PJBINDER_TENANT_ID || localStorage.getItem('tenant_id') || '').trim();
+  const payload = { name: String(name), args };
+  if (tenantId) payload.tenantId = tenantId;
   const resp = await fetch('/api/rpc', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name: String(name), args })
+    body: JSON.stringify(payload)
   });
 
   const raw = await resp.text().catch(() => '');
@@ -1757,6 +1760,20 @@ async function rpcRequest(name, args){
     throw new Error((data && data.error) ? data.error : `RPC failed: ${resp.status}`);
   }
   return data.result;
+}
+
+function initTenantFromUrl(){
+  try{
+    const params = new URLSearchParams(window.location.search || '');
+    const urlTenant = String(params.get('tenant') || params.get('tenantId') || params.get('t') || '').trim();
+    if (urlTenant) {
+      localStorage.setItem('tenant_id', urlTenant);
+      window.PJBINDER_TENANT_ID = urlTenant;
+      return;
+    }
+    const stored = String(localStorage.getItem('tenant_id') || '').trim();
+    if (stored) window.PJBINDER_TENANT_ID = stored;
+  } catch(_){}
 }
 
 function createRpcRunner(){
@@ -7047,6 +7064,7 @@ window.addEventListener('error', (e)=>{
 });
 
 document.addEventListener('DOMContentLoaded', function(){
+  initTenantFromUrl();
 // --- RRULE helpers ---
 function rruleFromMode(mode, baseDate){
   // baseDate: 'YYYY-MM-DD' or ''

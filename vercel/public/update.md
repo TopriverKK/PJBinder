@@ -1,4 +1,14 @@
 ﻿# アップデート
+## 2026-01-19 (v1.34i)
+- 概要: GAS依存を撤去してRPCに統一
+<details>
+<summary>個別の変更内容</summary>
+<ul>
+<li>google.script.run を廃止して /api/rpc に直接接続</li>
+<li>GASチェックやGAS用のポリフィルを削除</li>
+</ul>
+</details>
+
 ## 2026-01-19 (v1.34h)
 - 概要: 週次フィルタの保持改善と上部メニューのキャプション追加
 <details>

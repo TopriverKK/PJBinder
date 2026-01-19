@@ -527,7 +527,7 @@
     box-shadow: var(--shadow); z-index: 1200;
     font-size: 13px;
   }
-  .busy::before{ content:'⏳ '; }
+  .busy::before{ content:'? '; }
   /* select のプレイスホルダー表示用（値が空のとき） */
   select.is-placeholder { color: var(--muted); }
   /* === メモ全文表示のための自動高さパッチ === */
@@ -1120,7 +1120,7 @@ button.link:hover { opacity: .8; }
       <div class="card" id="quick-panel" data-disabled="1">
         <h2>
           クイック追加
-          <button id="qp-toggle" class="secondary mini" onclick="toggleQuickPanel()" title="折りたたみ/展開">◀</button>
+          <button id="qp-toggle" class="secondary mini" onclick="toggleQuickPanel()" title="折りたたみ/展開">?</button>
           <button class="secondary mini" onclick="openUsageGuide('BEGINNER')" title="使い方">？</button>
         </h2>
         <div class="body">
@@ -1170,7 +1170,7 @@ button.link:hover { opacity: .8; }
               <div class="toolbar">
                 <button class="secondary" onclick="openUsageGuide()">使い方</button>
                 <button onclick="openProjectDoc()">Docsを開く</button>
-                <button class="secondary" onclick="openAttachDialog('project')">📎添付</button>
+                <button class="secondary" onclick="openAttachDialog('project')">??添付</button>
               </div>
               <div class="muted" id="p_doc_status">未作成</div>
             </div>
@@ -1257,7 +1257,7 @@ button.link:hover { opacity: .8; }
               <div class="toolbar">
 
                 <button onclick="openTaskDoc()">Docsを開く</button>
-                <button class="secondary" onclick="openAttachDialog('task')">📎添付</button>
+                <button class="secondary" onclick="openAttachDialog('task')">??添付</button>
               </div>
               <div class="muted" id="t_doc_status">未作成</div>
             </div>
@@ -1359,7 +1359,7 @@ button.link:hover { opacity: .8; }
                 <option value="month">月単位</option>
               </select>
               <label class="muted" style="margin:0 6px 0 12px;">表示範囲</label>
-              <input id="gantt-start" type="date"/> <span class="muted">〜</span> <input id="gantt-end" type="date"/>
+              <input id="gantt-start" type="date"/> <span class="muted">?</span> <input id="gantt-end" type="date"/>
               <button class="secondary" onclick="applyGanttRange()">適用</button>
             </div>
             <div id="gantt-container"></div>
@@ -1451,7 +1451,7 @@ button.link:hover { opacity: .8; }
   <!-- VAULT (Credentials) -->
   <section class="page" id="page-vault">
     <div class="card">
-      <h2>認証情報（金庫）— パスワードは<b>ブラウザ側で暗号化</b>して保存</h2>
+      <h2>認証情報（金庫）? パスワードは<b>ブラウザ側で暗号化</b>して保存</h2>
       <div class="body">
         <div class="muted" style="margin-bottom:8px;">
           パスワードの平文保存は危険です。本機能は <b>クライアント側AES-GCM暗号</b>で暗号化した文字列のみを保存します。<br/>
@@ -1517,7 +1517,7 @@ button.link:hover { opacity: .8; }
             <div>
               <label>添付URL</label>
               <div class="toolbar">
-                <button class="secondary" onclick="openAttachDialog('shared')">📎添付</button>
+                <button class="secondary" onclick="openAttachDialog('shared')">??添付</button>
               </div>
               <div class="muted">Drive/URL を登録（Docs自動作成はありません）</div>
             </div>
@@ -1542,7 +1542,7 @@ button.link:hover { opacity: .8; }
             <tbody></tbody>
           </table>
         </div>
-        <div class="muted" style="margin-top:6px;">📎アイコンで添付のインライン一覧をトグル表示できます。</div>
+        <div class="muted" style="margin-top:6px;">??アイコンで添付のインライン一覧をトグル表示できます。</div>
       </div>
     </div>
   </section>
@@ -1742,64 +1742,57 @@ button.link:hover { opacity: .8; }
 </div>
 
 <script>
-// --- google.script.run polyfill (for Vercel/static hosting) ---
-// GASの `google.script.run.withSuccessHandler().withFailureHandler().fn(...args)` を
-// `/api/rpc` POST に橋渡しします。
-(function initGoogleScriptRunPolyfill(){
-  const g = (window.google = window.google || {});
-  const script = (g.script = g.script || {});
-  if (script.run) return;
+// --- RPC runner (no legacy script dependency) ---
+async function rpcRequest(name, args){
+  const resp = await fetch('/api/rpc', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: String(name), args })
+  });
 
-  // Marker for Vercel/static hosting (GAS already provides google.script.run).
-  try { script.__isVercelPolyfill = true; } catch(_){ }
-
-  function createRunner(){
-    let onSuccess = null;
-    let onFailure = null;
-
-    const runner = new Proxy({}, {
-      get(_target, prop){
-        if (prop === 'withSuccessHandler') {
-          return function(fn){ onSuccess = fn; return runner; };
-        }
-        if (prop === 'withFailureHandler') {
-          return function(fn){ onFailure = fn; return runner; };
-        }
-
-        // google.script.run.<name>(...args)
-        return async function(...args){
-          const success = onSuccess;
-          const failure = onFailure;
-          onSuccess = null;
-          onFailure = null;
-
-          try{
-            const resp = await fetch('/api/rpc', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ name: String(prop), args })
-            });
-
-            const raw = await resp.text().catch(() => '');
-            let data = null;
-            try { data = raw ? JSON.parse(raw) : null; } catch { data = { ok: false, error: raw || 'RPC error' }; }
-            if (!resp.ok || !data || data.ok !== true) {
-              throw new Error((data && data.error) ? data.error : `RPC failed: ${resp.status}`);
-            }
-            if (typeof success === 'function') success(data.result);
-          } catch (e) {
-            if (typeof failure === 'function') failure(e);
-            else throw e;
-          }
-        };
-      }
-    });
-
-    return runner;
+  const raw = await resp.text().catch(() => '');
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch { data = { ok: false, error: raw || 'RPC error' }; }
+  if (!resp.ok || !data || data.ok !== true) {
+    throw new Error((data && data.error) ? data.error : `RPC failed: ${resp.status}`);
   }
+  return data.result;
+}
 
-  script.run = createRunner();
-})();
+function createRpcRunner(){
+  let onSuccess = null;
+  let onFailure = null;
+
+  const runner = new Proxy({}, {
+    get(_target, prop){
+      if (prop === 'withSuccessHandler') {
+        return function(fn){ onSuccess = fn; return runner; };
+      }
+      if (prop === 'withFailureHandler') {
+        return function(fn){ onFailure = fn; return runner; };
+      }
+
+      return async function(...args){
+        const success = onSuccess;
+        const failure = onFailure;
+        onSuccess = null;
+        onFailure = null;
+        try{
+          const result = await rpcRequest(prop, args);
+          if (typeof success === 'function') success(result);
+        }catch(e){
+          if (typeof failure === 'function') failure(e);
+          else throw e;
+        }
+      };
+    }
+  });
+
+  return runner;
+}
+
+const rpcRun = createRpcRunner();
+function rpc(name, ...args){ return rpcRequest(name, args); }
 
 // === ローカルストア差分適用（超軽量） ===
 function patchRow(tableKey, row){
@@ -1847,11 +1840,10 @@ function rerenderAfter(tableKey){
   }
 }
 
-function gas(name, ...args){return new Promise((res,rej)=>{try{google.script.run.withSuccessHandler(res).withFailureHandler(rej)[name](...args);}catch(e){rej(e)}});}
 let APP_VERSION = null;
 
     window.addEventListener('load', () => {
-    google.script.run
+    rpcRun
       .withSuccessHandler(v => {
         APP_VERSION = v;
         setAppVersionBadge(APP_VERSION);
@@ -2117,7 +2109,7 @@ const Busy = {
 // ★ 既存 refresh を置き換え（中身はそのまま、前後に Busy を追加）
 function refresh() {
   Busy.push();
-  google.script.run
+  rpcRun
     .withSuccessHandler((raw)=>{
       const d0 = (raw && typeof raw==='object') ? raw : {};
       const d = Object.fromEntries(Object.entries(d0).map(([k,v])=>[String(k).toLowerCase(), v]));
@@ -2361,7 +2353,7 @@ function onDrop(ev, status){
         assignees: ass.join(',')
       });
 
-      google.script.run
+      rpcRun
         .withSuccessHandler(()=>{ refresh(); })
         .withFailureHandler(err => {
           console.error(err);
@@ -2621,7 +2613,7 @@ function setWeeklyToday(){
 async function ensureAttendanceWorklogsLoaded(){
   if (ATT_WORKLOGS_LOADED && Array.isArray(DATA.attendanceWorklogs) && DATA.attendanceWorklogs.length) return;
   try{
-    const rows = await gas('getAttendanceWorklogs');
+    const rows = await rpc('getAttendanceWorklogs');
     if (Array.isArray(rows)) DATA.attendanceWorklogs = rows;
     ATT_WORKLOGS_LOADED = true;
   }catch(e){
@@ -2747,7 +2739,7 @@ function weeklyRangeLabel(ws){
   try{
     const d0 = parseYMDLocal(String(ws||'')) || weekStartMonday(new Date());
     const d6 = addDays(d0, 6);
-    return `${fmtYMDLocal(d0)}〜${fmtYMDLocal(d6)}`;
+    return `${fmtYMDLocal(d0)}?${fmtYMDLocal(d6)}`;
   }catch(_){
     return String(ws||'');
   }
@@ -2837,7 +2829,7 @@ async function loadWeekly(){
 
     Busy.push();
     try{
-    const results = await Promise.all(weeks.map(ws => gas('getWeeklyReports', ws)));
+    const results = await Promise.all(weeks.map(ws => rpc('getWeeklyReports', ws)));
       const rowsByKey = {};
       const knownUsers = new Set(safeArr(DATA.users).map(u=>String(u.id||'').trim()).filter(Boolean));
       const knownProjects = new Set(safeArr(DATA.projects).map(p=>String(p.id||'').trim()).filter(Boolean));
@@ -2898,7 +2890,7 @@ async function saveWeeklyForUserProjectWeek(userId, projectId, weekStart){
 
     Busy.push();
     try{
-      const saved = await gas('upsertWeeklyReport', { weekStart: ws, userId: saveUid, projectId: savePid, issues, done });
+      const saved = await rpc('upsertWeeklyReport', { weekStart: ws, userId: saveUid, projectId: savePid, issues, done });
       if (!WEEKLY.rowsByKey) WEEKLY.rowsByKey = {};
       if (rawUid !== saveUid || rawPid !== savePid) {
         delete WEEKLY.rowsByKey[weeklyKey(ws, rawUid, rawPid)];
@@ -3226,12 +3218,10 @@ function setAttendanceRefreshBusy(busy){
 let _attWorklogsRefreshTimer = null;
 function scheduleAttendanceWorklogsRefresh(){
   try{
-    // Only available on Vercel polyfill runtime.
-    if (!(window.google && window.google.script && window.google.script.__isVercelPolyfill)) return;
     if (_attWorklogsRefreshTimer) clearTimeout(_attWorklogsRefreshTimer);
     _attWorklogsRefreshTimer = setTimeout(async ()=>{
       try{
-        const rows = await gas('getAttendanceWorklogs');
+        const rows = await rpc('getAttendanceWorklogs');
         if (Array.isArray(rows)) DATA.attendanceWorklogs = rows;
       }catch(_){ }
     }, 400);
@@ -3616,7 +3606,7 @@ async function refreshAttendance(){
     setAttendanceRefreshBusy(true);
     document.getElementById('att-status').textContent = '更新中...';
     const d = todayStr();
-    const rows = await gas('getAttendanceDay', d);
+    const rows = await rpc('getAttendanceDay', d);
     ATT.dayRows = Array.isArray(rows) ? rows : [];
     document.getElementById('att-status').textContent = `取得: ${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`;
     renderAttendancePage();
@@ -3636,7 +3626,7 @@ async function refreshAttendance(){
 
 async function loadAttendanceSettings(){
   try{
-    const s = await gas('getAttendanceSettings');
+    const s = await rpc('getAttendanceSettings');
     ATT.settings = s || { holidayUrl:'', companyHolidayUrl:'' };
     if (!ATT.settings.holidayUrl) ATT.settings.holidayUrl = defaultHolidayIcs;
     const hu = document.getElementById('att_holiday_url');
@@ -3653,7 +3643,7 @@ async function saveAttendanceSettings(){
   const hu = (document.getElementById('att_holiday_url')||{}).value || '';
   const cu = (document.getElementById('att_company_holiday_url')||{}).value || '';
   try{
-    await gas('setAttendanceSettings', { holidayUrl: String(hu||'').trim(), companyHolidayUrl: String(cu||'').trim() });
+    await rpc('setAttendanceSettings', { holidayUrl: String(hu||'').trim(), companyHolidayUrl: String(cu||'').trim() });
     await loadAttendanceSettings();
     toast('出勤状況設定を保存しました', true);
   }catch(e){
@@ -3671,7 +3661,7 @@ async function patchAttendance(userId, action){
   setAttendanceCardBusy(userId, true);
   try{
     setAttendanceSaveHint(userId, '保存中...', true);
-    const saved = await gas('patchAttendance', userId, date, action);
+    const saved = await rpc('patchAttendance', userId, date, action);
     // merge into ATT.dayRows
     const arr = Array.isArray(ATT.dayRows) ? ATT.dayRows.slice() : [];
     const idx = arr.findIndex(r => String(r.user_id||r.user||'') === String(userId));
@@ -4015,7 +4005,7 @@ async function loadAttendanceMonth(){
   const mi = document.getElementById('att_month');
   const month = mi && mi.value ? mi.value : todayStr().slice(0,7);
   try{
-    const rows = await gas('getAttendanceMonth', month);
+    const rows = await rpc('getAttendanceMonth', month);
     ATT.monthRows = Array.isArray(rows) ? rows : [];
     renderAttendanceMonthTable(month);
     renderAttendanceWeekTable(month);
@@ -4163,7 +4153,7 @@ function computeWorkIntervals(att){
     const lunchEnd = new Date(bStart);
     lunchEnd.setHours(13,0,0,0);
 
-    // breakSegments: 昼休みを除外した休憩区間（0〜2区間）
+    // breakSegments: 昼休みを除外した休憩区間（0?2区間）
     const segments = subtractInterval([bStart, bEnd], [lunchStart, lunchEnd]);
     for (const seg of segments){
       const segStart = seg[0], segEnd = seg[1];
@@ -4458,7 +4448,7 @@ function bindDashboardTabs(){
 
 // タブ切替（list/board/gantt）
 function switchTab(tab) {
-  // 旧GAS版の挙動に寄せて、
+  // 旧版の挙動に寄せて、
   // 1) 表示切替
   // 2) 必要な再描画（list/board/gantt）
   // 3) 状態保存（hash / query）
@@ -4498,7 +4488,7 @@ function switchTab(tab) {
     }
 
     // board: カンバンを確実に更新
-    // 旧GAS版同様、タブ切替時に必ず再描画して整合を取る
+    // 旧版同様、タブ切替時に必ず再描画して整合を取る
     try { renderKanban?.(); } catch(_){ }
 
     // gantt: 選択時に必ず今日始まりデフォルトへ
@@ -4689,16 +4679,16 @@ function renderTasksTable() {
     const tDocUrl = getTaskDocUrl(r.id);
     const pDocUrl = getProjectDocUrl(r.projectId||'');
     const docsBtns = [
-      tDocUrl ? `<button class="secondary" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📄タスクDoc</button>` : '',
-      pDocUrl ? `<button class="secondary" data-tip="プロジェクト共通のドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄PJ Doc</button>` : ''
+      tDocUrl ? `<button class="secondary" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">??タスクDoc</button>` : '',
+      pDocUrl ? `<button class="secondary" data-tip="プロジェクト共通のドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">??PJ Doc</button>` : ''
     ].filter(Boolean).join(' ');
 
     const tr = document.createElement('tr');
     tr.dataset.id = r.id;
 
     const docBadges = [
-      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">📄タスクDoc</span>` : '',
-      pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">📄PJDoc</span>` : ''
+      tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${r.id}')">??タスクDoc</span>` : '',
+      pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.projectId||''}')">??PJDoc</span>` : ''
     ].join('');
 
     // ★ ここで先にテーマ色を計算する
@@ -4709,7 +4699,7 @@ function renderTasksTable() {
                : prioLabel==='低' ? 'low' : '';
     const attN = countAttachments('task', r.id);
     const attBadge = attN
-  ? `<span class="doc-badge" data-tip="添付一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('task','${r.id}', this)">📎${attN}添付を表示</span>`
+  ? `<span class="doc-badge" data-tip="添付一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('task','${r.id}', this)">??${attN}添付を表示</span>`
   : '';
 
     const bg = ` style="background:${theme.bg}"`;
@@ -4732,8 +4722,8 @@ function renderTasksTable() {
       <td style="white-space:nowrap;">
         <button class="secondary" data-tip="この項目を編集します" onclick="editTask('${r.id}')">編集</button>
         <button class="secondary" onclick="moveStatus('${r.id}','doing')">→進行中</button>
-        <button class="secondary" onclick="moveStatus('${r.id}','done')">✓完了</button>
-        <button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">📎添付を追加</button>
+        <button class="secondary" onclick="moveStatus('${r.id}','done')">?完了</button>
+        <button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">??添付を追加</button>
         <button class="secondary" onclick="delTask('${r.id}')">削除</button>
       </td>
     `;
@@ -4774,8 +4764,8 @@ function attachTaskInlineEditHandlers(){
     }
     const ctl = document.createElement('span');
     ctl.className = 'inline-ctl';
-    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='✔︎';
-    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='✖︎';
+    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='??';
+    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='??';
     const wrap = document.createElement('span');
     wrap.appendChild(input); wrap.appendChild(ctl);
     ctl.appendChild(ok); ctl.appendChild(ng);
@@ -4790,7 +4780,7 @@ function attachTaskInlineEditHandlers(){
       const send = Object.assign({}, t, patch);
 
       try{
-        google.script.run
+        rpcRun
           .withSuccessHandler(()=>{
             showToast('ok','保存しました');
             cell.classList.add('cell-flash'); setTimeout(()=>cell.classList.remove('cell-flash'),1200);
@@ -4827,8 +4817,8 @@ function attachTaskInlineEditHandlers(){
 
     const ctl = document.createElement('span');
     ctl.className = 'inline-ctl';
-    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='✔︎';
-    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='✖︎';
+    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='??';
+    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='??';
 
     const wrap = document.createElement('div');
     wrap.appendChild(ta);
@@ -4842,7 +4832,7 @@ function attachTaskInlineEditHandlers(){
     const commit  = ()=>{
       const newMemo = ta.value;
       try{
-        google.script.run
+        rpcRun
           .withSuccessHandler(()=>{
             showToast('ok','メモを保存しました');
             // 軽量反映（即時見た目更新）
@@ -4892,8 +4882,8 @@ function attachProjectInlineEditHandlers(){
     });
     const ctl = document.createElement('span');
     ctl.className = 'inline-ctl';
-    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='✓';
-    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='✖';
+    const ok = document.createElement('button'); ok.className='ok'; ok.textContent='?';
+    const ng = document.createElement('button'); ng.className='ng'; ng.textContent='?';
     const wrap = document.createElement('span');
     wrap.appendChild(input); wrap.appendChild(ctl);
     ctl.appendChild(ok); ctl.appendChild(ng);
@@ -4903,7 +4893,7 @@ function attachProjectInlineEditHandlers(){
     const commit=()=>{
       const patch = Object.assign({}, p, { priority: input.value });
       try{
-        google.script.run
+        rpcRun
           .withSuccessHandler(()=>{
             showToast('ok','保存しました');
             cell.classList.add('cell-flash'); setTimeout(()=>cell.classList.remove('cell-flash'),1200);
@@ -4968,7 +4958,7 @@ function renderKanban() {
 
     const attN = countAttachments('task', r.id);
     const attBadge = attN
-      ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${r.id}')">📎${attN}</span>`
+      ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${r.id}')">??${attN}</span>`
       : '';
 
     const card = document.createElement('div');
@@ -5073,7 +5063,7 @@ function renderKanban() {
 
       // 4カラムの骨組み
       wrap.innerHTML = `
-        <h3 style="margin:0 0 6px 0;">👤 ${escapeHtml(lane.name)}</h3>
+        <h3 style="margin:0 0 6px 0;">?? ${escapeHtml(lane.name)}</h3>
         <div class="kanban" style="grid-template-columns:repeat(4,1fr); gap:8px;">
           ${cols.map(c => {
             const sid = `lane_${safeId(lane.key)}_${c}`;
@@ -5170,14 +5160,14 @@ function renderProjects() {
     // Docs の URL（未定義対策）
     const pDocUrl = getProjectDocUrl(r.id);
 
-    const attBtn = `<button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">📎添付を追加</button>`;
-    const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">📄Doc</span>' : '';
+    const attBtn = `<button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">??添付を追加</button>`;
+    const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">??Doc</span>' : '';
 
     const tr = document.createElement('tr');
 
     const attN = countProjectAttachmentsDeep(r.id);
     const attBadge = attN
-      ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">📎${attN}添付を表示</span>`
+      ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${escapeJsSq(r.id)}', this)">??${attN}添付を表示</span>`
       : '';
 
     // 親プロジェクト名（オプショナルチェイニングなし）
@@ -5287,8 +5277,8 @@ async function saveAttachmentModal(){
   const delIds = Array.from(ATT_MODAL.deleted||[]);
   Busy.push();
   try{
-    if(items.length) await gas('upsertAttachments', ATT_MODAL.kind, ATT_MODAL.id, items);
-    for(const did of delIds){ await gas('deleteAttachment', did); }
+    if(items.length) await rpc('upsertAttachments', ATT_MODAL.kind, ATT_MODAL.id, items);
+    for(const did of delIds){ await rpc('deleteAttachment', did); }
     await refresh();
     closeAttachmentModal();
   }catch(e){
@@ -5438,7 +5428,7 @@ function delMinute(id) { gsr().withSuccessHandler(()=>{ dropRow('minutes', id); 
 function deleteProjectHard(id){
   const p = safeArr(DATA.projects).find(x=>String(x.id)===String(id));
   const name = p ? (p.name||p.id) : String(id);
-  const ok = confirm(`⚠ プロジェクト「${name}」を完全削除します。\n関連タスク/添付URLも削除され、元に戻せません。\n\n本当に削除しますか？`);
+  const ok = confirm(`? プロジェクト「${name}」を完全削除します。\n関連タスク/添付URLも削除され、元に戻せません。\n\n本当に削除しますか？`);
   if(!ok) return;
 
   gsr()
@@ -5559,7 +5549,7 @@ function addProject() {
   // ★名称を変えたまま更新しようとしている → 上書き確認
   if (editId && origName && nameNow && nameNow !== origName) {
     const ok = confirm(
-      `⚠ 既存プロジェクト「${origName}」(ID:${editId}) を「${nameNow}」にリネームして上書き保存します。\n` +
+      `? 既存プロジェクト「${origName}」(ID:${editId}) を「${nameNow}」にリネームして上書き保存します。\n` +
       `本当に上書きしますか？\n\n新規追加にしたい場合は、キャンセルして「新規モードへ切替」を押してください。`
     );
     if (!ok) return; // 中断
@@ -5597,7 +5587,7 @@ function addTask() {
   // ★タイトルを変えたまま更新しようとしている → 上書き確認
   if (editId && origTitle && titleNow && titleNow !== origTitle) {
     const ok = confirm(
-      `⚠ 既存タスク「${origTitle}」(ID:${editId}) を「${titleNow}」にリネームして上書き保存します。\n` +
+      `? 既存タスク「${origTitle}」(ID:${editId}) を「${titleNow}」にリネームして上書き保存します。\n` +
       `本当に上書きしますか？\n\n新規追加にしたい場合は、キャンセルして「新規モードへ切替」を押してください。`
     );
     if (!ok) return; // 中断
@@ -5725,7 +5715,7 @@ async function createTaskDoc() {
 
     let body = '# タスク: ' + (target.title || '') + '\n';
     body += 'プロジェクト: ' + projName + (parentName ? '（親: ' + parentName + '）' : '') + '\n';
-    body += 'Docs作成日時: ' + `${y}-${m}-${d} ${hh}:${mm}` + '　プロジェクト期間: ' + projStart + '〜' + projEnd + '\n';
+    body += 'Docs作成日時: ' + `${y}-${m}-${d} ${hh}:${mm}` + '　プロジェクト期間: ' + projStart + '?' + projEnd + '\n';
     if (projBudgetNum) body += '予算: ' + projBudgetNum.toLocaleString() + ' 円\n';
     body += '主担当者: ' + (owner || '-') + '　担当者: ' + (assignees || '-') + '\n\n---';
 
@@ -6606,21 +6596,21 @@ function renderGantt(forceDefaults){
       // 1) 先頭の端数
       if (firstSpan>0){
         const end = addDays(cursor, firstSpan-1);
-        segs.push({days:firstSpan, label:`${String(cursor.getMonth()+1).padStart(2,'0')}/${String(cursor.getDate()).padStart(2,'0')}〜${String(end.getMonth()+1).padStart(2,'0')}/${String(end.getDate()).padStart(2,'0')}`});
+        segs.push({days:firstSpan, label:`${String(cursor.getMonth()+1).padStart(2,'0')}/${String(cursor.getDate()).padStart(2,'0')}?${String(end.getMonth()+1).padStart(2,'0')}/${String(end.getDate()).padStart(2,'0')}`});
         cursor = addDays(cursor, firstSpan);
       }
       // 2) フル週
       for(let i=0;i<fullWeeks;i++){
         const start = new Date(cursor);
         const end = addDays(start, 6);
-        segs.push({days:7, label:`W${i+1} ${String(start.getMonth()+1).padStart(2,'0')}/${String(start.getDate()).padStart(2,'0')}〜${String(end.getMonth()+1).padStart(2,'0')}/${String(end.getDate()).padStart(2,'0')}`});
+        segs.push({days:7, label:`W${i+1} ${String(start.getMonth()+1).padStart(2,'0')}/${String(start.getDate()).padStart(2,'0')}?${String(end.getMonth()+1).padStart(2,'0')}/${String(end.getDate()).padStart(2,'0')}`});
         cursor = addDays(cursor, 7);
       }
       // 3) 末尾の端数
       if (tail>0){
         const start = new Date(cursor);
         const end = addDays(start, tail-1);
-        segs.push({days:tail, label:`${String(start.getMonth()+1).padStart(2,'0')}/${String(start.getDate()).padStart(2,'0')}〜${String(end.getMonth()+1).padStart(2,'0')}/${String(end.getDate()).padStart(2,'0')}`});
+        segs.push({days:tail, label:`${String(start.getMonth()+1).padStart(2,'0')}/${String(start.getDate()).padStart(2,'0')}?${String(end.getMonth()+1).padStart(2,'0')}/${String(end.getDate()).padStart(2,'0')}`});
       }
 
       cells = segs.map(s=>`<div style="flex:0 0 ${s.days*pxPerDay}px; text-align:center; font-size:11px;">${s.label}</div>`).join('');
@@ -6639,11 +6629,11 @@ function renderGantt(forceDefaults){
     const ownerName = nameByUserId(proj?.ownerUserId || '');
     const pDocUrl = getProjectDocUrl(pid);
     const docBadgeP = pDocUrl
-      ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${pid}')">📄Doc</span>`
+      ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${pid}')">??Doc</span>`
       : '';
     const attNP = countAttachments('project', pid);
     const attBadgeP = attNP
-      ? `<span class="doc-badge" title="添付 ${attNP}件" onclick="openAttachmentManager('project','${pid}')">📎${attNP}</span>`
+      ? `<span class="doc-badge" title="添付 ${attNP}件" onclick="openAttachmentManager('project','${pid}')">??${attNP}</span>`
       : '';
 
     labelHtml.push(
@@ -6680,10 +6670,10 @@ function renderGantt(forceDefaults){
       // renderGantt 内、各タスクのラベル生成箇所を置き換え
       // 置換前：labelHtml.push(`<div ...>${escapeHtml(proj?.name || '(未割当)')} / <span class="muted">${title}</span></div>`);
       const tDocUrl = getTaskDocUrl(t.id);
-      const docBadge = tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">📄Doc</span>` : '';
+      const docBadge = tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">??Doc</span>` : '';
       const attN = countAttachments('task', t.id);
 
-      const attBadge = attN ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">📎${attN}</span>` : '';
+      const attBadge = attN ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">??${attN}</span>` : '';
 
       labelHtml.push(
         `<div style="height:24px; line-height:24px; padding:0 8px; border-bottom:1px solid var(--border); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
@@ -6742,7 +6732,7 @@ function renderGantt(forceDefaults){
     + '</div>'
     + '</div>';
 
-  // スクロール同期（ヘッダー⇄本体）— 双方向 & ループ防止
+  // スクロール同期（ヘッダー?本体）? 双方向 & ループ防止
   const head = document.getElementById('gantt-head-scroll');
   const body = document.getElementById('gantt-body-scroll');
   if (head && body){
@@ -6822,7 +6812,7 @@ function delLedgerPlan(id){ gsr().withSuccessHandler(()=>refresh()).deleteLedger
 function renderLedgerPage(){
   if (PAGE !== 'ledger') return;
 
-  // 定期の管理テーブル（既存）—そのまま
+  // 定期の管理テーブル（既存）?そのまま
   const tbp = document.querySelector('#ledgerPlanTable tbody');
   if (tbp){
     tbp.innerHTML='';
@@ -6998,7 +6988,7 @@ function setVersionAndDebug(v){
       chip2.onclick = ()=>window.open(info.url,'_blank'); chip2.style.cursor='pointer';
     }
   }).getSpreadsheetInfo();
-     gas('getLogoDataUrl')
+     rpc('getLogoDataUrl')
     .then(url => {
       setWatermark(url, 0.05, '820px');
       //setHeaderLogo(url);
@@ -7027,11 +7017,11 @@ async function runDiagnostics(){
   const log = (m)=>{ const elx=document.getElementById('dbg_log'); if(elx){ elx.textContent += m+'\n'; elx.scrollTop = elx.scrollHeight; } };
   try{
     log('start');
-    const meta = await gas('getSpreadsheetInfo'); document.getElementById('dbg_sheet').textContent = JSON.stringify(meta,null,2);
-    const ping = await gas('ping'); const client = {users:safeArr(DATA.users).length, projects:safeArr(DATA.projects).length, tasks:safeArr(DATA.tasks).length, subs:safeArr(DATA.subs).length};
+    const meta = await rpc('getSpreadsheetInfo'); document.getElementById('dbg_sheet').textContent = JSON.stringify(meta,null,2);
+    const ping = await rpc('ping'); const client = {users:safeArr(DATA.users).length, projects:safeArr(DATA.projects).length, tasks:safeArr(DATA.tasks).length, subs:safeArr(DATA.subs).length};
     document.getElementById('dbg_counts').textContent = JSON.stringify({server: ping.counts, client}, null, 2);
-    const all = await gas('getAllDataPlain'); document.getElementById('dbg_all').textContent = JSON.stringify({version:all.version, users:(all.users||[]).length, projects:(all.projects||[]).length, sampleUser:(all.users||[])[0]||null, sampleProject:(all.projects||[])[0]||null}, null, 2);
-    const u = await gas('debugPeek','Users',5); const p = await gas('debugPeek','Projects',5);
+    const all = await rpc('getAllDataPlain'); document.getElementById('dbg_all').textContent = JSON.stringify({version:all.version, users:(all.users||[]).length, projects:(all.projects||[]).length, sampleUser:(all.users||[])[0]||null, sampleProject:(all.projects||[])[0]||null}, null, 2);
+    const u = await rpc('debugPeek','Users',5); const p = await rpc('debugPeek','Projects',5);
     document.getElementById('dbg_users').textContent = JSON.stringify(u.rows, null, 2);
     document.getElementById('dbg_projects').textContent = JSON.stringify(p.rows, null, 2);
     log('done');
@@ -7040,10 +7030,10 @@ async function runDiagnostics(){
 
 function openHelpPopup(){ alert('上部の「使い方」タブに、詳細な手引きを用意しています。'); }
 
-// google.script.run helper
+// rpcRun helper
 function gsr(){
   try {
-    return google.script.run.withFailureHandler(function(e){
+    return rpcRun.withFailureHandler(function(e){
       alert('サーバーエラー: ' + (e && e.message ? e.message : e));
     });
   } catch (err) {
@@ -7204,7 +7194,7 @@ function applyQuickPanelState(){
   if(!btn) return;
   grid.classList.toggle('collapsed-left', QUICK_COLLAPSED);
   panel.classList.toggle('collapsed', QUICK_COLLAPSED);
-  btn.textContent = QUICK_COLLAPSED ? '▶' : '◀';
+  btn.textContent = QUICK_COLLAPSED ? '?' : '?';
   btn.title = QUICK_COLLAPSED ? '展開' : '折りたたみ';
 }
 function toggleQuickPanel(){
@@ -7290,7 +7280,7 @@ function renderMinutesPage(){
       .filter(Boolean).join(', ');
     const link = m.docUrl ? `<button class="secondary" onclick="window.open('${m.docUrl}','_blank')">Docs</button>` : '';
     const attN = countAttachments('minute', m.id||'');
-    const attB = attN? `<button class="secondary" onclick="openAttachmentManager('minute','${m.id}')">📎${attN}</button>`:'';
+    const attB = attN? `<button class="secondary" onclick="openAttachmentManager('minute','${m.id}')">??${attN}</button>`:'';
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${m.date||''}</td>
       <td>${escapeHtml(m.title||'')}</td>
@@ -7320,11 +7310,11 @@ async function createMinuteDocFromForm(){
     await ensureUsersLoaded();
 
     Busy.push();
-    google.script.run
+    rpcRun
       .withSuccessHandler((res)=>{
         if(res && res.docId){
           const body = buildMinutesBody(m);
-          google.script.run
+          rpcRun
             .withSuccessHandler(()=>{
               // ▼▼ ここで自動添付 ▼▼
               // ▼▼ ここで自動添付（project + 複数 task）▼▼
@@ -7352,7 +7342,7 @@ async function createMinuteDocFromForm(){
                 // project への添付
                 if (m.projectId) {
                   pending++;
-                  google.script.run
+                  rpcRun
                     .withSuccessHandler(done)
                     .withFailureHandler(fail)
                     .upsertAttachments('project', m.projectId, attachments);
@@ -7361,7 +7351,7 @@ async function createMinuteDocFromForm(){
                 // 各 task への添付（複数）
                 taskIds.forEach(taskId => {
                   pending++;
-                  google.script.run
+                  rpcRun
                     .withSuccessHandler(done)
                     .withFailureHandler(fail)
                     .upsertAttachments('task', taskId, attachments);
@@ -7439,11 +7429,11 @@ async function createDailyReportDocFromForm(){
     await ensureUsersLoaded();
 
     Busy.push();
-    google.script.run
+    rpcRun
       .withSuccessHandler((res)=>{
         if(res && res.docId){
           const body = buildDailyBody(r);
-          google.script.run
+          rpcRun
             .withSuccessHandler(()=>refresh())
             .withFailureHandler(()=>Busy.pop())
             .replaceDocWithMemo(res.docId, body);
@@ -7488,7 +7478,7 @@ function renderDailyCalendar(){
   const [yy,mm] = monthStr.split('-').map(Number);
   const first = new Date(yy, mm-1, 1), last = new Date(yy, mm, 0);
 
-  // 表示範囲（前後の端数を含めて日曜〜土曜で埋める）
+  // 表示範囲（前後の端数を含めて日曜?土曜で埋める）
   const start = new Date(first); start.setDate(first.getDate() - first.getDay());
   const end   = new Date(last);  end.setDate(last.getDate() + (6 - last.getDay()));
 
@@ -7545,7 +7535,7 @@ function toggleAttachmentList(kind, id, anchor){
       const html = items.map(a=>{
         const href = attachmentHref(a);
         const title = escapeHtml(a.title || href || '(無題)');
-        return `<div style="margin:4px 0;">📎 <a href="${escapeHtml(href)}" target="_blank" rel="noopener">${title}</a></div>`;
+        return `<div style="margin:4px 0;">?? <a href="${escapeHtml(href)}" target="_blank" rel="noopener">${title}</a></div>`;
       }).join('');
       td.innerHTML = `<div class="inline-attachments slide">${html}</div>`;
     }
@@ -7603,8 +7593,8 @@ function toggleProjectTaskList(projectId, anchor){
                         .split(',').filter(Boolean).map(nameByUserId).join(', ');
         const tDoc  = getTaskDocUrl(t.id);
         const attN  = countAttachments('task', t.id);
-        const docLink = tDoc ? `<a href="${tDoc}" target="_blank" rel="noopener">📄</a>` : '';
-        const attBtn  = attN ? `<button class="secondary mini" onclick="openAttachmentManager('task','${t.id}')">📎${attN}</button>` : '';
+        const docLink = tDoc ? `<a href="${tDoc}" target="_blank" rel="noopener">??</a>` : '';
+        const attBtn  = attN ? `<button class="secondary mini" onclick="openAttachmentManager('task','${t.id}')">??${attN}</button>` : '';
         return `
           <div style="display:flex; gap:8px; align-items:center; padding:2px 0;">
             <span style="min-width:72px;" class="muted">${escapeHtml(st)}</span>
@@ -7652,8 +7642,8 @@ function toggleProjectTasks(projectId, anchor){
       const pr = normPriority(t.priority||'');
       const tDoc = getTaskDocUrl(t.id);
       const attN = countAttachments('task', t.id);
-      const att = attN ? ` <span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">📎${attN}</span>` : '';
-      const doc = tDoc ? ` <span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">📄Doc</span>` : '';
+      const att = attN ? ` <span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">??${attN}</span>` : '';
+      const doc = tDoc ? ` <span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">??Doc</span>` : '';
       return `<div style="padding:2px 0;">
         <span class="pill" style="margin-right:6px;">${labelStatus(st)}</span>
         <span class="pill prio-badge ${pr==='高'?'prio-high':pr==='中'?'prio-mid':pr==='低'?'prio-low':''}" style="margin-right:6px;">${escapeHtml(pr)}</span>
@@ -7702,10 +7692,10 @@ function renderProjectsPage(){
 
   for (const r of rows){
     const pDocUrl = getProjectDocUrl(r.id);
-    const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄Doc</span>` : '';
-    const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJ Doc</button>` : '';
+    const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">??Doc</span>` : '';
+    const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">??PJ Doc</button>` : '';
     const attN    = countProjectAttachmentsDeep(r.id);
-    const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">📎${attN}添付を表示</span>` : '';
+    const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">??${attN}添付を表示</span>` : '';
 
     const theme = themeFor(r.id, null);
     const bg = ` style="background:${theme.bg}"`;
@@ -7726,7 +7716,7 @@ function renderProjectsPage(){
         <span class="pill prio-badge ${prc?('prio-'+prc):''}">${escapeHtml(prioLabel||'')}</span>
       </td>
       <td${bg}>${Number(r.budget||0).toLocaleString()}</td>
-      <td${bg}>${r.startDate||''}〜${r.endDate||''}</td>
+      <td${bg}>${r.startDate||''}?${r.endDate||''}</td>
       <td${bg}><b>${open}</b></td>
       <td${bg}><b>${done}</b></td>
       <td${bg}>${attN||0}</td>
@@ -7809,7 +7799,7 @@ function buildDailyBody(r){
 }
 async function openIcsDialog(){
   try{
-    const base = await gas('getIcsBaseUrl'); // 先ほどのサーバ関数
+    const base = await rpc('getIcsBaseUrl'); // 先ほどのサーバ関数
     if(!base){ alert('ICSのベースURLが未設定です（管理者向け: setIcsBaseUrl を一度実行してください）'); return; }
     const who = prompt('購読対象: 空=すべて / ユーザーIDを入力で担当者別（例: u_123）', '');
     const url = base.replace(/\/exec.*/,'/exec') + '?feed=tasks' + (who?('&assignee='+encodeURIComponent(who)):'');
@@ -7920,8 +7910,8 @@ function bindQuickNameGuards(){
       const edit = !!pHid.value;
       const orig = pHid.dataset.orig || '';
       const now  = (pName.value||'').trim();
-      pBtn.textContent = (edit && orig && now && now!==orig) ? '⚠ 上書き更新' : (edit ? 'プロジェクト更新' : 'プロジェクト追加');
-      pBtn.title = (pBtn.textContent==='⚠ 上書き更新') ? '編集中のプロジェクトをリネームして上書きします' : '';
+      pBtn.textContent = (edit && orig && now && now!==orig) ? '? 上書き更新' : (edit ? 'プロジェクト更新' : 'プロジェクト追加');
+      pBtn.title = (pBtn.textContent==='? 上書き更新') ? '編集中のプロジェクトをリネームして上書きします' : '';
     };
     pName.addEventListener('input', upd);
   }
@@ -7932,8 +7922,8 @@ function bindQuickNameGuards(){
       const edit = !!tHid.value;
       const orig = tHid.dataset.orig || '';
       const now  = (tName.value||'').trim();
-      tBtn.textContent = (edit && orig && now && now!==orig) ? '⚠ 上書き更新' : (edit ? 'タスク更新' : 'タスク追加');
-      tBtn.title = (tBtn.textContent==='⚠ 上書き更新') ? '編集中のタスクをリネームして上書きします' : '';
+      tBtn.textContent = (edit && orig && now && now!==orig) ? '? 上書き更新' : (edit ? 'タスク更新' : 'タスク追加');
+      tBtn.title = (tBtn.textContent==='? 上書き更新') ? '編集中のタスクをリネームして上書きします' : '';
     };
     tName.addEventListener('input', upd);
   }
@@ -7965,7 +7955,7 @@ function addShared(){
     };
     if(!s.name){ alert('名称は必須です'); return; }
     Busy.wrap(
-      google.script.run
+      rpcRun
         .withSuccessHandler(()=>refresh())
         .upsertShared(s)
     );
@@ -8012,7 +8002,7 @@ function renderShareds(){
     const attN  = countAttachments('shared', r.id);   // parentType 'shared' を使う
 
     const attBadge = attN
-      ? `<span class="doc-badge" title="添付 ${attN}件" onclick="toggleAttachmentList('shared','${r.id}', this)">📎${attN}</span>`
+      ? `<span class="doc-badge" title="添付 ${attN}件" onclick="toggleAttachmentList('shared','${r.id}', this)">??${attN}</span>`
       : '';
 
     // 状態は任意で：active/archived などがあれば表示、なければ空
@@ -8028,7 +8018,7 @@ function renderShareds(){
       <td>${escapeHtml(state)}</td>
       <td style="white-space:nowrap;">
         <button class="secondary" data-tip="この項目を編集します" onclick="editShared('${r.id}')">編集</button>
-        <button class="secondary" onclick="openAttachmentManager('shared','${r.id}')">📎管理</button>
+        <button class="secondary" onclick="openAttachmentManager('shared','${r.id}')">??管理</button>
         <button class="secondary" onclick="delShared('${r.id}')">削除</button>
       </td>`;
     tb.appendChild(tr);
@@ -8038,11 +8028,11 @@ function renderShareds(){
 function renderAttachmentInline(list){
   if(!list.length) return '';
   const icon = (a)=>{
-    if (a.type === 'drive' || a.fileId) return '📄';
+    if (a.type === 'drive' || a.fileId) return '??';
     const u = String(a.url||'').toLowerCase();
-    if (/\.(png|jpe?g|gif|webp|svg)$/.test(u)) return '🖼️';
-    if (/\.(pdf)$/.test(u)) return '📕';
-    return '🔗';
+    if (/\.(png|jpe?g|gif|webp|svg)$/.test(u)) return '???';
+    if (/\.(pdf)$/.test(u)) return '??';
+    return '??';
   };
   return list.map(a=>{
     const href = a.url || (a.fileId ? `https://drive.google.com/file/d/${a.fileId}/view` : '#');
@@ -8204,7 +8194,7 @@ function attachDefaultMemoEditors(){
 
     if (kind === 'task'){
       try{
-        google.script.run
+        rpcRun
           .withSuccessHandler(()=>{
             // クライアント即時反映
             const idx = safeArr(DATA.tasks).findIndex(x=>String(x.id)===String(id));
@@ -8224,7 +8214,7 @@ function attachDefaultMemoEditors(){
       if (!p) return;
       const patch = Object.assign({}, p, { memoText: text });
       try{
-        google.script.run
+        rpcRun
           .withSuccessHandler(()=>{
             // 即時反映
             const idx = safeArr(DATA.projects).findIndex(x=>String(x.id)===String(id));
@@ -8257,7 +8247,7 @@ function attachDefaultMemoEditors(){
       if (val === orig) return;
 
       if (kind === 'task'){
-        google.script.run
+        rpcRun
           .withSuccessHandler(()=>{
             orig = val;
             showToast('ok','メモを保存しました');
@@ -8276,7 +8266,7 @@ function attachDefaultMemoEditors(){
         if (!p) return;
 
         const patch = Object.assign({}, p, { memoText: val });
-        google.script.run
+        rpcRun
           .withSuccessHandler(row=>{
             orig = val;
             showToast('ok','メモを保存しました');
@@ -8334,7 +8324,7 @@ function attachDefaultMemoEditors(){
         const idx = safeArr(DATA.tasks).findIndex(x => String(x.id) === String(id));
         if (idx >= 0) DATA.tasks[idx].memoText = val;
 
-        google.script.run
+        rpcRun
           .withSuccessHandler(() => { showToast('ok', 'タスクのメモを保存しました'); })
           .withFailureHandler((err) => { showToast('ng', (err && err.message) || '保存に失敗しました'); })
           .saveTaskMemo(id, val);
@@ -8343,7 +8333,7 @@ function attachDefaultMemoEditors(){
         const p = safeArr(DATA.projects).find(x => String(x.id) === String(id)) || { id };
         const payload = Object.assign({}, p, { memoText: val });
 
-        google.script.run
+        rpcRun
           .withSuccessHandler((row) => {
             if (row) patchRow('projects', row);
             showToast('ok', 'プロジェクトのメモを保存しました');
@@ -8448,7 +8438,7 @@ function submitFlyoutTask(){
     ['tab-list',"タスクを表形式で確認・インライン編集できます"],
     ['tab-board',"ドラッグ＆ドロップで状態を移動できます"],
     ['tab-board',"担当者別スイムレーンはチェックで切替"],
-    ['tab-board',"カードの📄でDocs、📎で添付を開きます"],
+    ['tab-board',"カードの??でDocs、??で添付を開きます"],
     ['tab-list',"右上のCSVでエクスポートできます"],
     ['f_keyword',"タイトル・メモを横断検索"],
     ['f_project',"プロジェクトで絞り込み"],
@@ -8611,7 +8601,7 @@ function closeFlyout(){
 }
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeFlyout(); });
 
-// ===== 送信（GASに直接保存） =====
+// ===== 送信（RPCに直接保存） =====
 function submitFlyoutTask(){
   const ownerId = sel('ft_owner');
   const assigneesArr = Array.from((document.getElementById('ft_assignees')||{selectedOptions:[]}).selectedOptions).map(o=>o.value);
@@ -8715,7 +8705,7 @@ async function fetchDocsMarkdown(name){
       try{
         const buf = await resp.arrayBuffer();
         const countReplacement = (s)=>{
-          try { return (String(s||'').match(/\uFFFD|�/g) || []).length; } catch(_){ return 0; }
+          try { return (String(s||'').match(/\uFFFD|?/g) || []).length; } catch(_){ return 0; }
         };
         const tryDecode = (enc)=>{
           try { return new TextDecoder(enc).decode(buf); } catch(_){ return null; }
@@ -8996,7 +8986,7 @@ function openModal(title, bodyHtml, onMount){
   modal.innerHTML = `
     <header>
       <strong>${escapeHtml(title||'')}</strong>
-      <button class="close" onclick="closeModal()">✕</button>
+      <button class="close" onclick="closeModal()">?</button>
     </header>
     <div class="content">${bodyHtml||''}</div>
   `;
@@ -9053,7 +9043,7 @@ function showProjectModal(id){
       <div>
         <label>添付</label>
         <div class="toolbar">
-          <button class="secondary" onclick="openAttachDialogFor('project','${escapeHtml(p.id)}')">📎添付を追加</button>
+          <button class="secondary" onclick="openAttachDialogFor('project','${escapeHtml(p.id)}')">??添付を追加</button>
           <button class="secondary" onclick="openAttachmentManager('project','${escapeHtml(p.id)}')">添付一覧</button>
         </div>
         <div class="muted"></div>
@@ -9151,7 +9141,7 @@ function showTaskModal(id){
       <div>
         <label>添付</label>
         <div class="toolbar">
-          <button class="secondary" onclick="openAttachDialogFor('task','${escapeHtml(t.id)}')">📎添付を追加</button>
+          <button class="secondary" onclick="openAttachDialogFor('task','${escapeHtml(t.id)}')">??添付を追加</button>
           <button class="secondary" onclick="openAttachmentManager('task','${escapeHtml(t.id)}')">添付一覧</button>
         </div>
         <div class="muted"></div>
@@ -9292,7 +9282,7 @@ function closestSafe(target, selector){
 <aside id="flyout-project" class="flyout" role="dialog" aria-modal="true" aria-labelledby="fly-prj-title">
   <header>
     <h3 id="fly-prj-title" style="margin:0;font-size:16px;">プロジェクトを追加</h3>
-    <button class="secondary" onclick="closeFlyout('project')" aria-label="閉じる">✖</button>
+    <button class="secondary" onclick="closeFlyout('project')" aria-label="閉じる">?</button>
   </header>
   <div class="content">
     <div class="row">
@@ -9337,7 +9327,7 @@ function closestSafe(target, selector){
 <aside id="flyout-task" class="flyout" role="dialog" aria-modal="true" aria-labelledby="fly-task-title">
   <header>
     <h3 id="fly-task-title" style="margin:0;font-size:16px;">タスクを追加</h3>
-    <button class="secondary" onclick="closeFlyout('task')" aria-label="閉じる">✖</button>
+    <button class="secondary" onclick="closeFlyout('task')" aria-label="閉じる">?</button>
   </header>
   <div class="content">
     <div class="row">
@@ -9393,7 +9383,7 @@ function closestSafe(target, selector){
   <!-- 予備：将来の拡張用に小ボタンを並べたい場合
   <button class="fab-btn secondary tooltip-host"
           data-tip="今日の遅延タスクをハイライト" data-tip-pos="left"
-          onclick="quickOverdue()">⚡ 遅延フィルタ</button>
+          onclick="quickOverdue()">? 遅延フィルタ</button>
   -->
 </div>
 
@@ -9404,7 +9394,7 @@ function closestSafe(target, selector){
     <strong id="flyout-title">クイック操作</strong>
     <div style="display:flex; gap:6px; align-items:center;">
       <span class="muted tooltip-host" data-tip="ヒント:\nEnterで実行／Escで閉じる" data-tip-pos="bottom">？</span>
-      <button id="flyout-close" class="secondary mini" aria-label="フライアウトを閉じる">✕</button>
+      <button id="flyout-close" class="secondary mini" aria-label="フライアウトを閉じる">?</button>
     </div>
   </header>
   <div class="content">
@@ -9435,9 +9425,9 @@ function closestSafe(target, selector){
         <h2 style="padding:0 0 8px 0;">ショートカット</h2>
         <div class="body">
           <div class="toolbar">
-            <button class="secondary tooltip-host" data-tip="今日以前が期限で未完了のタスクを抽出">⚡ 遅延だけ</button>
-            <button class="secondary tooltip-host" data-tip="カンバンに切替" onclick="gotoDashboardTab('board')">📋 カンバン</button>
-            <button class="secondary tooltip-host" data-tip="ガントに切替" onclick="gotoDashboardTab('gantt')">📈 ガント</button>
+            <button class="secondary tooltip-host" data-tip="今日以前が期限で未完了のタスクを抽出">? 遅延だけ</button>
+            <button class="secondary tooltip-host" data-tip="カンバンに切替" onclick="gotoDashboardTab('board')">?? カンバン</button>
+            <button class="secondary tooltip-host" data-tip="ガントに切替" onclick="gotoDashboardTab('gantt')">?? ガント</button>
           </div>
           <p class="hint">ヒント: Enterで「タスク作成」を実行できます。</p>
         </div>
@@ -9453,10 +9443,10 @@ function closestSafe(target, selector){
 <!-- ===== 右下フローティングボタン ===== -->
 <div id="fab-stack" aria-live="polite" >
   <button class="fab-btn" id="btn_add_project" onclick="openProjectFormModal()" data-tip="新しいプロジェクトを右側のフライアウトから素早く作成します">
-    ➕ プロジェクト追加
+    ? プロジェクト追加
   </button>
   <button class="fab-btn" id="btn_add_task" onclick="openTaskFormModal()" data-tip="選択したプロジェクトにタスクを追加します">
-    ✅ タスク追加
+    ? タスク追加
   </button>
 </div>
 <div id="flyout-mask" class="flyout-mask" onclick="closeFlyout()"></div>
@@ -9467,7 +9457,7 @@ function closestSafe(target, selector){
   <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <header>
       <strong id="modal-title">タイトル</strong>
-      <button class="close" aria-label="閉じる" onclick="closeModal()">✕</button>
+      <button class="close" aria-label="閉じる" onclick="closeModal()">?</button>
     </header>
     <div class="content" id="modal-content"></div>
   </div>
@@ -9505,4 +9495,6 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
+
 

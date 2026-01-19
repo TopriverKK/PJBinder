@@ -3663,6 +3663,12 @@ function renderAttendancePage(){
     const clockIn = row.clock_in || '';
     const clockOut = row.clock_out || '';
     const worked = computeWorkedMinutes(row, uid);
+    const grossMinutes = row.clock_in ? minutesBetweenIso(row.clock_in, row.clock_out) : 0;
+    const workSettings = getUserWorkSettings(uid);
+    const breakMinutes = row.clock_in ? (computeBreakMinutes(row) + (workSettings.breakMinutes || 0)) : 0;
+    const workedLabel = row.clock_in
+      ? `本日${minutesToLabel(grossMinutes)}(うち休憩${minutesToLabel(breakMinutes)})`
+      : '';
 
     const currentEvent = (ATT.currentEventsByUser && ATT.currentEventsByUser[uid]) || null;
     const nextEvent = (ATT.nextEventsByUser && ATT.nextEventsByUser[uid]) || null;
@@ -3769,7 +3775,7 @@ function renderAttendancePage(){
           <span class="att-k">勤務場所</span><span class="att-v">${escapeHtml(attLocLabel(location))}</span>
           <span class="att-k">出勤</span><span class="att-v">${escapeHtml(attFormatTime(clockIn))}</span>
           <span class="att-k">退勤</span><span class="att-v">${escapeHtml(attFormatTime(clockOut))}</span>
-          <span class="att-k">勤務時間</span><span class="att-v">${escapeHtml(minutesToLabel(worked))}</span>
+          <span class="att-k">勤務時間</span><span class="att-v">${escapeHtml(workedLabel)}</span>
           <span class="att-status-pill tone-${tone}">${escapeHtml(attStatusLabel(status))}</span>
         </div>
 
@@ -4042,6 +4048,30 @@ function computeWorkIntervals(att){
     if(intervals.length===0) break;
   }
   return intervals.filter(iv=>iv[1]>iv[0]);
+}
+function computeBreakMinutes(att){
+  if(!att) return 0;
+  const br = Array.isArray(att.breaks) ? att.breaks : [];
+  let total = 0;
+  for (const b of br){
+    if(!b || !b.start) continue;
+    const bStart = new Date(b.start);
+    const bEnd = new Date(b.end || new Date().toISOString());
+    if(!(bEnd > bStart)) continue;
+
+    const lunchStart = new Date(bStart);
+    lunchStart.setHours(12,0,0,0);
+    const lunchEnd = new Date(bStart);
+    lunchEnd.setHours(13,0,0,0);
+
+    const segments = subtractInterval([bStart, bEnd], [lunchStart, lunchEnd]);
+    for (const seg of segments){
+      const segStart = seg[0], segEnd = seg[1];
+      if (!(segEnd > segStart)) continue;
+      total += (segEnd.getTime() - segStart.getTime()) / 60000;
+    }
+  }
+  return Math.max(0, Math.round(total));
 }
 function computeWorkedMinutes(att, userId){
   if(!att || !att.clock_in) return 0;

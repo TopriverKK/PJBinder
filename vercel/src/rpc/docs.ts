@@ -26,7 +26,12 @@ function todayYMD() {
 
 export async function rpcGetLogoDataUrl() {
   const url = await getSetting('LOGO_URL');
-  if (url) return url;
+  const trimmed = String(url || '').trim();
+  if (trimmed) {
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    const fileId = trimmed.replace(/\s+/g, '');
+    return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
+  }
   return getLogoDataUrl();
 }
 

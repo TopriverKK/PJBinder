@@ -1415,6 +1415,18 @@ button.link:hover { opacity: .8; }
           </div>
           <div><label>所属</label><input id="u_dept"/></div>
         </div>
+        <div class="row-3">
+          <div><label>勤務形態</label>
+            <select id="u_work_type">
+              <option value="standard">所定勤務（7時間30分）</option>
+              <option value="hourly">時給制</option>
+              <option value="contractor">委託</option>
+              <option value="custom">カスタム</option>
+            </select>
+          </div>
+          <div><label>所定勤務時間（分）</label><input id="u_work_minutes" type="number" min="0" placeholder="例: 450" value="450"/></div>
+          <div><label>固定休憩（分）</label><input id="u_break_minutes" type="number" min="0" placeholder="例: 90" value="90"/></div>
+        </div>
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
           <button onclick="addUser()">ユーザー追加</button>
         </div>
@@ -1425,7 +1437,7 @@ button.link:hover { opacity: .8; }
       <h2>ユーザー一覧</h2>
       <div class="body list">
         <table id="userTable">
-          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>出勤状況に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th></th></tr></thead>
+          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>勤務形態</th><th>所定(分)</th><th>休憩(分)</th><th>出勤状況に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -3247,6 +3259,40 @@ function setAttendanceView(view, opts){
 }
 
 const fixedBreakMinutes = 90;
+const defaultScheduledWorkMinutes = 450;
+
+function normalizeWorkType(raw){
+  const t = String(raw||'').trim().toLowerCase();
+  if (['standard','hourly','contractor','custom'].includes(t)) return t;
+  return 'standard';
+}
+function workTypeDefaults(type){
+  const t = normalizeWorkType(type);
+  if (t === 'hourly' || t === 'contractor') return { workMinutes: 0, breakMinutes: 0 };
+  if (t === 'custom') return { workMinutes: defaultScheduledWorkMinutes, breakMinutes: fixedBreakMinutes };
+  return { workMinutes: defaultScheduledWorkMinutes, breakMinutes: fixedBreakMinutes };
+}
+function parseMinutesInput(value, fallback){
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : fallback;
+}
+function getUserWorkSettingsByUser(u){
+  const type = normalizeWorkType(u && (u.workType || u.work_type || u.employmentType));
+  const defaults = workTypeDefaults(type);
+  const workMinutes = parseMinutesInput(
+    u && (u.scheduledWorkMinutes ?? u.workDailyMinutes ?? u.work_minutes ?? u.workMinutes),
+    defaults.workMinutes
+  );
+  const breakMinutes = parseMinutesInput(
+    u && (u.fixedBreakMinutes ?? u.breakMinutes ?? u.fixed_break_minutes),
+    defaults.breakMinutes
+  );
+  return { type, workMinutes, breakMinutes };
+}
+function getUserWorkSettings(userId){
+  const u = safeArr(DATA.users).find(x=>String(x.id||'')===String(userId||''));
+  return getUserWorkSettingsByUser(u);
+}
 const defaultHolidayIcs = 'https://www.google.com/calendar/ical/ja.japanese%23holiday%40group.v.calendar.google.com/public/basic.ics';
 
 function parseTaxRate(input){
@@ -3616,7 +3662,7 @@ function renderAttendancePage(){
     const location = String(row.location||'office');
     const clockIn = row.clock_in || '';
     const clockOut = row.clock_out || '';
-    const worked = computeWorkedMinutes(row);
+    const worked = computeWorkedMinutes(row, uid);
 
     const currentEvent = (ATT.currentEventsByUser && ATT.currentEventsByUser[uid]) || null;
     const nextEvent = (ATT.nextEventsByUser && ATT.nextEventsByUser[uid]) || null;
@@ -3862,7 +3908,7 @@ function renderAttendanceMonthTable(month){
     const tr = document.createElement('tr');
     const uid = String(r.user_id||r.user||'');
     const uname = nameByUserId(uid);
-    const worked = (r.clock_in && r.clock_out) ? computeWorkedMinutes(r) : 0;
+    const worked = (r.clock_in && r.clock_out) ? computeWorkedMinutes(r, uid) : 0;
     const projName = r.project_id ? (safeArr(DATA.projects).find(p=>String(p.id)===String(r.project_id))?.name || r.project_id) : '';
     const taskName = r.task_id ? (safeArr(DATA.tasks).find(t=>String(t.id)===String(r.task_id))?.title || r.task_id) : '';
     const pt = projName && taskName ? `${projName} / ${taskName}` : (projName || taskName || '');
@@ -3915,7 +3961,7 @@ function renderAttendanceWeekTable(month){
     if(!dateKey || dateKey.slice(0,7)!==String(month||'')) return;
     const uid = String(r.user_id||r.user||'');
     if(!uid) return;
-    const worked = (r.clock_in && r.clock_out) ? computeWorkedMinutes(r) : 0;
+    const worked = (r.clock_in && r.clock_out) ? computeWorkedMinutes(r, uid) : 0;
     if(worked<=0) return;
     const ws = mondayStart(dateKey);
     const we = addDaysKey(ws, 6);
@@ -3997,11 +4043,13 @@ function computeWorkIntervals(att){
   }
   return intervals.filter(iv=>iv[1]>iv[0]);
 }
-function computeWorkedMinutes(att){
+function computeWorkedMinutes(att, userId){
   if(!att || !att.clock_in) return 0;
   const intervals = computeWorkIntervals(att);
   const total = intervals.reduce((sum, iv)=> sum + ((iv[1]-iv[0]) / 60000), 0);
-  return Math.max(0, Math.round(total - fixedBreakMinutes));
+  const work = getUserWorkSettings(userId);
+  const breakMin = (work && Number.isFinite(work.breakMinutes)) ? work.breakMinutes : fixedBreakMinutes;
+  return Math.max(0, Math.round(total - breakMin));
 }
 function computeNightMinutes(att){
   const intervals = computeWorkIntervals(att);
@@ -4104,7 +4152,7 @@ async function exportFreeeAttendanceCsv(){
       items.forEach(att=>{
         const dateKey = String(att.work_date||'');
         if(!dateKey) return;
-        const workedMinutes = (att.clock_in && att.clock_out) ? computeWorkedMinutes(att) : 0;
+        const workedMinutes = (att.clock_in && att.clock_out) ? computeWorkedMinutes(att, uid) : 0;
         const nightMinutes = computeNightMinutes(att);
         const prev = workedByDay.get(dateKey);
         if(!prev) workedByDay.set(dateKey, { workedMinutes, nightMinutes });
@@ -4131,9 +4179,11 @@ async function exportFreeeAttendanceCsv(){
         else prescribedHolidayAttendanceDays += 1;
       }
 
-      const scheduledWorkMinutes = (540 - fixedBreakMinutes) * scheduledWorkdayCount;
-      const overtimeMinutes = Math.max(0, totalWorkMinutes - scheduledWorkMinutes);
-      const shortageMinutes = Math.max(0, scheduledWorkMinutes - totalWorkMinutes);
+      const work = getUserWorkSettingsByUser(u);
+      const scheduledDaily = Number(work.workMinutes || 0);
+      const scheduledWorkMinutes = scheduledDaily * scheduledWorkdayCount;
+      const overtimeMinutes = scheduledDaily > 0 ? Math.max(0, totalWorkMinutes - scheduledWorkMinutes) : 0;
+      const shortageMinutes = scheduledDaily > 0 ? Math.max(0, scheduledWorkMinutes - totalWorkMinutes) : 0;
 
       const startKey = toDateKey(monthStart);
       const endKey = toDateKey(monthEnd);
@@ -5145,7 +5195,17 @@ function renderLedger() {
 
 // --- Users ---
 function addUser() {
-  const u = { name: val('u_name'), email: val('u_email'), role: val('u_role'), department: val('u_dept') };
+  const workType = normalizeWorkType(val('u_work_type'));
+  const defaults = workTypeDefaults(workType);
+  const u = {
+    name: val('u_name'),
+    email: val('u_email'),
+    role: val('u_role'),
+    department: val('u_dept'),
+    workType: workType,
+    scheduledWorkMinutes: parseMinutesInput(val('u_work_minutes'), defaults.workMinutes),
+    fixedBreakMinutes: parseMinutesInput(val('u_break_minutes'), defaults.breakMinutes),
+  };
   if(!u.name || !u.email){ alert('氏名とメールは必須です'); return; }
   gsr().withSuccessHandler(row => { patchRow('users', row); rerenderAfter('users'); }).upsertUser(u);
 }
@@ -5153,6 +5213,7 @@ function renderUsers() {
   const tb = document.querySelector('#userTable tbody'); if (!tb) return;
   tb.innerHTML='';
   safeArr(DATA.users).forEach(u=>{
+    const work = getUserWorkSettingsByUser(u);
     const tr = document.createElement('tr');
     const checked = isAttendanceVisibleUser(u) ? 'checked' : '';
     tr.innerHTML = `
@@ -5160,6 +5221,16 @@ function renderUsers() {
       <td>${escapeHtml(u.email||'')}</td>
       <td>${escapeHtml(u.role||'')}</td>
       <td>${escapeHtml(u.department||'')}</td>
+      <td>
+        <select data-uid="${escapeHtml(u.id)}" data-field="workType">
+          <option value="standard" ${work.type==='standard'?'selected':''}>所定勤務</option>
+          <option value="hourly" ${work.type==='hourly'?'selected':''}>時給制</option>
+          <option value="contractor" ${work.type==='contractor'?'selected':''}>委託</option>
+          <option value="custom" ${work.type==='custom'?'selected':''}>カスタム</option>
+        </select>
+      </td>
+      <td><input type="number" min="0" data-uid="${escapeHtml(u.id)}" data-field="scheduledWorkMinutes" value="${escapeHtml(String(work.workMinutes))}"/></td>
+      <td><input type="number" min="0" data-uid="${escapeHtml(u.id)}" data-field="fixedBreakMinutes" value="${escapeHtml(String(work.breakMinutes))}"/></td>
       <td style="text-align:center;"><input type="checkbox" data-uid="${escapeHtml(u.id)}" data-field="attendanceVisible" ${checked}/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="employeeNumber" value="${escapeHtml(u.employeeNumber||'')}" placeholder="12345"/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="calendarUrl" value="${escapeHtml(u.calendarUrl||'')}" placeholder="https://calendar.google.com/.../basic.ics"/></td>
@@ -5169,7 +5240,7 @@ function renderUsers() {
   });
 
   // Save user settings on change.
-  tb.querySelectorAll('input[data-uid]').forEach(inp=>{
+  tb.querySelectorAll('input[data-uid], select[data-uid]').forEach(inp=>{
     inp.addEventListener('change', ()=>{
       const uid = inp.getAttribute('data-uid');
       const field = inp.getAttribute('data-field');
@@ -5177,6 +5248,7 @@ function renderUsers() {
 
       let value = null;
       if (inp.type === 'checkbox') value = !!inp.checked;
+      else if (inp.type === 'number') value = parseMinutesInput(inp.value, 0);
       else value = inp.value;
 
       const patch = { id: uid };
@@ -5186,6 +5258,23 @@ function renderUsers() {
           .upsertUser(patch);
     }, { once:false });
   });
+  bindUserWorkTypeDefaults();
+}
+let USER_WORK_BOUND = false;
+function bindUserWorkTypeDefaults(){
+  if (USER_WORK_BOUND) return;
+  const sel = el('u_work_type');
+  const wm = el('u_work_minutes');
+  const bm = el('u_break_minutes');
+  if (!sel || !wm || !bm) return;
+  sel.addEventListener('change', ()=>{
+    const type = normalizeWorkType(sel.value);
+    if (type === 'custom') return;
+    const defs = workTypeDefaults(type);
+    wm.value = String(defs.workMinutes);
+    bm.value = String(defs.breakMinutes);
+  });
+  USER_WORK_BOUND = true;
 }
 function delUser(id) { gsr().withSuccessHandler(()=>{ dropRow('users', id); rerenderAfter('users'); }).deleteUser(id); }
 function delMinute(id) { gsr().withSuccessHandler(()=>{ dropRow('minutes', id); rerenderAfter('minutes'); }).deleteMinute(id); }

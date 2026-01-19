@@ -332,6 +332,11 @@ export async function rpcDeleteDailyReport(id: string) {
   return { ok: true, id };
 }
 
+export async function rpcDeleteAttachment(id: string) {
+  await sbDelete('attachments', id);
+  return { ok: true, id };
+}
+
 export async function rpcUpsertShared(s: any) {
   s.updatedAt = isoTimestamp(new Date());
   if (!s.id) {

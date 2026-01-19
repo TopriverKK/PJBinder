@@ -11,7 +11,7 @@ export async function getSetting(key: string): Promise<string | null> {
   
   // Refresh cache if expired
   if (!settingsCache[tenantId] || now - (cacheTime[tenantId] || 0) > CACHE_TTL) {
-    const rows = await sbSelectAllSafe('settings');
+    const rows = await sbSelectAllSafe('settings', 'select=key,value');
     settingsCache[tenantId] = {};
     for (const row of rows) {
       settingsCache[tenantId][row.key] = row.value;
@@ -24,7 +24,7 @@ export async function getSetting(key: string): Promise<string | null> {
 
 export async function setSetting(key: string, value: string): Promise<void> {
   const { sbUpsert } = await import('./rest');
-  await sbUpsert('settings', { key, value }, 'key');
+  await sbUpsert('settings', { key, value }, 'tenant_id,key');
   
   // Invalidate cache
   const tenantId = requireTenantId('settings');

@@ -120,6 +120,11 @@
   nav { display:flex; gap:8px; margin-left:auto; }
   nav button { background:#1f2937; border:1px solid #334155; }
   nav button.active { background:#0ea5e9; border-color:#0ea5e9; }
+  .menu-bar{ background:#0f172a; border-bottom:1px solid #1f2937; padding:6px 6px; z-index:28; }
+  .menu-bar nav{ display:flex; gap:8px; flex-wrap:wrap; margin-left:0; }
+  .menu-bar.fixed.top{ position: sticky; top: var(--header-h); }
+  .menu-bar.fixed.bottom{ position: fixed; bottom:0; left:0; right:0; }
+  body.menu-bottom.menu-fixed{ padding-bottom: var(--menu-h, 0px); }
   .container { padding:16px; }
   .page { display:none; }
   .page.active { display:block; }
@@ -708,27 +713,31 @@ button.link:hover { opacity: .8; }
   <div class="toolbar">
     <button class="secondary" onclick="refresh()">最新化</button>
     <button class="secondary" id="nav-help"    onclick="openUsageGuide('BEGINNER')">使い方</button>
-    <button class="secondary" id="nav-updates" onclick="openUpdatesModal()">アップデート</button>
+    <button class="secondary" id="nav-updates" onclick="openUpdatesModal()">アップデート情報</button>
   </div>
-  <nav>
-    <button class="active" id="nav-dashboard" onclick="goto('dashboard')" data-tip="タスク/プロジェクトの一覧・カンバン・ガント">ダッシュボード</button>
-    <button id="nav-minutes" onclick="goto('minutes')" data-tip="議事録の作成とDocs連携">議事録</button>
-    <button id="nav-daily"   onclick="goto('daily')" data-tip="日報の記録">日報</button>
-    <button id="nav-weekly"  onclick="goto('weekly')" data-tip="週次の振り返り入力">週次</button>
-    <button id="nav-attendance" onclick="goto('attendance')" data-tip="出退勤・休憩・外出の管理">出勤状況</button>
-    <button id="nav-shared"  onclick="goto('shared')" data-tip="共有資料の登録と閲覧">共有資料</button>
-    <button id="nav-users"   onclick="goto('users')" data-tip="ユーザー情報/所属の管理">ユーザー</button>
-    <button id="nav-vault"   onclick="goto('vault')" data-tip="パスワード金庫の管理">パスワード金庫</button>
-    <button id="nav-subs"    onclick="goto('subs')" data-tip="サブスクの登録と一覧">サブスク</button>
-    <button id="nav-budget"  onclick="goto('budget')" data-tip="予算サマリと集計">予算</button>
-    <button id="nav-ledger"  onclick="goto('ledger')" data-tip="入出金の登録・一覧">入出金</button>
-    <button id="nav-projects" onclick="goto('projects')" data-tip="プロジェクト一覧と編集">プロジェクト</button>
-    <button id="nav-facility" onclick="goto('facility')" data-tip="設備予約の登録とガント">設備予約</button>
-    <button id="nav-workflow" onclick="goto('workflow')" data-tip="申請/承認の管理">ワークフロー</button>
-    <button id="nav-settings" onclick="goto('settings')" data-tip="画面表示や操作の設定">設定</button>
-    <button id="nav-debug"   onclick="goto('debug')" data-tip="診断・再同期">デバッグ</button>
-  </nav>
 </header>
+<div id="menu-bar-top">
+  <div id="menu-bar" class="menu-bar fixed top">
+    <nav>
+      <button class="active" id="nav-dashboard" onclick="goto('dashboard')" data-tip="タスク/プロジェクトの一覧・カンバン・ガント">ダッシュボード</button>
+      <button id="nav-minutes" onclick="goto('minutes')" data-tip="議事録の作成とDocs連携">議事録</button>
+      <button id="nav-daily"   onclick="goto('daily')" data-tip="日報の記録">日報</button>
+      <button id="nav-weekly"  onclick="goto('weekly')" data-tip="週次の振り返り入力">週次</button>
+      <button id="nav-attendance" onclick="goto('attendance')" data-tip="出退勤・休憩・外出の管理">出勤状況</button>
+      <button id="nav-shared"  onclick="goto('shared')" data-tip="共有資料の登録と閲覧">共有資料</button>
+      <button id="nav-users"   onclick="goto('users')" data-tip="ユーザー情報/所属の管理">ユーザー</button>
+      <button id="nav-vault"   onclick="goto('vault')" data-tip="パスワード金庫の管理">パスワード金庫</button>
+      <button id="nav-subs"    onclick="goto('subs')" data-tip="サブスクの登録と一覧">サブスク</button>
+      <button id="nav-budget"  onclick="goto('budget')" data-tip="予算サマリと集計">予算</button>
+      <button id="nav-ledger"  onclick="goto('ledger')" data-tip="入出金の登録・一覧">入出金</button>
+      <button id="nav-projects" onclick="goto('projects')" data-tip="プロジェクト一覧と編集">プロジェクト</button>
+      <button id="nav-facility" onclick="goto('facility')" data-tip="設備予約の登録とガント">設備予約</button>
+      <button id="nav-workflow" onclick="goto('workflow')" data-tip="申請/承認の管理">決済申請</button>
+      <button id="nav-settings" onclick="goto('settings')" data-tip="画面表示や操作の設定">設定</button>
+      <button id="nav-debug"   onclick="goto('debug')" data-tip="診断・再同期">デバッグ</button>
+    </nav>
+  </div>
+</div>
 
   <div id="toast-stack"></div>
   <!-- budget/subs/ledger/debug pages -->
@@ -1032,7 +1041,7 @@ button.link:hover { opacity: .8; }
   <section class="page" id="page-workflow">
     <div class="grid">
       <div class="card">
-        <h2>ワークフロー申請</h2>
+        <h2>決済申請申請</h2>
         <div class="body">
           <input type="hidden" id="wf_editing_id"/>
           <div class="row">
@@ -1121,6 +1130,16 @@ button.link:hover { opacity: .8; }
               <option value="month">月単位</option>
             </select>
           </div>
+          <div>
+            <label>メニューバー位置</label>
+            <select id="set_menu_position">
+              <option value="top">上部</option>
+              <option value="bottom">下部</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div><label class="checkline"><input type="checkbox" id="set_menu_fixed">メニューバーを固定表示</label></div>
           <div></div>
         </div>
         <div class="row">
@@ -2048,12 +2067,18 @@ function syncStickyOffsets(){
     const root = document.documentElement;
     const header = document.querySelector('header');
     const globalToolbar = document.getElementById('global-toolbar');
+    const menuBar = document.getElementById('menu-bar');
     const filters = document.querySelector('#page-dashboard .filters.sticky, #page-dashboard .filters');
 
     const headerH = header ? Math.round(header.getBoundingClientRect().height) : 56;
-    const toolbarH = (globalToolbar && globalToolbar.offsetParent !== null)
+    const baseToolbarH = (globalToolbar && globalToolbar.offsetParent !== null)
       ? Math.round(globalToolbar.getBoundingClientRect().height)
       : 0;
+    const menuFixedTop = !!(menuBar && menuBar.classList.contains('fixed') && menuBar.classList.contains('top'));
+    const menuFixedBottom = !!(menuBar && menuBar.classList.contains('fixed') && menuBar.classList.contains('bottom'));
+    const menuTopH = menuFixedTop ? Math.round(menuBar.getBoundingClientRect().height) : 0;
+    const menuBottomH = menuFixedBottom ? Math.round(menuBar.getBoundingClientRect().height) : 0;
+    const toolbarH = baseToolbarH + menuTopH;
     const filtersH = (filters && filters.offsetParent !== null)
       ? Math.round(filters.getBoundingClientRect().height)
       : 46;
@@ -2061,6 +2086,7 @@ function syncStickyOffsets(){
     root.style.setProperty('--header-h', headerH + 'px');
     root.style.setProperty('--toolbar-h', toolbarH + 'px');
     root.style.setProperty('--filters-h', filtersH + 'px');
+    root.style.setProperty('--menu-h', menuBottomH + 'px');
   }catch(_){ }
 }
 
@@ -2167,6 +2193,8 @@ const DEFAULT_SETTINGS = {
   density: 'standard',
   dashboardView: 'list',
   ganttScale: 'day',
+  menuPosition: 'top',
+  menuFixed: true,
   showWatermark: true,
   showTooltips: true,
   showFab: true,
@@ -2192,12 +2220,16 @@ function syncSettingsForm(){
   const density = document.getElementById('set_density');
   const dashboardView = document.getElementById('set_dashboard_view');
   const ganttScale = document.getElementById('set_gantt_scale');
+  const menuPosition = document.getElementById('set_menu_position');
+  const menuFixed = document.getElementById('set_menu_fixed');
   const wm = document.getElementById('set_show_watermark');
   const tips = document.getElementById('set_show_tooltips');
   const fab = document.getElementById('set_show_fab');
   if (density) density.value = APP_SETTINGS.density || 'standard';
   if (dashboardView) dashboardView.value = APP_SETTINGS.dashboardView || 'list';
   if (ganttScale) ganttScale.value = APP_SETTINGS.ganttScale || 'day';
+  if (menuPosition) menuPosition.value = APP_SETTINGS.menuPosition || 'top';
+  if (menuFixed) menuFixed.checked = !!APP_SETTINGS.menuFixed;
   if (wm) wm.checked = !!APP_SETTINGS.showWatermark;
   if (tips) tips.checked = !!APP_SETTINGS.showTooltips;
   if (fab) fab.checked = !!APP_SETTINGS.showFab;
@@ -2224,6 +2256,31 @@ function applyDensity(value){
   document.body.style.fontSize = '14px';
 }
 
+function placeMenuBar(position){
+  const bar = document.getElementById('menu-bar');
+  if (!bar) return;
+  const pos = (position === 'bottom') ? 'bottom' : 'top';
+  const topHost = document.getElementById('menu-bar-top');
+  const bottomHost = document.getElementById('menu-bar-bottom');
+  const host = (pos === 'bottom') ? bottomHost : topHost;
+  if (host && bar.parentElement !== host) host.appendChild(bar);
+  document.body.classList.toggle('menu-bottom', pos === 'bottom');
+  document.body.classList.toggle('menu-top', pos === 'top');
+}
+
+function applyMenuBarSettings(){
+  const bar = document.getElementById('menu-bar');
+  if (!bar) return;
+  const position = APP_SETTINGS.menuPosition === 'bottom' ? 'bottom' : 'top';
+  const fixed = !!APP_SETTINGS.menuFixed;
+  placeMenuBar(position);
+  bar.classList.toggle('fixed', fixed);
+  bar.classList.toggle('top', position === 'top');
+  bar.classList.toggle('bottom', position === 'bottom');
+  document.body.classList.toggle('menu-fixed', fixed);
+  try { syncStickyOffsets(); } catch(_){}
+}
+
 function applyAppSettings(opts){
   const options = opts || {};
   applyDensity(APP_SETTINGS.density);
@@ -2238,6 +2295,8 @@ function applyAppSettings(opts){
 
   const fab = document.getElementById('fab-stack');
   if (fab) fab.style.display = APP_SETTINGS.showFab ? '' : 'none';
+
+  applyMenuBarSettings();
 
   const nextScale = APP_SETTINGS.ganttScale || 'day';
   if (nextScale !== GANTT_SCALE) {
@@ -2265,6 +2324,8 @@ function readSettingsForm(){
   const density = (document.getElementById('set_density') || {}).value;
   const dashboardView = (document.getElementById('set_dashboard_view') || {}).value;
   const ganttScale = (document.getElementById('set_gantt_scale') || {}).value;
+  const menuPosition = (document.getElementById('set_menu_position') || {}).value;
+  const menuFixed = (document.getElementById('set_menu_fixed') || {}).checked;
   const showWatermark = (document.getElementById('set_show_watermark') || {}).checked;
   const showTooltips = (document.getElementById('set_show_tooltips') || {}).checked;
   const showFab = (document.getElementById('set_show_fab') || {}).checked;
@@ -2272,6 +2333,8 @@ function readSettingsForm(){
     density: density || 'standard',
     dashboardView: dashboardView || 'list',
     ganttScale: ganttScale || 'day',
+    menuPosition: menuPosition || 'top',
+    menuFixed: !!menuFixed,
     showWatermark: !!showWatermark,
     showTooltips: !!showTooltips,
     showFab: !!showFab,
@@ -2487,7 +2550,7 @@ function hydrateSelects(){
     set('fac_facility', items, {empty:true, label:f=>f.name||f.id, value:f=>f.id});
   })();
 
-  // ワークフロー承認者（順番）
+  // 決済申請承認者（順番）
   const wfMulti = document.getElementById('wf_approvers');
   if (wfMulti){
     while(wfMulti.options.length) wfMulti.remove(0);
@@ -5395,7 +5458,7 @@ function renderProjects() {
     const pDocUrl = getProjectDocUrl(r.id);
 
     const attBtn = `<button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('project','${escapeJsSq(r.id)}','${escapeJsSq(r.name||r.id)}')">📎添付を追加</button>`;
-    const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">??Doc</span>' : '';
+    const badge  = pDocUrl ? '<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます。" onclick="openProjectDocById(\''+r.id+'\')">📄PJDoc</span>' : '';
 
     const tr = document.createElement('tr');
 
@@ -6628,7 +6691,7 @@ function editWorkflowRequest(id){
 }
 
 function delWorkflowRequest(id){
-  if(!confirmDel('ワークフロー申請')) return;
+  if(!confirmDel('決済申請申請')) return;
   gsr().withSuccessHandler(()=>refresh()).deleteWorkflowRequest(id);
 }
 
@@ -6863,7 +6926,7 @@ function renderGantt(forceDefaults){
     const ownerName = nameByUserId(proj?.ownerUserId || '');
     const pDocUrl = getProjectDocUrl(pid);
     const docBadgeP = pDocUrl
-      ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${pid}')">??Doc</span>`
+      ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${pid}')">📄PJDoc</span>`
       : '';
     const attNP = countAttachments('project', pid);
     const attBadgeP = attNP
@@ -6904,7 +6967,7 @@ function renderGantt(forceDefaults){
       // renderGantt 内、各タスクのラベル生成箇所を置き換え
       // 置換前：labelHtml.push(`<div ...>${escapeHtml(proj?.name || '(未割当)')} / <span class="muted">${title}</span></div>`);
       const tDocUrl = getTaskDocUrl(t.id);
-      const docBadge = tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">??Doc</span>` : '';
+      const docBadge = tDocUrl ? `<span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">📄PJDoc</span>` : '';
       const attN = countAttachments('task', t.id);
 
       const attBadge = attN ? `<span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">??${attN}</span>` : '';
@@ -7882,7 +7945,7 @@ function toggleProjectTasks(projectId, anchor){
       const tDoc = getTaskDocUrl(t.id);
       const attN = countAttachments('task', t.id);
       const att = attN ? ` <span class="doc-badge" title="添付 ${attN}件" onclick="openAttachmentManager('task','${t.id}')">??${attN}</span>` : '';
-      const doc = tDoc ? ` <span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">??Doc</span>` : '';
+      const doc = tDoc ? ` <span class="doc-badge" title="Task Doc" data-tip="タスクのドキュメントを開きます" onclick="openTaskDocById('${t.id}')">📄PJDoc</span>` : '';
       return `<div style="padding:2px 0;">
         <span class="pill" style="margin-right:6px;">${labelStatus(st)}</span>
         <span class="pill prio-badge ${pr==='高'?'prio-high':pr==='中'?'prio-mid':pr==='低'?'prio-low':''}" style="margin-right:6px;">${escapeHtml(pr)}</span>
@@ -7931,7 +7994,7 @@ function renderProjectsPage(){
 
   for (const r of rows){
     const pDocUrl = getProjectDocUrl(r.id);
-    const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">??Doc</span>` : '';
+    const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJDoc</span>` : '';
     const docBtn  = pDocUrl ? `<button class="secondary" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJ Doc</button>` : '';
     const attN    = countProjectAttachmentsDeep(r.id);
     const attBadge= attN ? `<span class="doc-badge" data-tip="添付URL一覧を表示します。" title="添付 ${attN}件" onclick="toggleAttachmentList('project','${r.id}', this)">??${attN}添付を表示</span>` : '';
@@ -9724,13 +9787,15 @@ function closestSafe(target, selector){
 <!-- アップデート表示モーダル -->
 <div class="modal-backdrop" id="updates-modal">
   <div class="modal-panel">
-    <h3>アップデート履歴</h3>
+    <h3>アップデート情報</h3>
     <div id="updates-body"></div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeUpdatesModal()">閉じる</button>
     </div>
   </div>
 </div>
+
+<div id="menu-bar-bottom"></div>
 
 </body>
 

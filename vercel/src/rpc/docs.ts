@@ -25,7 +25,7 @@ function todayYMD() {
 }
 
 export async function rpcGetLogoDataUrl() {
-  const raw = String(await getSetting('LOGO_URL') || '').trim();
+  const raw = String(await getSetting('GOOGLE_LOGO_FILE_ID') || '').trim();
   if (raw) {
     const fileId = extractDriveId(raw) || raw;
     const dataUrl = await getLogoDataUrl(fileId);

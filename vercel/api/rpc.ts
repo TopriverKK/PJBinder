@@ -53,10 +53,8 @@ async function ensureTenantSettingsInternal() {
   const fallbackTemplates = [
     { key: 'DAILY_TEMPLATE_ID', value: '' },
     { key: 'MINUTES_TEMPLATE_ID', value: '' },
-    { key: 'NOTES_FOLDER_ID', value: '' },
     { key: 'PROJECT_TEMPLATE_ID', value: '' },
     { key: 'TASK_TEMPLATE_ID', value: '' },
-    { key: 'LOGO_URL', value: '' },
     { key: 'GOOGLE_CLIENT_EMAIL', value: '' },
     { key: 'GOOGLE_PRIVATE_KEY', value: '' },
     { key: 'GOOGLE_DRIVE_ID', value: '' },

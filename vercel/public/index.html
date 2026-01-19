@@ -34,6 +34,7 @@
     --bg:#f8fafc; --card:#ffffff; --border:#e5e7eb; --ink:#111827;
     --muted:#6b7280; --accent:#0ea5e9; --pill:#eef2ff; --pill-ink:#3730a3;
     --shadow: 0 1px 2px rgba(0,0,0,.05);
+    --ui-scale: 0.95;
 
     /* Weekly schedule sheet-like colors */
     --weekly-name-bg: #dbeafe; /* light blue */
@@ -47,6 +48,8 @@
   }
   select { background-color: #fff; }
   html, body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif; margin:0; background:var(--bg); color:var(--ink); }
+  body { zoom: var(--ui-scale); }
+  body.density-relaxed { text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
   header {
       padding: 6px 6px;
       background: #0f172a;
@@ -2280,21 +2283,15 @@ function applyDensity(value){
   const root = document.documentElement;
   if (!root) return;
   const d = String(value || 'standard');
-  if (d === 'compact') {
-    root.style.setProperty('--row-h', '38px');
-    root.style.setProperty('--cell-py', '4px');
-    document.body.style.fontSize = '13px';
-    return;
-  }
-  if (d === 'relaxed') {
-    root.style.setProperty('--row-h', '52px');
-    root.style.setProperty('--cell-py', '8px');
-    document.body.style.fontSize = '15px';
-    return;
-  }
+  const isCompact = d === 'compact';
+  const isRelaxed = d === 'relaxed';
+  const scale = isCompact ? 0.75 : (isRelaxed ? 1 : 0.95);
+  root.style.setProperty('--ui-scale', String(scale));
   root.style.setProperty('--row-h', '44px');
   root.style.setProperty('--cell-py', '6px');
-  document.body.style.fontSize = '14px';
+  document.body.classList.toggle('density-compact', isCompact);
+  document.body.classList.toggle('density-standard', !isCompact && !isRelaxed);
+  document.body.classList.toggle('density-relaxed', isRelaxed);
 }
 
 function placeMenuBar(position){

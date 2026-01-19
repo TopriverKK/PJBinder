@@ -23,7 +23,7 @@ export async function getSetting(key: string): Promise<string | null> {
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
-  const { sbUpsert } = await import('./rest');
+  const { sbUpsert } = await import('./rest.js');
   const updatedAt = new Date().toISOString();
   await sbUpsert('settings', { key, value, updatedAt }, 'tenant_id,key');
   

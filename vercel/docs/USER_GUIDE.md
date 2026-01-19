@@ -1,120 +1,123 @@
-# PJ�o�C���_�[ �}�j���A���i�g�p�Ҍ����j
+﻿# PJバインダー マニュアル（使用者向け）
 
-���̕����́A����I��PJ�o�C���_�[���g���l�����Ɂu�����悭�^�p���邽�߂̎g�����v���܂Ƃ߂܂��B
+この文書は、日常的にPJバインダーを使う人向けに「効率よく運用するための使い方」をまとめます。
 
-## 1. �_�b�V���{�[�h�i�^�X�N�Ǘ��j
+## 1. ダッシュボード（タスク管理）
 
-### 1.1 ��ʍ\��
-- ��F�t�B���^�i�L�[���[�h/�v���W�F�N�g/�S��/����/�D��x/�X�e�[�^�X�j
-- ���F�^�X�N�\���i�^�u�Őؑցj
-  - �^�X�N�ꗗ / �J���o�� / �K���g
-- ���F�v���W�F�N�g�ꗗ�i��/�������Ȃǁj
+### 1.1 画面構成
+- 上：フィルタ（キーワード/プロジェクト/担当/期限/優先度/ステータス）
+- 中：タスク表示（タブで切替）
+  - タスク一覧 / カンバン / ガント
+- 下：プロジェクト一覧（未/完了数など）
 
-### 1.2 �t�B���^�̎g�����i��ƌ������オ��j
-- �u�v���W�F�N�g�v�ōi�� �� �ŏd�v
-- �u�S���v�ōi�� �� �����̃^�X�N�����ɂł���
-- �u����From/To�v�ō��T�����Ȃ�
-- �u�X�e�[�^�X�v�� `�����ȊO` ���g���ƕ֗�
+### 1.2 フィルタの使い方（作業効率が上がる）
+- 「プロジェクト」で絞る → 最重要
+- 「担当」で絞る → 自分のタスクだけにできる
+- 「期限From/To」で今週だけなど
+- 「ステータス」で `完了以外` を使うと便利
 
-### 1.3 �^�X�N�ꗗ�ilist�j
-- �s�̑���ŕҏW�EDocs�E�Y�t�Ȃǂ����s
-- �����͈ꗗ��ŕҏW�ł���i�Z�����ŕۑ�/�L�����Z���j
+### 1.3 タスク一覧（list）
+- 行の操作で編集・Docs・添付などを実行
+- メモは一覧上で編集できる（セル内で保存/キャンセル）
 
-### 1.4 �J���o���iboard�j
-- �J�[�h���h���b�O&�h���b�v�ŗ�ړ��itodo/doing/blocked/done�j
-- �J�[�h�����̃{�^���ł��X�e�[�^�X�ύX�ł���
+### 1.4 カンバン（board）
+- カードをドラッグ&ドロップで列移動（todo/doing/blocked/done）
+- カード下部のボタンでもステータス変更できる
 
-#### �S���ҕʃX�C�����[��
-- �u�S���ҕʃX�C�����[���vON
-- ���[���ɃJ�[�h�𗎂Ƃ��ƁA�X�e�[�^�X�ɉ����ĒS���ҁiassignees�j���X�V�����
-  - `������` ���[���ɗ��Ƃ��ƒS���҂��N���A�����
+#### 担当者別スイムレーン
+- 「担当者別スイムレーン」ON
+- レーンにカードを落とすと、ステータスに加えて担当者（assignees）も更新される
+  - `未割当` レーンに落とすと担当者がクリアされる
 
-### 1.5 �K���g�igantt�j
-- �u�\���͈́i�J�n?�I���j�v���w�肵�āu�K�p�v
-- �X�P�[���i��/�T/���j�ŉ������ς��
-- ���X�N���[���̓K���g�g�̒��ōs���i�y�[�W�S�͉̂��X�N���[�����Ȃ��j
+### 1.5 ガント（gantt）
+- 「表示範囲（開始?終了）」を指定して「適用」
+- スケール（日/週/月）で横幅が変わる
+- 横スクロールはガント枠の中で行う（ページ全体は横スクロールしない）
 
-## 2. �v���W�F�N�g
+## 2. プロジェクト
 
-### 2.1 �e�q�֌W
-- �e�v���W�F�N�g���w�肷��ƁA�v���W�F�N�g�̊K�w�Ǘ����ł���
+### 2.1 親子関係
+- 親プロジェクトを指定すると、プロジェクトの階層管理ができる
 
-### 2.2 ���ԁE�\�Z
-- ���Ԃ̓K���g�E�Ǘ��̑O��ɂ���
-- �\�Z�̓v���W�F�N�g���x���ŊǗ��i�K�v�ȏꍇ�̂݁j
+### 2.2 期間・予算
+- 期間はガント・管理の前提にする
+- 予算はプロジェクトレベルで管理（必要な場合のみ）
 
-### 2.3 �v���W�F�N�g���S�폜�i�^�p���Ӂj
-- �u���S�폜�v�͊֘A�^�X�N�E�Y�t���܂߂č폜����
-- ���s�O�ɁA�{���ɕs�v���m�F�i�����͊�{�ł��Ȃ��j
+### 2.3 プロジェクト完全削除（運用注意）
+- 「完全削除」は関連タスク・添付も含めて削除する
+- 実行前に、本当に不要か確認（復元は基本できない）
 
-## 3. Docs�iGoogle�h�L�������g�j�A�g
+## 3. Docs（Googleドキュメント）連携
 
-PJ�o�C���_�[�́A�L�^�̎c��Ɩ���Docs�ɏW�񂵂₷���\���ł��B
+PJバインダーは、記録の残る業務をDocsに集約しやすい構成です。
 
-- �v���W�F�N�gDocs�F�v���W�F�N�g�̊�b���
-- �^�X�NDocs�F�^�X�N�̏��i�e���v���[�g���玩���쐬�����ꍇ����j
-- �c���^Docs�F��c�L�^
-- ����Docs�F���X�̋L�^
+- プロジェクトDocs：プロジェクトの基礎情報
+- タスクDocs：タスクの情報（テンプレートから自動作成される場合あり）
+- 議事録Docs：会議記録
+- 日報Docs：日々の記録
 
-### 3.1 �悭����^�p
-- �u�^�X�N�쐬 �� Task Docs�쐬 �� ���s������Docs�ɒǋL�v
-- �u�c���^�����A�����N���L������ݒ肵�Ċ֌W�҂֋��L�v
+### 3.1 よくある運用
+- 「タスク作成 → Task Docs作成 → 実行メモはDocsに追記」
+- 「議事録を作り、リンク共有権限を設定して関係者へ共有」
 
-## 4. �Y�t�iAttachment�j
-- �^�X�N/�v���W�F�N�g�ɓY�t��R�Â�����
-- �J���o����ł�?�o�b�W�Ō�����������
+## 4. 添付（Attachment）
+- タスク/プロジェクトに添付を紐づけられる
+- カンバン上では?バッジで件数が見える
 
-## 5. �c���^�iMinutes�j
-- �o�^����Docs�����쐬���ł���
-- �Q����/�c��/���莖���ȂǁA��c���̋L�^�Ɏg��
+## 5. 議事録（Minutes）
+- 登録時にDocs自動作成ができる
+- 参加者/議題/決定事項など、会議情報の記録に使う
 
-## 6. ����iDaily�j
-- ���X�̕񍐂��c��
-- Docs�����쐬�i�܂��͊���Docs�ւ̒ǋL/�u���j���^�p�ɍ��킹�Ďg��
+## 6. 日報（Daily）
+- 日々の報告を残す
+- Docs自動作成（または既存Docsへの追記/置換）を運用に合わせて使う
 
-## 7. �Α�
+## 7. 勤怠
 
-### 7.1 �_�b�V���{�[�h
-- ���[�U�[�J�[�h�� freee�]�ƈ��ԍ����ŕ���
-- �\��\���F�l�J�����_�[(ICS)����u���݂̗\��/���̗\��v��\��
+### 7.1 ダッシュボード
+- ユーザーカードは freee従業員番号順で並ぶ
+- 予定表示：個人カレンダー(ICS)から「現在の予定/次の予定」を表示
 
-### 7.2 �ō��̋���
-- �x�e/�O�o�̓g�O���i�����Ɓu�߂�v�\���ɂȂ�A�ēx�����ƕ��A�j
-- �ދ΂��g�O���i�ދΌ�́u�ދΎ���v�ɂȂ�A�����Ǝ������j
+### 7.2 打刻の挙動
+- 休憩/外出はトグル（押すと「戻り」表示になり、再度押すと復帰）
+- 退勤もトグル（退勤後は「退勤取消」になり、押すと取り消し）
 
-### 7.3 �����X�V
-- �ΑӃ_�b�V���{�[�h�ł̂ݗL��
-- �y�[�W�ړ��E�T�}���ؑցE�^�u��\���Ŏ�����~�i�s�v�ȒʐM�����炷�j
+勤務時間は「本日hh時間mm分（うち休憩mm分）」で表示されます。
 
-### 7.4 �T�}���i��/�T�j�� freee CSV
-- �u�����ǂݍ��݁v�Ō����f�[�^���擾
-- �ufreee�W�vCSV�_�E�����[�h�v��CSV���o��
-  - `users.employeeNumber` �����ݒ肾�ƍ���̂ŕK������
+### 7.3 自動更新
+- 勤怠ダッシュボードでのみ有効
+- ページ移動・サマリ切替・タブ非表示で自動停止（不要な通信を減らす）
 
-## 8. ���[�U�[
-- �Αӕ\���Efreee�]�ƈ��ԍ��EICS URL ���Ǘ�
+### 7.4 サマリ（月/週）と freee CSV
+- 「月次読み込み」で月次データを取得
+- 「freee集計CSVダウンロード」でCSVを出力
+  - `users.employeeNumber` が未設定だと困るので必ず入力
 
-### 8.1 ICS�i�\��\���j�̐ݒ�菇�iGoogle�J�����_�[�j
+## 8. ユーザー
+- 勤怠表示・freee従業員番号・ICS URL を管理
+- 勤務形態 / 所定勤務時間 / 固定休憩 を設定（勤怠計算に反映）
 
-�ΑӃ_�b�V���{�[�h�́u���݂̗\��/���̗\��v�́A���[�U�[���Ƃ�ICS URL���Q�Ƃ��ĕ\�����܂��B
+### 8.1 ICS（予定表示）の設定手順（Googleカレンダー）
 
-1. Google�J�����_�[�ŁA�A�g�������J�����_�[���J��
-2. **�ݒ�Ƌ��L** ���J��
-3. **�\��̃A�N�Z�X����** �ŁA����L��������
-  - **��ʌ��J���ĒN�ł����p�ł���悤�ɂ���**
-  - **�\��̕\���i���ׂĂ̗\��̏ڍׁj**
-4. **�J�����_�[�̓���** �� **���̃J�����_�[�̌��JURL** ���R�s�[����
-5. PJ�o�C���_�[�� **���[�U�[** �y�[�W�ŁA�Ώۃ��[�U�[�� **ICS��** �ɓ\��t����
+勤怠ダッシュボードの「現在の予定/次の予定」は、ユーザーごとのICS URLを参照して表示します。
 
-���ӁF�J�����_�[�̌��J�ݒ�𔺂��܂��B���J�͈́E�^�p�͑g�D���[���ɏ]���Ă��������B
+1. Googleカレンダーで、連携したいカレンダーを開く
+2. **設定と共有** を開く
+3. **予定のアクセス権限** で、次を有効化する
+  - **一般公開して誰でも利用できるようにする**
+  - **予定の表示（すべての予定の詳細）**
+4. **カレンダーの統合** の **このカレンダーの公開URL** をコピーする
+5. PJバインダーの **ユーザー** ページで、対象ユーザーの **ICS欄** に貼り付ける
 
-## 9. ���ɁiVault�j
-- �F�؏���ۑ�����i�N���C�A���g���Í����O��̐݌v�j
-- ���L����Ƃ��͉^�p���[���i�p�X�t���[�Y�Ǘ��j�𖾊m��
+注意：カレンダーの公開設定を伴います。公開範囲・運用は組織ルールに従ってください。
+
+## 9. 金庫（Vault）
+- 認証情報を保存する（クライアント側暗号化前提の設計）
+- 共有するときは運用ルール（パスフレーズ管理）を明確に
 
 ---
 
-## �t�^�F�^�X�N�^�p�̏�ԑJ�ځiMermaid�j
+## 付録：タスク運用の状態遷移（Mermaid）
 
 ```mermaid
 stateDiagram-v2
@@ -125,27 +128,28 @@ stateDiagram-v2
   blocked --> doing
   doing --> done
   blocked --> done
-  done --> todo: �����߂��i�K�v�Ȃ�j
+  done --> todo: 差し戻し（必要なら）
 ```
 
-## �t�^�F�Αӂ̏�ԑJ�ځiMermaid�j
+## 付録：勤怠の状態遷移（Mermaid）
 
 ```mermaid
 stateDiagram-v2
   [*] --> not_clocked
-  not_clocked --> working: �o��(�I�t�B�X/�e�����[�N)
-  not_clocked --> out: �o��(�O�o)
+  not_clocked --> working: 出勤(オフィス/テレワーク)
+  not_clocked --> out: 出勤(外出)
 
-  working --> break: �x�e
-  break --> working: �x�e�߂�
+  working --> break: 休憩
+  break --> working: 休憩戻り
 
-  working --> out: �O�o
-  out --> working: �O�o�߂�
+  working --> out: 外出
+  out --> working: 外出戻り
 
-  working --> done: �ދ�
-  break --> done: �ދ΁i�x�e�����j
-  out --> done: �ދ�
+  working --> done: 退勤
+  break --> done: 退勤（休憩を閉じる）
+  out --> done: 退勤
 
-  done --> working: �ދΎ���i�o�΍ς݂̏ꍇ�j
-  done --> not_clocked: �ދΎ���i�o�΂������ꍇ�j
+  done --> working: 退勤取消（出勤済みの場合）
+  done --> not_clocked: 退勤取消（出勤が無い場合）
 ```
+

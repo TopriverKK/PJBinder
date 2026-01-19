@@ -324,6 +324,10 @@
   #quick-panel.collapsed h2 { writing-mode: vertical-rl; transform: rotate(180deg); margin:0; padding: 8px 0; font-size:12px; }
   #quick-panel.collapsed .body { display:none; }
   #qp-toggle { position:absolute; top:8px; right:8px; }
+  /* Quick panel is kept for form bindings but hidden from the dashboard UI. */
+  #page-dashboard #quick-panel{ display:none; }
+  #page-dashboard #dashboard-grid{ grid-template-columns: 1fr; }
+  #page-dashboard #dashboard-grid.collapsed-left{ grid-template-columns: 1fr; }
 
   /* ガントのスクロールバー（復活＋見やすく） */
   .show-scrollbars{ scrollbar-gutter: auto; }
@@ -1113,7 +1117,7 @@ button.link:hover { opacity: .8; }
   <section class="page active" id="page-dashboard">
     <div class="grid" id="dashboard-grid">
       <!-- 左サイド：クイック追加（折りたたみ対応） -->
-      <div class="card" id="quick-panel">
+      <div class="card" id="quick-panel" data-disabled="1">
         <h2>
           クイック追加
           <button id="qp-toggle" class="secondary mini" onclick="toggleQuickPanel()" title="折りたたみ/展開">◀</button>
@@ -7068,13 +7072,22 @@ function applyQuickPanelState(){
   const grid=document.getElementById('dashboard-grid');
   const panel=document.getElementById('quick-panel');
   const btn=document.getElementById('qp-toggle');
-  if(!grid||!panel||!btn) return;
+  if(!grid||!panel) return;
+  if (panel.dataset && panel.dataset.disabled === '1'){
+    grid.classList.remove('collapsed-left');
+    panel.classList.remove('collapsed');
+    if (btn) btn.style.display = 'none';
+    return;
+  }
+  if(!btn) return;
   grid.classList.toggle('collapsed-left', QUICK_COLLAPSED);
   panel.classList.toggle('collapsed', QUICK_COLLAPSED);
   btn.textContent = QUICK_COLLAPSED ? '▶' : '◀';
   btn.title = QUICK_COLLAPSED ? '展開' : '折りたたみ';
 }
 function toggleQuickPanel(){
+  const panel=document.getElementById('quick-panel');
+  if (panel && panel.dataset && panel.dataset.disabled === '1') return;
   QUICK_COLLAPSED = !QUICK_COLLAPSED;
   try{ localStorage.setItem('quick_collapsed', QUICK_COLLAPSED ? '1':'0'); }catch(_){}
   applyQuickPanelState();

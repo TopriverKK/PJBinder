@@ -1,14 +1,14 @@
-# PJ�o�C���_�[ �d�l���i�ȈՁj
+﻿# PJバインダー 仕様書（簡易）
 
-���̕����́A�^�p�E�ێ��s������̂��߂́u�������d�l�v�ł��B
+この文書は、運用・保守や不具合調査のための「実装寄り仕様」です。
 
-## 1. �S�̍\��
+## 1. 全体構成
 
-- �z�M�FVercel�i�ÓI�z�M + API Routes�j
-- �t�����g�F�P��y�[�W�� `public/index.html` ��UI���W��
-- �o�b�N�G���h�F`/api/rpc` ��RPC�f�B�X�p�b�`�i�K�v�ɉ����Ēx��import�j
-- DB�FSupabase�iservice role�j
-- �O���FGoogle Drive/Docs�iservice account�j
+- 配信：Vercel（静的配信 + API Routes）
+- フロント：単一ページの `public/index.html` にUIを集約
+- バックエンド：`/api/rpc` でRPCディスパッチ（必要に応じて遅延import）
+- DB：Supabase（service role）
+- 外部：Google Drive/Docs（service account）
 
 ```mermaid
 flowchart LR
@@ -18,12 +18,12 @@ flowchart LR
   R -->|service account| G[Google APIs]
 ```
 
-## 2. ���/���[�e�B���O
+## 2. 画面/ルーティング
 
-### 2.1 ��ʑJ��
-- �N�G���Ńy�[�W�E�^�u��\������
-  - `?page=dashboard` �Ȃ�
-  - �_�b�V���{�[�h������ `?tab=board|gantt|...` �𕹗p
+### 2.1 画面遷移
+- クエリでページ・タブを表現する
+  - `?page=dashboard` など
+  - ダッシュボード内部は `?tab=board|gantt|...` を併用
 
 ```mermaid
 stateDiagram-v2
@@ -42,54 +42,60 @@ stateDiagram-v2
   }
 ```
 
-### 2.2 �u�ǂ̃y�[�W����ł��J���o��/�K���g�ցv
-- �V���[�g�J�b�g�́u�_�b�V���{�[�h�֖߂�v���u�^�u�ؑցv��2�i���K�v
-- �^�u�ؑւ����ł͕\��DOM�����݂��Ȃ��y�[�W�����邽��
+### 2.2 「どのページからでもカンバン/ガントへ」
+- ショートカットは「ダッシュボードへ戻る」→「タブ切替」の2段が必要
+- タブ切替だけでは表示DOMが存在しないページがあるため
 
-## 3. RPC�i/api/rpc�j
+## 3. RPC（/api/rpc）
 
-### 3.1 �Ăяo���K��
-- �t�����g�� `name` �� `args` ���w�肵�� `/api/rpc` ��POST
-- �T�[�o�� `name` �Ńn���h�����������āA`args` ���֐��֓n��
+### 3.1 呼び出し規約
+- フロントは `name` と `args` を指定して `/api/rpc` にPOST
+- サーバは `name` でハンドラを引き当て、`args` を関数へ渡す
 
-### 3.2 �x��import���j
-- API Route �̃g�b�v���x�� import �𑝂₷�� Vercel �̎��s���Ŏ��s������
-- ���̂��߁ARPC���ƂɎ������W���[����x�����[�h���A�K�v�Ȏ������ǂݍ���
+### 3.2 遅延import方針
+- API Route のトップレベル import を増やすと Vercel の実行環境で失敗しうる
+- そのため、RPCごとに実装モジュールを遅延ロードし、必要な時だけ読み込む
 
-### 3.3 ��\�I��RPC
-- �^�X�N
-  - `setTaskStatus`�F�^�X�N�̃X�e�[�^�X�X�V�itodo/doing/blocked/done�j
-- �Α�
-  - `patchAttendance`�FclockIn/clockOut/toggleBreak/toggleOut �Ȃǂ�1��RPC�ŏ���
+### 3.3 代表的なRPC
+- タスク
+  - `setTaskStatus`：タスクのステータス更新（todo/doing/blocked/done）
+- 勤怠
+  - `patchAttendance`：clockIn/clockOut/toggleBreak/toggleOut などを1つのRPCで処理
 
-## 4. �f�[�^���f���i�T���j
+## 4. データモデル（概略）
 
-> ������DDL�� Supabase ���𐳂Ƃ���B
+> 厳密なDDLは Supabase 側を正とする。
 
 ### 4.1 users
-- `employeeNumber`�Ffreee�]�ƈ��ԍ��i�ΑӃJ�[�h�̃\�[�g�ECSV�o�͂Ɏg�p�j
-- `icsUrl`�F�l�J�����_�[(ICS)��URL�i�\��\���Ɏg�p�j
+- `employeeNumber`: freee従業員番号（勤怠カードのソート・CSV出力に使用）
+- `calendarUrl`: 個人カレンダー(ICS)のURL（予定表示に使用）
+- `workType`: 勤務形態（standard/hourly/contractor/custom）
+- `scheduledWorkMinutes`: 所定勤務時間（分）
+- `fixedBreakMinutes`: 固定休憩時間（分）
 
 ### 4.2 tasks
-- `status`�F`todo|doing|blocked|done`
-- `assignees`�F�S���ҁi�����j
-- `projectId`�F�����v���W�F�N�g
-- `startDate/endDate`�F�K���g�\���̊�b
+- `status`：`todo|doing|blocked|done`
+- `assignees`：担当者（複数）
+- `projectId`：所属プロジェクト
+- `startDate/endDate`：ガント表示の基礎
 
 ### 4.3 attendancemanager
-- `clock_in` / `clock_out`�F�ō������inull���e�j
-- `work_location`�F�Ζ��ꏊ�ioffice/telework/out �Ȃǁj
-- `break_*` / `out_*`�F�x�e�E�O�o�̊J�n/�I��
+- `clock_in` / `clock_out`：打刻時刻（null許容）
+- `status`：出勤状態（not-clocked/working/break/out/done）
+- `location`：勤務場所（office/remote/out）
+- `breaks`：休憩区間の配列（start/end）
+- `project_id` / `task_id`：作業紐づけ
+- `notes`：メモ
 
-## 5. �ΑӁi��ԑJ�ځj
+## 5. 勤怠（状態遷移）
 
-### 5.1 �ړI
-- �ō��̐�������ۂ��Ȃ���A����I�y���[�V�����ɉ���UI�ɂ���
+### 5.1 目的
+- 打刻の整合性を保ちながら、現場オペレーションに沿うUIにする
 
-### 5.2 �v�_
-- �ދΌ�Ɍ���ďo�΂��������ꍇ�A�ދ΂��������đ��s�ł���
-- �x�e/�O�o�̓g�O������Łu�߂�v�\���ɂȂ�
-- �ދ΂��g�O������Łu�ދΎ���v�\���ɂȂ�
+### 5.2 要点
+- 退勤後に誤って出勤を押した場合、退勤を取り消して続行できる
+- 休憩/外出はトグル操作で「戻り」表示になる
+- 退勤もトグル操作で「退勤取消」表示になる
 
 ```mermaid
 stateDiagram-v2
@@ -107,19 +113,26 @@ stateDiagram-v2
   break --> done: clockOut
   out --> done: clockOut
 
-  done --> working: clockOut(���)
-  done --> not_clocked: clockOut(���)
+  done --> working: clockOut(取消)
+  done --> not_clocked: clockOut(取消)
 
-  done --> working: clockIn(�ދΎ��)
+  done --> working: clockIn(退勤取消)
 ```
 
-## 6. �G���[�n���h�����O���j
+## 6. エラーハンドリング方針
 
-- Supabase�ۑ��F�K�B�i���s�̓��[�U�[�ɒʒm���A�Ď��s�\�ɂ���j
-- Google Docs�쐬�F�x�X�g�G�t�H�[�g�i���s���Ă��又���͐��������ɂ��Ă悢�j
+- Supabase保存：必達（失敗はユーザーに通知し、再試行可能にする）
+- Google Docs作成：ベストエフォート（失敗しても主処理は成功扱いにしてよい）
 
-## 7. �^�p�`�F�b�N���X�g
+## 7. 運用チェックリスト
 
-- `users.employeeNumber` ���S���������Ă���i�ΑӃ\�[�g/CSV�j
-- ICS URL ���K�v�Ȑl�� `users.icsUrl` ��ݒ�
-- Vercel ���ϐ��iSupabase/Google�j���ݒ�ς�
+- `users.employeeNumber` が全員分入っている（勤怠ソート/CSV）
+- 勤務形態/所定勤務/固定休憩 が必要に応じて設定済み
+- ICS URL が必要な人は `users.calendarUrl` を設定
+- Vercel 環境変数（Supabase/Google）が設定済み
+
+
+
+
+
+

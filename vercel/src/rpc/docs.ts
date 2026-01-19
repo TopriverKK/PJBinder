@@ -25,36 +25,31 @@ function todayYMD() {
 }
 
 export async function rpcGetLogoDataUrl() {
-  const url = await getSetting('LOGO_URL');
-  const trimmed = String(url || '').trim();
-  if (trimmed) return normalizeLogoUrl(trimmed);
+  const raw = String(await getSetting('LOGO_URL') || '').trim();
+  if (raw) {
+    const fileId = extractDriveId(raw) || raw;
+    const dataUrl = await getLogoDataUrl(fileId);
+    if (dataUrl) return dataUrl;
+  }
   return getLogoDataUrl();
 }
 
-function normalizeLogoUrl(input: string): string {
+function extractDriveId(input: string): string {
   const raw = String(input || '').trim();
   if (!raw) return '';
-  if (/^data:/i.test(raw)) return raw;
   if (/^https?:\/\//i.test(raw)) {
-    const driveId = extractDriveId(raw);
-    if (driveId) return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(driveId)}`;
-    return raw;
+    const match = raw.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) return match[1];
+    try {
+      const u = new URL(raw);
+      const id = u.searchParams.get('id');
+      if (id) return id;
+    } catch (_) {
+      return '';
+    }
+    return '';
   }
-  const fileId = raw.replace(/\s+/g, '');
-  return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
-}
-
-function extractDriveId(url: string): string {
-  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (match && match[1]) return match[1];
-  try {
-    const u = new URL(url);
-    const id = u.searchParams.get('id');
-    if (id) return id;
-  } catch (_) {
-    // ignore
-  }
-  return '';
+  return raw.replace(/\s+/g, '');
 }
 
 export async function rpcSetDocLinkShare(docId: string, role: 'viewer' | 'commenter' | 'editor') {

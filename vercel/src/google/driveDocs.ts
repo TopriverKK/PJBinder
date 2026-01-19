@@ -321,23 +321,24 @@ export async function appendDocWithMemo(docId: string, memoText: string) {
   return true;
 }
 
-export async function getLogoDataUrl() {
+export async function getLogoDataUrl(overrideFileId?: string | null) {
   try {
     const { drive } = getGoogleClients();
     const { logoFileId } = loadGoogleEnv();
-    if (!logoFileId) return null;
+    const fileId = String(overrideFileId || '').trim() || logoFileId;
+    if (!fileId) return null;
 
     const params = driveParams();
 
     // `alt=media` returns binary; googleapis gives it back in `data`.
     const res: any = await drive.files.get(
-      { ...params, fileId: logoFileId, alt: 'media' as any },
+      { ...params, fileId, alt: 'media' as any },
       { responseType: 'arraybuffer' }
     );
 
     const meta = await drive.files.get({
       ...params,
-      fileId: logoFileId,
+      fileId,
       fields: 'mimeType',
     });
 

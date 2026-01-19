@@ -67,6 +67,8 @@
     padding:2px 8px; border-radius:999px; border:1px solid #334155;
     background:#1f2937; color:#e2e8f0; font-size:12px; font-weight:600;
   }
+  .checkline{ display:flex; align-items:center; gap:6px; font-size:13px; }
+  .checkline input[type="checkbox"]{ width:auto; }
   .toolbar{ flex-wrap: wrap; }
   nav { flex-wrap: wrap; }
   :root{
@@ -723,6 +725,7 @@ button.link:hover { opacity: .8; }
     <button id="nav-projects" onclick="goto('projects')" data-tip="プロジェクト一覧と編集">プロジェクト</button>
     <button id="nav-facility" onclick="goto('facility')" data-tip="設備予約の登録とガント">設備予約</button>
     <button id="nav-workflow" onclick="goto('workflow')" data-tip="申請/承認の管理">ワークフロー</button>
+    <button id="nav-settings" onclick="goto('settings')" data-tip="画面表示や操作の設定">設定</button>
     <button id="nav-debug"   onclick="goto('debug')" data-tip="診断・再同期">デバッグ</button>
   </nav>
 </header>
@@ -1082,6 +1085,55 @@ button.link:hover { opacity: .8; }
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-settings" class="page">
+    <div class="card">
+      <h2>設定</h2>
+      <div class="body">
+        <div class="row">
+          <div>
+            <label>表示密度</label>
+            <select id="set_density">
+              <option value="standard">標準</option>
+              <option value="compact">コンパクト</option>
+              <option value="relaxed">ゆったり</option>
+            </select>
+          </div>
+          <div>
+            <label>ダッシュボード既定ビュー</label>
+            <select id="set_dashboard_view">
+              <option value="list">一覧</option>
+              <option value="board">カンバン</option>
+              <option value="gantt">ガント</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>ガント既定スケール</label>
+            <select id="set_gantt_scale">
+              <option value="day">日単位</option>
+              <option value="week">週単位</option>
+              <option value="month">月単位</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
+        <div class="row">
+          <div><label class="checkline"><input type="checkbox" id="set_show_watermark">透かしロゴを表示</label></div>
+          <div><label class="checkline"><input type="checkbox" id="set_show_tooltips">ツールチップを表示</label></div>
+        </div>
+        <div class="row">
+          <div><label class="checkline"><input type="checkbox" id="set_show_fab">右下の追加ボタンを表示</label></div>
+          <div></div>
+        </div>
+        <div class="toolbar" style="justify-content:flex-end; margin-top:8px;">
+          <button onclick="saveAppSettings()">保存</button>
+          <button class="secondary" onclick="resetAppSettings()">初期化</button>
         </div>
       </div>
     </div>
@@ -2046,7 +2098,7 @@ function goto(page, opts) {
     }
   }
 
-  const pages = ['dashboard','minutes','daily','weekly','attendance','users','vault','budget','subs','ledger','projects','facility','workflow','debug','shared'];
+  const pages = ['dashboard','minutes','daily','weekly','attendance','users','vault','budget','subs','ledger','projects','facility','workflow','settings','debug','shared'];
   pages.forEach(p => {
     const pageEl = document.getElementById('page-'+p);
     if (pageEl) pageEl.classList.toggle('active', p===page);
@@ -2110,7 +2162,136 @@ function countAttachments(kind, id){
 }
 const FILTERS_KEY = 'pm_filters_v2';
 let OVERDUE = false; // 遅延クイックフィルタ
+const SETTINGS_KEY = 'pjbinder_settings_v1';
+const DEFAULT_SETTINGS = {
+  density: 'standard',
+  dashboardView: 'list',
+  ganttScale: 'day',
+  showWatermark: true,
+  showTooltips: true,
+  showFab: true,
+};
+let APP_SETTINGS = { ...DEFAULT_SETTINGS };
+let TOOLTIPS_ENABLED = true;
 const dayMs = 24*60*60*1000; // グローバル日ミリ秒（ガント/日付計算で使用）
+
+function loadAppSettings(){
+  try{
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw) || {};
+    APP_SETTINGS = { ...DEFAULT_SETTINGS, ...data };
+  }catch(_){}
+}
+
+function persistAppSettings(){
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(APP_SETTINGS)); }catch(_){}
+}
+
+function syncSettingsForm(){
+  const density = document.getElementById('set_density');
+  const dashboardView = document.getElementById('set_dashboard_view');
+  const ganttScale = document.getElementById('set_gantt_scale');
+  const wm = document.getElementById('set_show_watermark');
+  const tips = document.getElementById('set_show_tooltips');
+  const fab = document.getElementById('set_show_fab');
+  if (density) density.value = APP_SETTINGS.density || 'standard';
+  if (dashboardView) dashboardView.value = APP_SETTINGS.dashboardView || 'list';
+  if (ganttScale) ganttScale.value = APP_SETTINGS.ganttScale || 'day';
+  if (wm) wm.checked = !!APP_SETTINGS.showWatermark;
+  if (tips) tips.checked = !!APP_SETTINGS.showTooltips;
+  if (fab) fab.checked = !!APP_SETTINGS.showFab;
+}
+
+function applyDensity(value){
+  const root = document.documentElement;
+  if (!root) return;
+  const d = String(value || 'standard');
+  if (d === 'compact') {
+    root.style.setProperty('--row-h', '38px');
+    root.style.setProperty('--cell-py', '4px');
+    document.body.style.fontSize = '13px';
+    return;
+  }
+  if (d === 'relaxed') {
+    root.style.setProperty('--row-h', '52px');
+    root.style.setProperty('--cell-py', '8px');
+    document.body.style.fontSize = '15px';
+    return;
+  }
+  root.style.setProperty('--row-h', '44px');
+  root.style.setProperty('--cell-py', '6px');
+  document.body.style.fontSize = '14px';
+}
+
+function applyAppSettings(opts){
+  const options = opts || {};
+  applyDensity(APP_SETTINGS.density);
+
+  const wm = document.getElementById('watermark');
+  if (wm) wm.style.display = APP_SETTINGS.showWatermark ? '' : 'none';
+
+  TOOLTIPS_ENABLED = !!APP_SETTINGS.showTooltips;
+  if (!TOOLTIPS_ENABLED) {
+    document.querySelectorAll('.tooltip-bubble').forEach(el => el.remove());
+  }
+
+  const fab = document.getElementById('fab-stack');
+  if (fab) fab.style.display = APP_SETTINGS.showFab ? '' : 'none';
+
+  const nextScale = APP_SETTINGS.ganttScale || 'day';
+  if (nextScale !== GANTT_SCALE) {
+    GANTT_SCALE = nextScale;
+    try { localStorage.setItem('gantt_scale', GANTT_SCALE); } catch(_){}
+    if (PAGE === 'dashboard' && ACTIVE_TAB === 'gantt') {
+      try { renderGantt?.(true); } catch(_){}
+    }
+  }
+  const scaleSel = document.getElementById('gantt-scale-mode');
+  if (scaleSel && String(scaleSel.value || '') !== String(GANTT_SCALE)) {
+    scaleSel.value = GANTT_SCALE;
+  }
+
+  if (PAGE === 'dashboard') {
+    const params = readRouteParams();
+    const hasRouteTab = !!params.tab || !!location.hash;
+    if (!options.respectRoute || !hasRouteTab) {
+      try { switchTab(APP_SETTINGS.dashboardView || 'list'); } catch(_){}
+    }
+  }
+}
+
+function readSettingsForm(){
+  const density = (document.getElementById('set_density') || {}).value;
+  const dashboardView = (document.getElementById('set_dashboard_view') || {}).value;
+  const ganttScale = (document.getElementById('set_gantt_scale') || {}).value;
+  const showWatermark = (document.getElementById('set_show_watermark') || {}).checked;
+  const showTooltips = (document.getElementById('set_show_tooltips') || {}).checked;
+  const showFab = (document.getElementById('set_show_fab') || {}).checked;
+  return {
+    density: density || 'standard',
+    dashboardView: dashboardView || 'list',
+    ganttScale: ganttScale || 'day',
+    showWatermark: !!showWatermark,
+    showTooltips: !!showTooltips,
+    showFab: !!showFab,
+  };
+}
+
+function saveAppSettings(){
+  APP_SETTINGS = { ...DEFAULT_SETTINGS, ...readSettingsForm() };
+  persistAppSettings();
+  applyAppSettings({ respectRoute: false });
+  try { showToast('ok', '設定を保存しました'); } catch(_){}
+}
+
+function resetAppSettings(){
+  APP_SETTINGS = { ...DEFAULT_SETTINGS };
+  persistAppSettings();
+  syncSettingsForm();
+  applyAppSettings({ respectRoute: false });
+  try { showToast('ok', '設定を初期化しました'); } catch(_){}
+}
 
 function saveFiltersToLS(){
   const payload = { ...FILTERS, overdue: OVERDUE ? 1 : 0 };
@@ -7102,6 +7283,8 @@ window.addEventListener('error', (e)=>{
 document.addEventListener('DOMContentLoaded', function(){
   initTenantFromUrl();
   loadTenantLabel();
+  loadAppSettings();
+  syncSettingsForm();
 // --- RRULE helpers ---
 function rruleFromMode(mode, baseDate){
   // baseDate: 'YYYY-MM-DD' or ''
@@ -7174,6 +7357,7 @@ function bindRruleUI(){
   }
   try { const m=document.getElementById('gantt-scale-mode'); if(m) m.value=GANTT_SCALE; } catch(_){ }
   try { setVersionAndDebug(APP_VERSION); fetchSpreadsheetInfo(); refresh(); bindRruleUI(); } catch(e){ alert('初期化時エラー: ' + e); }
+  applyAppSettings({ respectRoute: true });
 
   // クイック追加の折りたたみ状態を反映
   //try { QUICK_COLLAPSED = (localStorage.getItem('quick_collapsed')==='1'); applyQuickPanelState(); } catch(_){}
@@ -9291,6 +9475,7 @@ function openAppUsageGuide() {
   }
 
   function onEnter(e){
+    if (!TOOLTIPS_ENABLED) return;
     const target = closestSafe(e.target,'[data-tip]');
     if(!target) return;
     const text = target.getAttribute('data-tip');

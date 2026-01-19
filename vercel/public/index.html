@@ -703,21 +703,21 @@ button.link:hover { opacity: .8; }
     <button class="secondary" id="nav-updates" onclick="openUpdatesModal()">アップデート</button>
   </div>
   <nav>
-    <button class="active" id="nav-dashboard" onclick="goto('dashboard')">ダッシュボード</button>
-    <button id="nav-minutes" onclick="goto('minutes')">議事録</button>
-    <button id="nav-daily"   onclick="goto('daily')">日報</button>
-    <button id="nav-weekly"  onclick="goto('weekly')">週次</button>
-    <button id="nav-attendance" onclick="goto('attendance')">出勤状況</button>
-    <button id="nav-shared"  onclick="goto('shared')">共有資料</button>
-    <button id="nav-users"   onclick="goto('users')">ユーザー</button>
-    <button id="nav-vault"   onclick="goto('vault')">パスワード金庫</button>
-    <button id="nav-subs"    onclick="goto('subs')">サブスク</button>
-    <button id="nav-budget"  onclick="goto('budget')">予算</button>
-    <button id="nav-ledger"  onclick="goto('ledger')">入出金</button>
-    <button id="nav-projects" onclick="goto('projects')">プロジェクト</button>
-    <button id="nav-facility" onclick="goto('facility')">設備予約</button>
-    <button id="nav-workflow" onclick="goto('workflow')">ワークフロー</button>
-    <button id="nav-debug"   onclick="goto('debug')">デバッグ</button>
+    <button class="active" id="nav-dashboard" onclick="goto('dashboard')" data-tip="タスク/プロジェクトの一覧・カンバン・ガント">ダッシュボード</button>
+    <button id="nav-minutes" onclick="goto('minutes')" data-tip="議事録の作成とDocs連携">議事録</button>
+    <button id="nav-daily"   onclick="goto('daily')" data-tip="日報の記録">日報</button>
+    <button id="nav-weekly"  onclick="goto('weekly')" data-tip="週次の振り返り入力">週次</button>
+    <button id="nav-attendance" onclick="goto('attendance')" data-tip="出退勤・休憩・外出の管理">出勤状況</button>
+    <button id="nav-shared"  onclick="goto('shared')" data-tip="共有資料の登録と閲覧">共有資料</button>
+    <button id="nav-users"   onclick="goto('users')" data-tip="ユーザー情報/所属の管理">ユーザー</button>
+    <button id="nav-vault"   onclick="goto('vault')" data-tip="パスワード金庫の管理">パスワード金庫</button>
+    <button id="nav-subs"    onclick="goto('subs')" data-tip="サブスクの登録と一覧">サブスク</button>
+    <button id="nav-budget"  onclick="goto('budget')" data-tip="予算サマリと集計">予算</button>
+    <button id="nav-ledger"  onclick="goto('ledger')" data-tip="入出金の登録・一覧">入出金</button>
+    <button id="nav-projects" onclick="goto('projects')" data-tip="プロジェクト一覧と編集">プロジェクト</button>
+    <button id="nav-facility" onclick="goto('facility')" data-tip="設備予約の登録とガント">設備予約</button>
+    <button id="nav-workflow" onclick="goto('workflow')" data-tip="申請/承認の管理">ワークフロー</button>
+    <button id="nav-debug"   onclick="goto('debug')" data-tip="診断・再同期">デバッグ</button>
   </nav>
 </header>
 
@@ -2455,6 +2455,7 @@ let WEEKLY_FILTER = {
   department: '', // '' | '__unset__' | deptName
   userId: '',
 };
+let WEEKLY_FILTER_READY = false;
 const WEEKLY_FILTER_KEY = 'weekly_filters_v1';
 function loadWeeklyFilterFromLS(){
   try{
@@ -2472,7 +2473,6 @@ function saveWeeklyFilterToLS(){
   };
   try{ localStorage.setItem(WEEKLY_FILTER_KEY, JSON.stringify(payload)); }catch(_){}
 }
-loadWeeklyFilterFromLS();
 
 function setAppVersionBadge(v){
   const badge = document.getElementById('app-version');
@@ -2534,6 +2534,11 @@ function ensureWeeklyFilterControls(baseUsers){
   const deptSel = el('wk_filter_dept');
   const userSel = el('wk_filter_user');
   if (!deptSel || !userSel) return;
+  if (!Array.isArray(baseUsers) || baseUsers.length === 0) return;
+  if (!WEEKLY_FILTER_READY) {
+    loadWeeklyFilterFromLS();
+    WEEKLY_FILTER_READY = true;
+  }
 
   // Bind handlers once.
   if (!deptSel.dataset.bound) {

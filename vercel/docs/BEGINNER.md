@@ -11,7 +11,7 @@
    - 勤務形態 / 所定勤務時間 / 固定休憩（勤務時間の集計に使用）
 3. 画面右下の「プロジェクト追加」「タスク追加」を確認
 
-![ユーザー画面](./images/beginner-users.png)
+![ユーザー画面](/docs/images/beginner-users.png)
 
 ## 2. 画面の見方（全体像）
 
@@ -19,7 +19,7 @@
 - 右下の丸いボタン：プロジェクト・タスクの追加
 - 各ページの上部：フィルタ・日付・検索
 
-![ダッシュボード（全体）](./images/beginner-dashboard.png)
+![ダッシュボード（全体）](/docs/images/beginner-dashboard.png)
 
 ## 3. ダッシュボード（タスク・プロジェクトの中心）
 
@@ -35,7 +35,7 @@
 ### 3.3 カンバン / ガント
 - 画面上部の「カンバン」「ガント」タブで切り替え
 
-![ダッシュボード（タスク一覧）](./images/beginner-dashboard.png)
+![ダッシュボード（タスク一覧）](/docs/images/beginner-dashboard.png)
 
 ## 4. 日報（毎日の報告）
 
@@ -43,7 +43,7 @@
 2. 日付とユーザーを選んで「登録」
 3. カレンダーから過去日報を開けます
 
-![日報画面](./images/beginner-daily.png)
+![日報画面](/docs/images/beginner-daily.png)
 
 ## 5. 議事録（会議の記録）
 
@@ -51,7 +51,7 @@
 2. 日付・件名・プロジェクト・参加者を入力
 3. 「登録(Docs自動作成)」でGoogleドキュメントを作成
 
-![議事録画面](./images/beginner-minutes.png)
+![議事録画面](/docs/images/beginner-minutes.png)
 
 ## 6. 週次（週ごとの振り返り）
 
@@ -59,7 +59,7 @@
 - 上部の日付で週を切り替え
 - 各プロジェクト行の「課題」「実施」を入力
 
-![週次画面](./images/beginner-weekly.png)
+![週次画面](/docs/images/beginner-weekly.png)
 
 ## 7. 出勤状況（出勤・休憩・退勤）
 
@@ -69,7 +69,7 @@
 
 勤務時間は「本日hh時間mm分(うち休憩mm分)」で表示されます。
 
-![出勤状況画面](./images/beginner-attendance.png)
+![出勤状況画面](/docs/images/beginner-attendance.png)
 
 ## 8. プロジェクト管理
 
@@ -77,14 +77,14 @@
 - フィルタで絞り込み
 - 「PJ Doc」ボタンでDocsを開く
 
-![プロジェクト画面](./images/beginner-projects.png)
+![プロジェクト画面](/docs/images/beginner-projects.png)
 
 ## 9. 設定（表示やテナント）
 
 - 表示密度、メニュー位置、透かしロゴなどを変更
 - テナント設定は管理者のみ操作推奨
 
-![設定画面](./images/beginner-settings.png)
+![設定画面](/docs/images/beginner-settings.png)
 
 ## 10. よくあるつまずき
 

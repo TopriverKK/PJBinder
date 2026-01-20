@@ -751,6 +751,7 @@ button.link:hover { opacity: .8; }
       <button id="nav-projects" onclick="goto('projects')" data-tip="プロジェクト一覧と編集">プロジェクト</button>
       <button id="nav-facility" onclick="goto('facility')" data-tip="設備予約の登録とガント">設備予約</button>
       <button id="nav-workflow" onclick="goto('workflow')" data-tip="申請/承認の管理">決済申請</button>
+      <button id="nav-icd" onclick="goto('icd')" data-tip="iCDの進捗/評価管理">iCD</button>
       <button id="nav-settings" onclick="goto('settings')" data-tip="画面表示や操作の設定">設定</button>
       <button id="nav-debug"   onclick="goto('debug')" data-tip="診断・再同期">デバッグ</button>
     </nav>
@@ -1113,6 +1114,42 @@ button.link:hover { opacity: .8; }
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-icd" class="page">
+    <div class="card">
+      <h2>iCD</h2>
+      <div class="body">
+        <div class="row">
+          <div><label>部門</label><select id="icd_department"></select></div>
+          <div><label>役割</label><select id="icd_role"></select></div>
+          <div><label>大分類</label><select id="icd_big"></select></div>
+          <div><label>ユーザー</label><select id="icd_user"></select></div>
+        </div>
+        <div class="row">
+          <div><label>選択ユーザーの部門</label><select id="icd_user_department"></select></div>
+          <div class="muted" id="icd_status" style="align-self:flex-end;"></div>
+        </div>
+        <div class="toolbar" style="justify-content:flex-end; margin-top:8px;">
+          <button class="secondary" onclick="importIcdMaster()">初期データ取込</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>iCD一覧</h2>
+      <div class="body">
+        <div id="icd-empty" class="muted" style="display:none; margin-bottom:8px;">ユーザーを選択してください。</div>
+        <table id="icdTable">
+          <thead>
+            <tr>
+              <th>大分類</th><th>中分類</th><th>小分類</th><th>評価項目</th><th>役割</th>
+              <th>習熟度</th><th>達成目標</th><th>達成評価</th><th>コメント</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </section>
@@ -2176,7 +2213,7 @@ function goto(page, opts) {
     }
   }
 
-  const pages = ['dashboard','minutes','daily','weekly','attendance','users','vault','budget','subs','ledger','projects','facility','workflow','settings','debug','shared'];
+  const pages = ['dashboard','minutes','daily','weekly','attendance','users','vault','budget','subs','ledger','projects','facility','workflow','icd','settings','debug','shared'];
   pages.forEach(p => {
     const pageEl = document.getElementById('page-'+p);
     if (pageEl) pageEl.classList.toggle('active', p===page);
@@ -2201,6 +2238,9 @@ function goto(page, opts) {
   if (page === 'settings') {
     try { ensureTenantSettings(); } catch(_){ }
   }
+  if (page === 'icd') {
+    try { ensureTenantSettings(); } catch(_){ }
+  }
   if (page === 'attendance') {
     applyAttendanceViewUi();
     try { loadAttendanceSettings?.(); } catch (e) {}
@@ -2222,7 +2262,7 @@ function gotoDashboardTab(tab){
 }
 
 // --- Data & Filters ---
-let DATA = {users:[], projects:[], tasks:[], subs:[], ledger:[], ledgerPlans:[], credentials:[], attachments:[], minutes:[], dailyReports:[], shareds:[], facilityAssets:[], facilityReservations:[], workflowRequests:[], workflowApprovals:[], paymentRequests:[]};
+let DATA = {users:[], projects:[], tasks:[], subs:[], ledger:[], ledgerPlans:[], credentials:[], attachments:[], minutes:[], dailyReports:[], shareds:[], facilityAssets:[], facilityReservations:[], workflowRequests:[], workflowApprovals:[], paymentRequests:[], icdMasters:[], icdProgress:[]};
 let FILTERS = { keyword:'', project:'', assignee:'', department:'', from:'', to:'', priority:'', status:'' };
 let PAGE = 'dashboard';
 let ACTIVE_TAB = 'list';
@@ -2556,7 +2596,7 @@ const PRIORITY_IN = { 'High':'高', 'Middle':'中', 'Medium':'中', 'Low':'低',
 function normPriority(p){ return PRIORITY_IN[String(p||'').trim()] || String(p||''); }
 function labelStatus(code){ return STATUS_LABELS[String(code||'').toLowerCase()] || String(code||''); }
 
-function emptyData(){ return {users:[], projects:[], tasks:[], subs:[], ledger:[], credentials:[], facilityAssets:[], facilityReservations:[], workflowRequests:[], workflowApprovals:[], paymentRequests:[]}; }
+function emptyData(){ return {users:[], projects:[], tasks:[], subs:[], ledger:[], credentials:[], facilityAssets:[], facilityReservations:[], workflowRequests:[], workflowApprovals:[], paymentRequests:[], icdMasters:[], icdProgress:[]}; }
 function safeArr(a){ return Array.isArray(a) ? a : []; }
 
 // --- Busy indicator ---
@@ -2618,6 +2658,8 @@ function refresh() {
         workflowRequests:     workflowFallback,
         workflowApprovals:    workflowApprovals,
         paymentRequests:      paymentRequests,
+        icdMasters:           pick('icdMasters','icd_master','icdmasters'),
+        icdProgress:          pick('icdProgress','icd_progress','icdprogress'),
       };
       ATT_WORKLOGS_LOADED = false;
       hydrateSelects();
@@ -2892,9 +2934,272 @@ function renderAll() {
   renderWeeklyPage();
   renderFacilityPage();
   renderWorkflowPage();
+  renderIcdPage();
 
   // メモの自動伸縮
   attachDefaultMemoEditors();
+}
+
+// =============================
+// iCD
+// =============================
+let ICD_FILTER = {
+  department: '',
+  role: '',
+  big: '',
+  userId: '',
+};
+let ICD_SEEDING = false;
+let ICD_READY = false;
+
+function getTenantSettingValue(key, fallback){
+  const row = safeArr(TENANT_SETTINGS).find(r => String(r?.key || '') === String(key || ''));
+  if (!row) return fallback;
+  const value = row?.value;
+  if (value == null) return fallback;
+  const text = String(value);
+  return text.trim() ? text : fallback;
+}
+
+function getIcdDepartmentOptions(){
+  const raw = getTenantSettingValue('ICD_DEPARTMENT_OPTIONS', '営農部,営業部,アカデミー');
+  return raw.split(',').map(s=>s.trim()).filter(Boolean);
+}
+
+function getIcdRoleMap(){
+  const fallback = {
+    '営農部': ['営農１年目','営農２年目','営農','農場長'],
+    '営業部': ['営業'],
+    'アカデミー': ['事務','総務','顧問','管理者'],
+  };
+  const raw = getTenantSettingValue('ICD_DEPARTMENT_ROLE_MAP', '');
+  if (!raw) return fallback;
+  try{
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : fallback;
+  }catch(_){
+    return fallback;
+  }
+}
+
+function icdRolesForDept(dept){
+  const map = getIcdRoleMap();
+  const roles = map && dept ? map[dept] : null;
+  return Array.isArray(roles) ? roles.map(s=>String(s).trim()).filter(Boolean) : [];
+}
+
+function icdGetProgressByUser(userId){
+  return safeArr(DATA.icdProgress).filter(p => String(p.userId||'') === String(userId||''));
+}
+
+async function importIcdMaster(){
+  if (ICD_SEEDING) return;
+  ICD_SEEDING = true;
+  const status = el('icd_status');
+  if (status) status.textContent = 'iCD初期データを取り込み中...';
+  try{
+    const resp = await fetch('/icd/icd_master.csv', { cache:'no-store' });
+    if (!resp.ok) throw new Error('icd_master.csv not found');
+    const csv = await resp.text();
+    await rpc('importIcdCsv', csv);
+    await refresh();
+    if (status) status.textContent = 'iCD初期データを取り込みました';
+  }catch(e){
+    if (status) status.textContent = '';
+    alert('iCD初期データの取り込みに失敗しました: ' + (e && e.message ? e.message : e));
+  }finally{
+    ICD_SEEDING = false;
+  }
+}
+
+function bindIcdFilters(){
+  if (ICD_READY) return;
+  const deptSel = el('icd_department');
+  const roleSel = el('icd_role');
+  const bigSel = el('icd_big');
+  const userSel = el('icd_user');
+  const userDeptSel = el('icd_user_department');
+
+  if (deptSel) deptSel.addEventListener('change', ()=>{
+    ICD_FILTER.department = String(deptSel.value||'');
+    ICD_FILTER.role = '';
+    renderIcdPage();
+  });
+  if (roleSel) roleSel.addEventListener('change', ()=>{
+    ICD_FILTER.role = String(roleSel.value||'');
+    renderIcdPage();
+  });
+  if (bigSel) bigSel.addEventListener('change', ()=>{
+    ICD_FILTER.big = String(bigSel.value||'');
+    renderIcdPage();
+  });
+  if (userSel) userSel.addEventListener('change', ()=>{
+    ICD_FILTER.userId = String(userSel.value||'');
+    renderIcdPage();
+  });
+  if (userDeptSel) userDeptSel.addEventListener('change', ()=>{
+    const userId = String(ICD_FILTER.userId||'');
+    if (!userId) return;
+    const dept = String(userDeptSel.value||'');
+    gsr().withSuccessHandler((row)=>{
+      patchRow('users', row);
+      renderIcdPage();
+    }).withFailureHandler((e)=>{
+      alert('部門の保存に失敗しました: ' + (e && e.message ? e.message : e));
+    }).upsertUser({ id: userId, department: dept });
+  });
+  ICD_READY = true;
+}
+
+function renderIcdPage(){
+  if (PAGE !== 'icd') return;
+
+  bindIcdFilters();
+
+  if (!safeArr(DATA.icdMasters).length && !ICD_SEEDING) {
+    importIcdMaster();
+    const status = el('icd_status');
+    if (status) status.textContent = 'iCD初期データを準備しています...';
+    return;
+  }
+
+  const masters = safeArr(DATA.icdMasters);
+  const users = safeArr(DATA.users);
+  const deptOptions = getIcdDepartmentOptions();
+  const deptMap = getIcdRoleMap();
+  const dept = ICD_FILTER.department || '';
+
+  const deptSel = el('icd_department');
+  if (deptSel) {
+    const opts = [{ label:'すべて', value:'' }].concat(deptOptions.map(d=>({ label:d, value:d })));
+    setSelectOptions(deptSel, opts, dept);
+    ICD_FILTER.department = String(deptSel.value||'');
+  }
+
+  const deptRoles = icdRolesForDept(ICD_FILTER.department);
+  const roleSel = el('icd_role');
+  if (roleSel) {
+    const roleOptions = Array.isArray(deptRoles) && deptRoles.length
+      ? deptRoles
+      : Array.from(new Set(Object.values(deptMap).flat().map(r=>String(r).trim()).filter(Boolean)));
+    const opts = [{ label:'すべて', value:'' }].concat(roleOptions.map(r=>({ label:r, value:r })));
+    setSelectOptions(roleSel, opts, ICD_FILTER.role);
+    ICD_FILTER.role = String(roleSel.value||'');
+  }
+
+  const bigSel = el('icd_big');
+  if (bigSel) {
+    const bigList = Array.from(new Set(masters.map(m=>String(m.bigCategory||'').trim()).filter(Boolean))).sort();
+    const opts = [{ label:'すべて', value:'' }].concat(bigList.map(b=>({ label:b, value:b })));
+    setSelectOptions(bigSel, opts, ICD_FILTER.big);
+    ICD_FILTER.big = String(bigSel.value||'');
+  }
+
+  const userSel = el('icd_user');
+  if (userSel) {
+    const opts = [{ label:'ユーザーを選択', value:'' }].concat(users.map(u=>({
+      label: u.name || u.email || u.id,
+      value: u.id,
+    })));
+    setSelectOptions(userSel, opts, ICD_FILTER.userId);
+    ICD_FILTER.userId = String(userSel.value||'');
+  }
+
+  const selectedUser = users.find(u=>String(u.id||'')===String(ICD_FILTER.userId||''));
+  const userDeptSel = el('icd_user_department');
+  if (userDeptSel) {
+    const userDept = String(selectedUser?.department||'').trim();
+    const deptList = deptOptions.slice();
+    if (userDept && !deptList.includes(userDept)) deptList.unshift(userDept);
+    const deptOpts = [''].concat(deptList).map(d=>({ label: d ? d : '（未選択）', value: d }));
+    setSelectOptions(userDeptSel, deptOpts, String(selectedUser?.department||''));
+  }
+
+  const emptyMsg = el('icd-empty');
+  if (!ICD_FILTER.userId) {
+    if (emptyMsg) emptyMsg.style.display = '';
+  } else if (emptyMsg) {
+    emptyMsg.style.display = 'none';
+  }
+
+  const tb = document.querySelector('#icdTable tbody');
+  if (!tb) return;
+  if (!ICD_FILTER.userId) {
+    tb.innerHTML = '';
+    return;
+  }
+
+  const roleFilter = String(ICD_FILTER.role||'');
+  const bigFilter = String(ICD_FILTER.big||'');
+  const allowedRoles = deptRoles;
+
+  const filtered = masters.filter(m=>{
+    if (bigFilter && String(m.bigCategory||'') !== bigFilter) return false;
+    const roles = String(m.roles||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if (roleFilter) return roles.includes(roleFilter);
+    if (allowedRoles.length && roles.length) return roles.some(r=>allowedRoles.includes(r));
+    return true;
+  }).sort((a,b)=>{
+    const ab = String(a.bigCategory||'').localeCompare(String(b.bigCategory||''));
+    if (ab !== 0) return ab;
+    return Number(a.displayOrder||0) - Number(b.displayOrder||0);
+  });
+
+  const progressRows = icdGetProgressByUser(ICD_FILTER.userId);
+  const progressMap = new Map(progressRows.map(p=>[String(p.icdId||''), p]));
+
+  tb.innerHTML = filtered.map(m=>{
+    const pid = String(m.id||'');
+    const p = progressMap.get(pid) || {};
+    const prof = p.proficiency ?? '';
+    const target = p.target ?? '';
+    const evalv = p.evaluation ?? '';
+    const comment = p.comment ?? '';
+    return `<tr data-icd-id="${escapeHtml(pid)}">
+      <td>${escapeHtml(m.bigCategory||'')}</td>
+      <td>${escapeHtml(m.middleCategory||'')}</td>
+      <td>${escapeHtml(m.smallCategory||'')}</td>
+      <td>${escapeHtml(m.evalItem||'')}</td>
+      <td>${escapeHtml(m.roles||'')}</td>
+      <td><input type="number" step="0.5" min="0" max="5" data-field="proficiency" value="${escapeHtml(String(prof))}"/></td>
+      <td><input type="number" step="0.5" min="0" max="5" data-field="target" value="${escapeHtml(String(target))}"/></td>
+      <td><input type="number" step="0.5" min="0" max="5" data-field="evaluation" value="${escapeHtml(String(evalv))}"/></td>
+      <td><input data-field="comment" value="${escapeHtml(String(comment))}" placeholder="コメント"/></td>
+      <td><button class="secondary" onclick="saveIcdProgress('${escapeJsSq(pid)}')">保存</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" class="muted">該当するiCD項目がありません</td></tr>';
+}
+
+function saveIcdProgress(icdId){
+  const userId = String(ICD_FILTER.userId||'');
+  if (!userId) { alert('ユーザーを選択してください'); return; }
+  const row = Array.from(document.querySelectorAll('#icdTable tr[data-icd-id]')).find(tr => tr.getAttribute('data-icd-id') === icdId);
+  if (!row) return;
+  const getVal = (field)=>{
+    const el = row.querySelector(`[data-field="${field}"]`);
+    return el ? el.value : '';
+  };
+  const toNum = (v)=>{
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const existing = safeArr(DATA.icdProgress).find(p=>String(p.userId||'')===userId && String(p.icdId||'')===icdId);
+  const payload = {
+    id: existing?.id,
+    userId,
+    icdId,
+    proficiency: toNum(getVal('proficiency')),
+    target: toNum(getVal('target')),
+    evaluation: toNum(getVal('evaluation')),
+    comment: String(getVal('comment')||''),
+  };
+  gsr().withSuccessHandler((saved)=>{
+    patchRow('icdProgress', saved);
+    renderIcdPage();
+    showToast('ok', 'iCDを保存しました');
+  }).withFailureHandler((e)=>{
+    alert('iCDの保存に失敗しました: ' + (e && e.message ? e.message : e));
+  }).upsertIcdProgress(payload);
 }
 
 // =============================

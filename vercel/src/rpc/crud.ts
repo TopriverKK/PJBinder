@@ -14,6 +14,44 @@ function isoTimestamp(d: Date): string {
   return d.toISOString(); // Full ISO timestamp for timestamp columns
 }
 
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  const src = String(text ?? '');
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '"') {
+      const next = src[i + 1];
+      if (inQuotes && next === '"') {
+        field += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (ch === ',' && !inQuotes) {
+      row.push(field);
+      field = '';
+      continue;
+    }
+    if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && src[i + 1] === '\n') i++;
+      row.push(field);
+      field = '';
+      if (row.some((v) => String(v ?? '').trim() !== '')) rows.push(row);
+      row = [];
+      continue;
+    }
+    field += ch;
+  }
+  row.push(field);
+  if (row.some((v) => String(v ?? '').trim() !== '')) rows.push(row);
+  return rows;
+}
+
 // Upsert functions
 export async function rpcUpsertProject(p: any) {
   p.updatedAt = isoDate(new Date());
@@ -346,6 +384,110 @@ export async function rpcUpsertShared(s: any) {
   
   const results = await sbUpsert('shareds', s, 'id');
   return Array.isArray(results) ? results[0] : results;
+}
+
+export async function rpcUpsertIcdProgress(p: any) {
+  const row = { ...(p || {}) };
+  if (!row.userId) throw new Error('userId is required');
+  if (!row.icdId) throw new Error('icdId is required');
+  row.updatedAt = isoDate(new Date());
+  if (!row.id) row.createdAt = row.updatedAt;
+  const onConflict = row.id ? 'id' : 'userId,icdId';
+  const results = await sbUpsert('icd_progress', row, onConflict);
+  return Array.isArray(results) ? results[0] : results;
+}
+
+export async function rpcImportIcdCsv(csvText: string) {
+  const rows = parseCsvRows(csvText);
+  if (!rows.length) return { inserted: 0, replaced: 0 };
+
+  const header = rows[0].map((v) => String(v ?? '').trim());
+  const idxBig = header.indexOf('タスク大分類');
+  const idxBigDesc = header.indexOf('タスク大分類説明');
+  const idxMiddle = header.indexOf('タスク中分類');
+  const idxSmall = header.indexOf('タスク小分類');
+  const idxEval = header.indexOf('評価項目');
+  const idxEvalDesc = header.indexOf('評価項目説明');
+  const idxOrder = header.indexOf('表示順');
+  const idxCreated = header.indexOf('作成日');
+  const idxUpdated = header.indexOf('最終更新日');
+  const idxChanged = header.indexOf('変更日');
+  const idxDeleted = header.indexOf('削除日');
+  const idxDupMiddle = header.indexOf('重複対象タスク中分類識別子');
+  const idxDupSmall = header.indexOf('重複対象タスク小分類識別子');
+  const idxDupEval = header.indexOf('重複対象評価項目識別子');
+  let roleStart = Math.max(idxDupMiddle, idxDupSmall, idxDupEval);
+  if (roleStart >= 0) roleStart += 1;
+  const roleSeed = header.findIndex((h) =>
+    ['営農１年目','営農２年目','営農','農場長','営業','事務','総務','顧問','管理者'].includes(h)
+  );
+  if (roleStart < 0 && roleSeed >= 0) roleStart = roleSeed;
+  if (roleStart < 0) roleStart = header.length;
+  const roleHeaders = header.slice(roleStart).map((v) => String(v ?? '').trim());
+
+  let startRow = 1;
+  if (rows.length > 1) {
+    const r1 = rows[1] || [];
+    const hasCore = String(r1[idxBig] ?? '').trim() || String(r1[idxEval] ?? '').trim();
+    if (!hasCore) startRow = 2;
+  }
+
+  const items: any[] = [];
+  const now = isoDate(new Date());
+  for (let i = startRow; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const big = String(r[idxBig] ?? '').trim();
+    const bigDesc = String(r[idxBigDesc] ?? '').trim();
+    const middle = String(r[idxMiddle] ?? '').trim();
+    const small = String(r[idxSmall] ?? '').trim();
+    const evalItem = String(r[idxEval] ?? '').trim();
+    const evalDesc = String(r[idxEvalDesc] ?? '').trim();
+    const orderRaw = String(r[idxOrder] ?? '').trim();
+    const orderVal = Number(orderRaw);
+    const displayOrder = Number.isFinite(orderVal) ? orderVal : 0;
+    const duplicateMiddleKey = String(r[idxDupMiddle] ?? '').trim();
+    const duplicateSmallKey = String(r[idxDupSmall] ?? '').trim();
+    const duplicateEvalKey = String(r[idxDupEval] ?? '').trim();
+    const createdAt = String(r[idxCreated] ?? '').trim() || now;
+    const updatedAt = String(r[idxUpdated] ?? '').trim() || String(r[idxChanged] ?? '').trim() || now;
+    const deletedAt = String(r[idxDeleted] ?? '').trim();
+    if (!big && !middle && !small && !evalItem) continue;
+
+    const roles: string[] = [];
+    for (let j = roleStart; j < header.length; j++) {
+      const h = roleHeaders[j - roleStart];
+      if (!h) continue;
+      const val = String(r[j] ?? '').trim();
+      if (val) roles.push(h);
+    }
+
+    items.push({
+      bigCategory: big,
+      bigDesc,
+      middleCategory: middle,
+      smallCategory: small,
+      evalItem,
+      evalDesc,
+      displayOrder,
+      duplicateMiddleKey,
+      duplicateSmallKey,
+      duplicateEvalKey,
+      roles: roles.join(','),
+      createdAt,
+      updatedAt,
+      deletedAt,
+    });
+  }
+
+  const existing = await sbSelect('icd_master', 'select=id');
+  const replaced = Array.isArray(existing) ? existing.length : 0;
+  if (replaced) {
+    await sbDeleteWhere('icd_master', 'id=not.is.null');
+  }
+  for (const row of items) {
+    await sbUpsert('icd_master', row);
+  }
+  return { inserted: items.length, replaced };
 }
 
 export async function rpcDeleteShared(id: string) {

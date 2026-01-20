@@ -63,6 +63,8 @@ async function ensureTenantSettingsInternal() {
     { key: 'GOOGLE_MINUTES_FOLDER_ID', value: '' },
     { key: 'GOOGLE_DAILY_REPORTS_FOLDER_ID', value: '' },
     { key: 'GOOGLE_LOGO_FILE_ID', value: '' },
+    { key: 'ICD_DEPARTMENT_OPTIONS', value: '営農部,営業部,アカデミー' },
+    { key: 'ICD_DEPARTMENT_ROLE_MAP', value: '{"営農部":["営農１年目","営農２年目","営農","農場長"],"営業部":["営業"],"アカデミー":["事務","総務","顧問","管理者"]}' },
   ];
 
   try {
@@ -332,6 +334,14 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   async upsertShared(...args: any[]) {
     const crud = await getCrudMod();
     return await crud.rpcUpsertShared(args[0]);
+  },
+  async upsertIcdProgress(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcUpsertIcdProgress(args[0]);
+  },
+  async importIcdCsv(...args: any[]) {
+    const crud = await getCrudMod();
+    return await crud.rpcImportIcdCsv(String(args[0] ?? ''));
   },
   async upsertAttachments(...args: any[]) {
     const crud = await getCrudMod();

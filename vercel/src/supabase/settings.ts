@@ -1,4 +1,5 @@
 import { sbSelectAllSafe } from './selectAll.js';
+import { sbSelect } from './rest.js';
 import { requireTenantId } from './tenant.js';
 
 const settingsCache: Record<string, Record<string, string>> = {};
@@ -19,7 +20,17 @@ export async function getSetting(key: string): Promise<string | null> {
     cacheTime[tenantId] = now;
   }
   
-  return settingsCache[tenantId]?.[key] || null;
+  const cached = settingsCache[tenantId]?.[key];
+  if (cached && String(cached).trim()) return cached;
+  try {
+    const rows = await sbSelect('settings_template', `select=key,value&key=eq.${encodeURIComponent(key)}&limit=1`);
+    const row = Array.isArray(rows) ? rows[0] : null;
+    const fallback = row?.value;
+    if (fallback && String(fallback).trim()) return String(fallback).trim();
+  } catch (_e) {
+    // ignore template fallback failures
+  }
+  return cached || null;
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {

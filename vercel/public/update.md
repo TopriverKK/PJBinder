@@ -1,11 +1,10 @@
 ﻿# アップデート
-## 2026-01-19 (v1.40r)
-- 概要: ドキュメント作成と絵文字表示の修正
+## 2026-01-19 (v1.40s)
+- 概要: settingsテンプレート補完の強化
 <details>
 <summary>個別の変更内容</summary>
 <ul>
-<li>settingsのテンプレートIDを読み込む処理を安定化</li>
-<li>UI内の置換文字(??)を絵文字に復元</li>
+<li>settings未設定時にsettings_templateから値を補完</li>
 </ul>
 </details>
 

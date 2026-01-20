@@ -1,4 +1,4 @@
-import { loadGoogleEnv } from '../google/env.js';
+﻿import { loadGoogleEnv } from '../google/env.js';
 import {
   appendDocWithMemo,
   createGoogleDocInFolder,
@@ -22,6 +22,25 @@ function todayYMD() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dd}`;
+}
+
+async function tryLoadGoogleEnv(context: string) {
+  try {
+    return await loadGoogleEnv();
+  } catch (e) {
+    console.error(`[docs] ${context} missing Google settings:`, e);
+    return null;
+  }
+}
+
+async function safeEnsureFolderPath(base: string | undefined, parts: string[]) {
+  if (!base) return undefined;
+  try {
+    return await ensureFolderPath(base, parts);
+  } catch (e) {
+    console.error('[docs] Failed to ensure folder path:', e);
+    return undefined;
+  }
 }
 
 async function getSettingWithTemplate(key: string): Promise<string | null> {
@@ -86,12 +105,15 @@ export async function rpcCreateProjectDoc(projectId: string) {
   const owner = p.ownerUserId ? await sbSelectOneById('users', String(p.ownerUserId)) : null;
   const parent = p.parentProjectId ? await sbSelectOneById('projects', String(p.parentProjectId)) : null;
 
-  const env = await loadGoogleEnv();
+  const env = await tryLoadGoogleEnv('project doc');
+  if (!env) {
+    return { ok: false, error: 'Missing Google settings', project: p };
+  }
   const base = env.projectDocsFolderId || env.baseFolderId;
 
   // GAS: ['プロジェクトDocs', projectName]
   // If base folder is not configured, fall back to Drive root.
-  const folderId = base ? await ensureFolderPath(base, ['プロジェクトDocs', sanitizeName(p.name || p.id)]) : undefined;
+  const folderId = await safeEnsureFolderPath(base, ['プロジェクトDocs', sanitizeName(p.name || p.id)]);
   const title = `プロジェクト ${p.name || p.id}`;
 
   const templateId = await getSettingWithTemplate('PROJECT_TEMPLATE_ID');
@@ -151,7 +173,10 @@ export async function rpcCreateTaskDoc(taskId: string) {
   const proj = t.projectId ? await sbSelectOneById('projects', String(t.projectId)) : null;
   const owner = t.ownerUserId ? await sbSelectOneById('users', String(t.ownerUserId)) : null;
 
-  const env = await loadGoogleEnv();
+  const env = await tryLoadGoogleEnv('task doc');
+  if (!env) {
+    return { ok: false, error: 'Missing Google settings' };
+  }
   const base = env.projectDocsFolderId || env.baseFolderId;
 
   // GAS: ['プロジェクトDocs', projName, 'タスクDocs']
@@ -226,8 +251,8 @@ function normalizeCsv(v: any): string {
 export async function rpcCreateMinuteDoc(input: any) {
   if (!input || !input.date || !input.title) throw new Error('date と title は必須です');
 
-  const env = await loadGoogleEnv();
-  const base = env.minutesFolderId || env.baseFolderId;
+  const env = await tryLoadGoogleEnv('minute doc');
+  const base = env ? (env.minutesFolderId || env.baseFolderId) : undefined;
 
   const dateStr = String(input.date);
   const dt = new Date(dateStr);
@@ -264,6 +289,7 @@ export async function rpcCreateMinuteDoc(input: any) {
   let docId: string | null = null;
   let url: string | null = null;
 
+  if (env) {
   try {
     if (templateId) {
       const result = await copyDocTemplate({
@@ -307,6 +333,7 @@ export async function rpcCreateMinuteDoc(input: any) {
     docId = null;
     url = null;
   }
+  }
 
   // Ensure selected info is present even if the template has no placeholders.
   const metaLines: string[] = [];
@@ -349,8 +376,8 @@ export async function rpcCreateDailyReportDoc(r: any) {
   const userId = String(r?.userId || '').trim();
   if (!userId) throw new Error('userId は必須です');
 
-  const env = await loadGoogleEnv();
-  const base = env.dailyReportsFolderId || env.baseFolderId;
+  const env = await tryLoadGoogleEnv('daily report doc');
+  const base = env ? (env.dailyReportsFolderId || env.baseFolderId) : undefined;
 
   // ユーザー名（無ければ userId）
   let uname = userId;
@@ -385,6 +412,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
   let docId: string | null = null;
   let url: string | null = null;
 
+  if (env) {
   try {
     if (templateId) {
       const result = await copyDocTemplate({
@@ -425,6 +453,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
     docId = null;
     url = null;
   }
+  }
 
   // Supabase: DailyReports row
   const now = isoDate(new Date());
@@ -450,3 +479,4 @@ export async function rpcCreateDailyReportDoc(r: any) {
 
   return { ok: true, docId, url, id };
 }
+

@@ -4,20 +4,53 @@ import { loadGoogleEnv } from './env.js';
 const GOOGLE_DOC_MIME = 'application/vnd.google-apps.document';
 const GOOGLE_FOLDER_MIME = 'application/vnd.google-apps.folder';
 
+let driveIdState: 'unknown' | 'valid' | 'invalid' = 'unknown';
+let cachedDriveId: string | null = null;
+
 async function driveParams() {
   const { driveId } = await loadGoogleEnv();
-  return driveId
-    ? {
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-        corpora: 'drive' as const,
-        driveId,
-      }
-    : {
+  const normalized = driveId ? String(driveId).trim() : '';
+  if (!normalized || driveIdState === 'invalid') {
+    return {
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: 'allDrives' as const,
+    };
+  }
+  if (driveIdState === 'valid' && cachedDriveId === normalized) {
+    return {
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: 'drive' as const,
+      driveId: normalized,
+    };
+  }
+
+  // Validate shared drive once; fall back if the ID is not accessible.
+  try {
+    const { drive } = await getGoogleClients();
+    await drive.drives.get({ driveId: normalized, fields: 'id' });
+    driveIdState = 'valid';
+    cachedDriveId = normalized;
+    return {
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: 'drive' as const,
+      driveId: normalized,
+    };
+  } catch (e: any) {
+    const msg = String(e?.message || e || '');
+    if (/shared drive not found|drive not found|notFound/i.test(msg)) {
+      driveIdState = 'invalid';
+      cachedDriveId = normalized;
+      return {
         supportsAllDrives: true,
         includeItemsFromAllDrives: true,
         corpora: 'allDrives' as const,
       };
+    }
+    throw e;
+  }
 }
 
 async function findFolderId(parentId: string, name: string): Promise<string | null> {

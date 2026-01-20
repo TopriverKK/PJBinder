@@ -23,6 +23,24 @@ export async function getSetting(key: string): Promise<string | null> {
   const cached = settingsCache[tenantId]?.[key];
   if (cached && String(cached).trim()) return cached;
   try {
+    const legacyRows = await sbSelect(
+      'settings',
+      `select=key,value&tenant_id=is.null&key=eq.${encodeURIComponent(key)}&limit=1`
+    );
+    const legacyRow = Array.isArray(legacyRows) ? legacyRows[0] : null;
+    const legacyValue = legacyRow?.value;
+    if (legacyValue && String(legacyValue).trim()) {
+      try {
+        await setSetting(key, String(legacyValue));
+      } catch (_e) {
+        // If migration fails, still use the legacy value for this request.
+      }
+      return String(legacyValue).trim();
+    }
+  } catch (_e) {
+    // ignore legacy fallback failures
+  }
+  try {
     const rows = await sbSelect('settings_template', `select=key,value&key=eq.${encodeURIComponent(key)}&limit=1`);
     const row = Array.isArray(rows) ? rows[0] : null;
     const fallback = row?.value;

@@ -134,6 +134,15 @@
     background: inherit;
   }
 
+  /* ダッシュボードのメモ欄は密度に関係なく自動伸縮 */
+  #page-dashboard td.cell-memo{ height: auto; }
+  #page-dashboard .memo-edit{
+    height: auto;
+    min-height: calc(var(--row-h) - var(--cell-py)*2 + 8px);
+    resize: vertical;
+    overflow: hidden;
+  }
+
 
   header h1 { font-size:16px; margin:0; font-weight:700; }
   nav { display:flex; gap:8px; margin-left:auto; }
@@ -390,6 +399,8 @@
   .inline-attachments.slide.open{ max-height:800px; }
   /* 日報一覧をグリッド横断で表示 */
   #page-daily #daily-list-card { grid-column: 1 / -1; }
+  /* 入出金一覧をグリッド横断で表示 */
+  #page-ledger #ledger-list-card { grid-column: 1 / -1; }
   /* 検索ツールバーも固定（フィルタの直下に重ならない位置） */
   .toolbar.sticky-head {
     position: sticky;
@@ -937,7 +948,7 @@ button.link:hover { opacity: .8; }
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="ledger-list-card">
         <h2>入出金一覧（最新50件）</h2>
         <div class="body list" style="padding:0;">
           <table id="ledgerTableFull">

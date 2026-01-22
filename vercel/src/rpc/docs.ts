@@ -398,6 +398,27 @@ export async function rpcCreateDailyReportDoc(r: any) {
   const projectId = String(r?.projectId || '').trim();
   const body = String(r?.body || '');
 
+  // 残タスク（担当者に割り当てられていて未完了のもの）
+  let remainingTasks: string[] = [];
+  try {
+    const uid = encodeURIComponent(userId);
+    const rows = await sbSelect(
+      'tasks',
+      `select=id,title,status,assignees,ownerUserId&or=(ownerUserId.eq.${uid},assignees.ilike.*${uid}*)`
+    );
+    remainingTasks = (Array.isArray(rows) ? rows : [])
+      .filter((t) => String(t?.status || '').toLowerCase() !== 'done')
+      .map((t) => String(t?.title || t?.id || '').trim())
+      .filter(Boolean);
+  } catch {
+    // ignore
+  }
+  const remainingBlock =
+    remainingTasks.length ? remainingTasks.map((t) => `- [ ] ${t}`).join('\n') : '- [ ] なし';
+  const bodyFilled = body
+    .replace('* 【残タスク】', remainingBlock)
+    .replace('【残タスク】', remainingBlock);
+
   // Best-effort: resolve project name
   let projectLabel = projectId;
   if (projectLabel) {
@@ -425,18 +446,16 @@ export async function rpcCreateDailyReportDoc(r: any) {
           '【ユーザー名】': uname,
           '【工数】': String(hours),
           '【プロジェクト】': projectLabel || '-',
-          '【本文】': body,
+          '【本文】': bodyFilled,
         },
       });
       docId = result.docId;
       url = result.url;
     } else {
-      const titleLine = `日報 ${dateStr} / ${uname}`;
       const initialText =
-        `${titleLine}\n` +
         `ユーザー: ${uname}　日付: ${dateStr}　工数: ${hours}h\n` +
         (projectLabel ? `プロジェクト: ${projectLabel}\n` : '') +
-        `\n${body}\n`;
+        `\n${bodyFilled}\n`;
 
       const result = await createGoogleDocInFolder({
         title: fileTitle,
@@ -467,7 +486,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
       userId,
       hours,
       projectId: projectId || null,
-      body,
+      body: bodyFilled,
       tasks: String(r?.tasks || ''),
       docId,
       docUrl: url,

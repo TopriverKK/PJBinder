@@ -314,7 +314,29 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
   },
   async addWorkflowApproval(...args: any[]) {
     const crud = await getCrudMod();
-    return await (crud as any).rpcAddWorkflowApproval(args[0]);
+    const payload = args[0] || {};
+    const workflowId = String(payload.workflowId || '').trim();
+    const approverId = String(payload.approverId || '').trim();
+    if (!workflowId) throw new Error('workflowId is required');
+    if (!approverId) throw new Error('approverId is required');
+    const rows = await sbSelect('workflow_requests', `select=id,approverIds&limit=1&id=eq.${encodeURIComponent(workflowId)}`);
+    const req = Array.isArray(rows) ? rows[0] ?? null : null;
+    const route = String(req?.approverIds || '').split(',').map(s=>s.trim()).filter(Boolean);
+    if (route.length && !route.includes(approverId)) {
+      throw new Error('承認者が承認ルートに含まれていません');
+    }
+    const approvals = await sbSelect('workflow_approvals', `select=approverId,action&workflowId=eq.${encodeURIComponent(workflowId)}`);
+    const existingIds = Array.isArray(approvals) ? approvals.map(a=>String(a?.approverId||'').trim()).filter(Boolean) : [];
+    if (existingIds.includes(approverId)) {
+      throw new Error('同一承認者は複数回承認できません');
+    }
+    if (route.length) {
+      const next = route[existingIds.length];
+      if (next && approverId !== next) {
+        throw new Error('承認順が正しくありません');
+      }
+    }
+    return await (crud as any).rpcAddWorkflowApproval(payload);
   },
   async upsertLedgerEntry(...args: any[]) {
     const crud = await getCrudMod();

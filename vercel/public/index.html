@@ -2358,6 +2358,7 @@ let TOOLTIPS_ENABLED = true;
 const dayMs = 24*60*60*1000; // グローバル日ミリ秒（ガント/日付計算で使用）
 let TENANT_SETTINGS = [];
 let TENANT_SETTINGS_UNLOCKED = false;
+let WF_APPROVER_ORDER = [];
 
 function loadAppSettings(){
   try{
@@ -2858,6 +2859,14 @@ function hydrateSelects(){
     while(wfMulti.options.length) wfMulti.remove(0);
     users.forEach(u => wfMulti.add(new Option(u.name||u.email||u.id, u.id)));
     wfMulti.size = Math.min(Math.max(users.length, 3), 8);
+    const readOrder = ()=>{
+      const selected = Array.from(wfMulti.selectedOptions).map(o=>o.value);
+      const next = [];
+      selected.forEach(v=>{ if (WF_APPROVER_ORDER.includes(v)) next.push(v); });
+      selected.forEach(v=>{ if (!next.includes(v)) next.push(v); });
+      WF_APPROVER_ORDER = next;
+    };
+    wfMulti.onchange = ()=>{ readOrder(); };
   }
   // 部署フィルタ
   (function setDeptFilter(){
@@ -7212,7 +7221,9 @@ function workflowStatusLabel(status){
 function addWorkflowRequest(){
   const id = val('wf_editing_id');
   const existing = id ? safeArr(DATA.workflowRequests).find(x=>String(x.id)===String(id)) : null;
-  const approvers = selMulti('wf_approvers').join(',');
+  const selected = selMulti('wf_approvers');
+  const ordered = WF_APPROVER_ORDER.filter(v=>selected.includes(v));
+  const approvers = (ordered.length ? ordered : selected).join(',');
   const payload = {
     id: id || undefined,
     title: val('wf_title'),
@@ -7252,6 +7263,7 @@ function editWorkflowRequest(id){
   if (el('wf_approvers')) {
     const arr = String(r.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean);
     Array.from(el('wf_approvers').options).forEach(o=>{ o.selected = arr.includes(o.value); });
+    WF_APPROVER_ORDER = arr.slice();
   }
 }
 
@@ -7274,6 +7286,18 @@ function addWorkflowApproval(id, action){
     return;
   }
   const approverIds = String(req?.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean);
+  if (!approverIds.includes(approverId)) {
+    alert('承認者が承認ルートに含まれていません');
+    return;
+  }
+  if (approvals.some(a=>String(a.approverId||'')===approverId)) {
+    alert('同一承認者の承認は既に登録されています');
+    return;
+  }
+  if (approverIds.length && approverIds[approvals.length] && approverIds[approvals.length] !== approverId) {
+    alert('承認順が正しくありません');
+    return;
+  }
   const approvedCount = approvals.filter(a=>String(a.action||'')==='approve').length + 1;
   const hasRoute = approverIds.length > 0;
   const nextStatus = action==='reject'

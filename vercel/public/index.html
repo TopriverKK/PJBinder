@@ -1231,6 +1231,16 @@ button.link:hover { opacity: .8; }
             <input id="ts_value" placeholder="例: 1u_..."/>
           </div>
         </div>
+        <div class="row">
+          <div>
+            <label>テナント設定パスワード</label>
+            <input id="tenant_settings_password" type="password" placeholder="パスワードを入力"/>
+          </div>
+          <div style="display:flex; align-items:flex-end; gap:8px;">
+            <button class="secondary" onclick="unlockTenantSettings()">解除</button>
+            <div class="muted" id="tenant_settings_lock_state">ロック中</div>
+          </div>
+        </div>
         <div class="toolbar" style="justify-content:flex-end; margin-top:8px;">
           <input type="hidden" id="ts_editing_key"/>
           <button onclick="saveTenantSetting()">保存</button>
@@ -1256,6 +1266,15 @@ button.link:hover { opacity: .8; }
           <button class="secondary" onclick="forceResync()">強制再同期（Users/Projects）</button>
           <button class="secondary" onclick="refresh()">データ再取得</button>
           <button class="secondary" onclick="renderAll()">再レンダリング</button>
+        </div>
+        <div class="row">
+          <div>
+            <label class="checkline">
+              <input type="checkbox" id="dbg_show_unimplemented">
+              未実装のタブを表示
+            </label>
+          </div>
+          <div></div>
         </div>
         <div class="row">
           <div><label>接続先シート</label><pre id="dbg_sheet"></pre></div>
@@ -2261,6 +2280,24 @@ function gotoDashboardTab(tab){
   setTimeout(()=>{ try{ switchTab(t); }catch(_){ } }, 0);
 }
 
+function isTabVisible(tab){
+  if (SHOW_UNIMPLEMENTED_TABS) return true;
+  return !UNIMPLEMENTED_TABS.includes(tab);
+}
+
+function applyTabVisibility(){
+  UNIMPLEMENTED_TABS.forEach(tab=>{
+    const navEl = document.getElementById('nav-'+tab);
+    const pageEl = document.getElementById('page-'+tab);
+    const visible = isTabVisible(tab);
+    if (navEl) navEl.style.display = visible ? '' : 'none';
+    if (pageEl) pageEl.style.display = visible ? '' : 'none';
+  });
+  if (!isTabVisible(PAGE)) {
+    try{ goto('dashboard', { skipRoute:true }); }catch(_){ }
+  }
+}
+
 // --- Data & Filters ---
 let DATA = {users:[], projects:[], tasks:[], subs:[], ledger:[], ledgerPlans:[], credentials:[], attachments:[], minutes:[], dailyReports:[], shareds:[], facilityAssets:[], facilityReservations:[], workflowRequests:[], workflowApprovals:[], paymentRequests:[], icdMasters:[], icdProgress:[]};
 let FILTERS = { keyword:'', project:'', assignee:'', department:'', from:'', to:'', priority:'', status:'' };
@@ -2291,6 +2328,9 @@ function countAttachments(kind, id){
 const FILTERS_KEY = 'pm_filters_v2';
 let OVERDUE = false; // 遅延クイックフィルタ
 const SETTINGS_KEY = 'pjbinder_settings_v1';
+const UNIMPLEMENTED_TABS = ['icd'];
+const UNIMPLEMENTED_TABS_KEY = 'pjbinder_unimplemented_tabs_visible';
+let SHOW_UNIMPLEMENTED_TABS = (localStorage.getItem(UNIMPLEMENTED_TABS_KEY) === '1');
 const DEFAULT_SETTINGS = {
   density: 'standard',
   dashboardView: 'list',
@@ -2306,6 +2346,7 @@ let APP_SETTINGS = { ...DEFAULT_SETTINGS };
 let TOOLTIPS_ENABLED = true;
 const dayMs = 24*60*60*1000; // グローバル日ミリ秒（ガント/日付計算で使用）
 let TENANT_SETTINGS = [];
+let TENANT_SETTINGS_UNLOCKED = false;
 
 function loadAppSettings(){
   try{
@@ -2483,6 +2524,10 @@ function resetAppSettings(){
 }
 
 async function loadTenantSettings(){
+  if (!TENANT_SETTINGS_UNLOCKED) {
+    renderTenantSettings();
+    return;
+  }
   try{
     const rows = await rpc('getSettingsEntries');
     TENANT_SETTINGS = Array.isArray(rows) ? rows : [];
@@ -2493,6 +2538,10 @@ async function loadTenantSettings(){
 }
 
 async function ensureTenantSettings(){
+  if (!TENANT_SETTINGS_UNLOCKED) {
+    renderTenantSettings();
+    return;
+  }
   try{
     await rpc('ensureTenantSettings');
   }catch(e){
@@ -2501,9 +2550,42 @@ async function ensureTenantSettings(){
   await loadTenantSettings();
 }
 
+function updateTenantSettingsLockState(){
+  const state = el('tenant_settings_lock_state');
+  if (state) state.textContent = TENANT_SETTINGS_UNLOCKED ? '解除済み' : 'ロック中';
+  const disabled = !TENANT_SETTINGS_UNLOCKED;
+  ['ts_key','ts_value'].forEach(id=>{
+    const input = el(id);
+    if (input) input.disabled = disabled;
+  });
+}
+
+async function unlockTenantSettings(){
+  const pwd = String(val('tenant_settings_password') || '');
+  if (!pwd) { alert('パスワードを入力してください'); return; }
+  try{
+    const ok = await rpc('verifyTenantPassword', pwd);
+    if (ok && ok.ok) {
+      TENANT_SETTINGS_UNLOCKED = true;
+      updateTenantSettingsLockState();
+      await ensureTenantSettings();
+      await loadTenantSettings();
+    } else {
+      alert('パスワードが一致しません');
+    }
+  }catch(e){
+    alert('パスワード確認に失敗しました: ' + (e && e.message ? e.message : e));
+  }
+}
+
 function renderTenantSettings(){
+  updateTenantSettingsLockState();
   const tbody = document.querySelector('#tenantSettingsTable tbody');
   if (!tbody) return;
+  if (!TENANT_SETTINGS_UNLOCKED) {
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">パスワード解除後に表示されます</td></tr>';
+    return;
+  }
   const rows = safeArr(TENANT_SETTINGS).slice().sort((a,b)=>{
     const ak = String(a?.key || '');
     const bk = String(b?.key || '');
@@ -2549,6 +2631,7 @@ function resetTenantSettingForm(){
 }
 
 async function saveTenantSetting(){
+  if (!TENANT_SETTINGS_UNLOCKED) { alert('パスワード解除後に操作してください'); return; }
   const key = String(val('ts_key') || '').trim();
   const value = String(val('ts_value') || '');
   if (!key) { alert('キーを入力してください'); return; }
@@ -7893,6 +7976,18 @@ function bindRruleUI(){
   try { const m=document.getElementById('gantt-scale-mode'); if(m) m.value=GANTT_SCALE; } catch(_){ }
   try { setVersionAndDebug(APP_VERSION); fetchSpreadsheetInfo(); refresh(); bindRruleUI(); } catch(e){ alert('初期化時エラー: ' + e); }
   applyAppSettings({ respectRoute: true });
+  applyTabVisibility();
+  try {
+    const dbg = el('dbg_show_unimplemented');
+    if (dbg) {
+      dbg.checked = SHOW_UNIMPLEMENTED_TABS;
+      dbg.addEventListener('change', ()=>{
+        SHOW_UNIMPLEMENTED_TABS = !!dbg.checked;
+        try { localStorage.setItem(UNIMPLEMENTED_TABS_KEY, SHOW_UNIMPLEMENTED_TABS ? '1' : '0'); } catch(_){}
+        applyTabVisibility();
+      });
+    }
+  } catch(_){ }
 
   // クイック追加の折りたたみ状態を反映
   //try { QUICK_COLLAPSED = (localStorage.getItem('quick_collapsed')==='1'); applyQuickPanelState(); } catch(_){}

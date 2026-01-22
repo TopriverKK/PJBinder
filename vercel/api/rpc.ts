@@ -241,6 +241,15 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     await settings.setSetting(key, value);
     return { ok: true };
   },
+  async verifyTenantPassword(...args: any[]) {
+    const pwd = String(args[0] ?? '');
+    const id = getTenantId();
+    if (!id) return { ok: false };
+    const rows = await sbSelect('tenants', `select=id,tenantPassword&limit=1&id=eq.${encodeURIComponent(id)}`);
+    const row = Array.isArray(rows) ? rows[0] ?? null : null;
+    const stored = row && typeof (row as any).tenantPassword === 'string' ? String((row as any).tenantPassword) : '';
+    return { ok: stored === pwd };
+  },
 
   // Weekly progress
   async getWeeklyReports(...args: any[]) {

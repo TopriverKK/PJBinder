@@ -7269,12 +7269,18 @@ function addWorkflowApproval(id, action){
   const approvals = safeArr(DATA.workflowApprovals).filter(a=>String(a.workflowId)===String(id));
   const step = approvals.length + 1;
   const req = safeArr(DATA.workflowRequests).find(r=>String(r.id)===String(id));
+  if (!req || !req.title || !req.requesterId) {
+    alert('申請情報が不足しているため承認できません。再読み込み後にもう一度お試しください。');
+    return;
+  }
   const approverIds = String(req?.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean);
   const nextStatus = action==='reject' ? 'rejected' : (step >= approverIds.length ? 'approved' : 'pending');
   Busy.push();
   gsr().withSuccessHandler(()=>{
     gsr().withSuccessHandler(()=>refresh()).upsertWorkflowRequest({
       id,
+      title: req.title,
+      requesterId: req.requesterId,
       status: nextStatus,
       currentStep: step,
     });
@@ -8670,12 +8676,37 @@ function buildDailyBody(r){
   const userName = displayUser(r.userId||'');
   const projName = nameByProjectId(r.projectId||'') || '-';
   // r.tasks は CSV で来る前提（createDailyReportDocFromForm内）
-  const taskTitles = String(r.tasks||'').split(',').map(id=>safeArr(DATA.tasks).find(t=>t.id===id)?.title).filter(Boolean).join(', ') || '-';
+  const assigned = safeArr(DATA.tasks).filter(t=>{
+    const uid = String(r.userId||'');
+    const assignees = String(t.assignees||'').split(',').map(s=>s.trim());
+    const isOwner = String(t.ownerUserId||'') === uid;
+    const isAssignee = assignees.includes(uid);
+    return isOwner || isAssignee;
+  });
+  const remaining = assigned.filter(t=>String(t.status||'').toLowerCase() !== 'done');
+  const remainingLines = remaining.length
+    ? remaining.map(t=>`- [ ] ${t.title||t.id}`).join('\n')
+    : '- [ ] なし';
 
   return (
-`# 日報 ${r.date||''} / ${userName||'-'}
+`#
 
-`
+# 本日の作業予定
+
+- [ ] 午前  
+      - [ ]   
+- [ ] 午後  
+      - [ ] 
+
+# 残タスク
+
+${remainingLines}
+
+#
+
+# メモ
+
+* `
   );
 }
 async function openIcsDialog(){

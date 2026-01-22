@@ -414,7 +414,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
     // ignore
   }
   const remainingBlock =
-    remainingTasks.length ? remainingTasks.map((t) => `- [ ] ${t}`).join('\n') : '- [ ] なし';
+    remainingTasks.length ? remainingTasks.map((t) => `- ${t}`).join('\n') : '- なし';
   const memoOnly = body || '';
   const bodyFilled = memoOnly;
   const fallbackTemplateText =

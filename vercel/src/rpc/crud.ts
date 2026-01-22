@@ -150,6 +150,12 @@ export async function rpcUpsertPaymentRequest(r: any) {
 export async function rpcUpsertWorkflowRequest(r: any) {
   r.updatedAt = isoDate(new Date());
   if (!r.id) {
+    if (!r.title || !String(r.title).trim()) {
+      throw new Error('title is required');
+    }
+    if (!r.requesterId || !String(r.requesterId).trim()) {
+      throw new Error('requesterId is required');
+    }
     r.id = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     r.createdAt = r.updatedAt;
   }

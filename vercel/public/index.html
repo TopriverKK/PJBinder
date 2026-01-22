@@ -7250,6 +7250,7 @@ function delWorkflowRequest(id){
 }
 
 function addWorkflowApproval(id, action){
+  if (!id) { alert('申請IDが不明なため処理できません'); return; }
   const selId = `wf_user_${safeId(id)}`;
   const approverId = el(selId)?.value || '';
   if (!approverId) { alert('承認者を選択してください'); return; }

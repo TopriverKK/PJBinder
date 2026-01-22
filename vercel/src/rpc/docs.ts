@@ -415,9 +415,16 @@ export async function rpcCreateDailyReportDoc(r: any) {
   }
   const remainingBlock =
     remainingTasks.length ? remainingTasks.map((t) => `- [ ] ${t}`).join('\n') : '- [ ] なし';
-  const bodyFilled = body
-    .replace('* 【残タスク】', remainingBlock)
-    .replace('【残タスク】', remainingBlock);
+  const memoOnly = body || '';
+  const bodyFilled = memoOnly;
+  const fallbackTemplateText =
+    `# 本日の作業予定\n\n` +
+    `- [ ] 午前  \n      - [ ]   \n` +
+    `- [ ] 午後  \n      - [ ] \n\n` +
+    `# 残タスク\n\n` +
+    `${remainingBlock}\n\n` +
+    `# メモ\n\n` +
+    `* ${memoOnly}\n`;
 
   // Best-effort: resolve project name
   let projectLabel = projectId;
@@ -447,6 +454,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
           '【工数】': String(hours),
           '【プロジェクト】': projectLabel || '-',
           '【本文】': bodyFilled,
+          '【残タスク】': remainingBlock,
         },
       });
       docId = result.docId;
@@ -455,7 +463,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
       const initialText =
         `ユーザー: ${uname}　日付: ${dateStr}　工数: ${hours}h\n` +
         (projectLabel ? `プロジェクト: ${projectLabel}\n` : '') +
-        `\n${bodyFilled}\n`;
+        `\n${fallbackTemplateText}\n`;
 
       const result = await createGoogleDocInFolder({
         title: fileTitle,

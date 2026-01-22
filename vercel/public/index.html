@@ -7274,7 +7274,11 @@ function addWorkflowApproval(id, action){
     return;
   }
   const approverIds = String(req?.approverIds||'').split(',').map(s=>s.trim()).filter(Boolean);
-  const nextStatus = action==='reject' ? 'rejected' : (step >= approverIds.length ? 'approved' : 'pending');
+  const approvedCount = approvals.filter(a=>String(a.action||'')==='approve').length + 1;
+  const hasRoute = approverIds.length > 0;
+  const nextStatus = action==='reject'
+    ? 'rejected'
+    : (hasRoute && approvedCount >= approverIds.length ? 'approved' : 'pending');
   Busy.push();
   gsr().withSuccessHandler(()=>{
     gsr().withSuccessHandler(()=>refresh()).upsertWorkflowRequest({
@@ -8673,41 +8677,8 @@ function buildMinutesBody(m){
 
 // ★Dailyテンプレート生成
 function buildDailyBody(r){
-  const userName = displayUser(r.userId||'');
-  const projName = nameByProjectId(r.projectId||'') || '-';
-  // r.tasks は CSV で来る前提（createDailyReportDocFromForm内）
-  const assigned = safeArr(DATA.tasks).filter(t=>{
-    const uid = String(r.userId||'');
-    const assignees = String(t.assignees||'').split(',').map(s=>s.trim());
-    const isOwner = String(t.ownerUserId||'') === uid;
-    const isAssignee = assignees.includes(uid);
-    return isOwner || isAssignee;
-  });
-  const remaining = assigned.filter(t=>String(t.status||'').toLowerCase() !== 'done');
-  const remainingLines = remaining.length
-    ? remaining.map(t=>`- [ ] ${t.title||t.id}`).join('\n')
-    : '- [ ] なし';
-
-  return (
-`#
-
-# 本日の作業予定
-
-- [ ] 午前  
-      - [ ]   
-- [ ] 午後  
-      - [ ] 
-
-# 残タスク
-
-${remainingLines}
-
-#
-
-# メモ
-
-* `
-  );
+  const memo = String(r?.body || '').trim();
+  return memo ? `* ${memo}` : '* ';
 }
 async function openIcsDialog(){
   try{

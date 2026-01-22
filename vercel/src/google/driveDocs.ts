@@ -280,7 +280,19 @@ export async function replaceDocWithMemo(docId: string, memoText: string) {
   const { docs } = await getGoogleClients();
   const text = String(memoText || '');
 
-  // 1) try placeholder replacement
+  // 1) detect placeholder presence
+  let hasPlaceholder = false;
+  try {
+    const doc = await docs.documents.get({ documentId: docId });
+    const content = (doc.data.body?.content || [])
+      .map((c) => c.paragraph?.elements?.map((e) => e.textRun?.content || '').join('') || '')
+      .join('');
+    hasPlaceholder = /(\{\{BODY\}\}|【本文】|＜本文＞)/i.test(content);
+  } catch {
+    // ignore
+  }
+
+  // 2) try placeholder replacement
   await docs.documents.batchUpdate({
     documentId: docId,
     requestBody: {
@@ -307,7 +319,11 @@ export async function replaceDocWithMemo(docId: string, memoText: string) {
     },
   });
 
-  // 2) append at end (safe fallback)
+  if (hasPlaceholder) {
+    return true;
+  }
+
+  // 3) append at end (safe fallback)
   const doc = await docs.documents.get({ documentId: docId });
   const endIndex = doc.data.body?.content?.at(-1)?.endIndex;
   const insertIndex = typeof endIndex === 'number' ? Math.max(1, endIndex - 1) : 1;

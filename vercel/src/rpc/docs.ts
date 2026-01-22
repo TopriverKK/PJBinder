@@ -399,22 +399,75 @@ export async function rpcCreateDailyReportDoc(r: any) {
   const body = String(r?.body || '');
 
   // 残タスク（担当者に割り当てられていて未完了のもの）
-  let remainingTasks: string[] = [];
+  let remainingTasks: Array<{ id: string; title: string; projectId: string; memoText: string }> = [];
+  let remainingTaskRows: any[] = [];
   try {
     const uid = encodeURIComponent(userId);
     const rows = await sbSelect(
       'tasks',
-      `select=id,title,status,assignees,ownerUserId&or=(ownerUserId.eq.${uid},assignees.ilike.*${uid}*)`
+      `select=id,title,status,assignees,ownerUserId,projectId,memoText,docId,docUrl&or=(ownerUserId.eq.${uid},assignees.ilike.*${uid}*)`
     );
-    remainingTasks = (Array.isArray(rows) ? rows : [])
+    remainingTaskRows = Array.isArray(rows) ? rows : [];
+    remainingTasks = remainingTaskRows
       .filter((t) => String(t?.status || '').toLowerCase() !== 'done')
-      .map((t) => String(t?.title || t?.id || '').trim())
-      .filter(Boolean);
+      .map((t) => ({
+        id: String(t?.id || '').trim(),
+        title: String(t?.title || t?.id || '').trim(),
+        projectId: String(t?.projectId || '').trim(),
+        memoText: String(t?.memoText || '').trim(),
+      }))
+      .filter((t) => t.title);
   } catch {
     // ignore
   }
-  const remainingBlock =
-    remainingTasks.length ? remainingTasks.map((t) => `- ${t}`).join('\n') : '- なし';
+  let remainingBlock = '- なし';
+  try {
+    if (remainingTasks.length) {
+      const projectIds = Array.from(new Set(remainingTasks.map((t) => t.projectId).filter(Boolean)));
+      const projects = projectIds.length
+        ? await sbSelect('projects', `select=id,name,docId,docUrl&id=in.(${projectIds.map((p) => `"${p}"`).join(',')})`)
+        : [];
+      const projectMap = new Map(
+        (Array.isArray(projects) ? projects : []).map((p: any) => [
+          String(p?.id || ''),
+          {
+            name: String(p?.name || p?.id || '').trim(),
+            url: p?.docUrl || (p?.docId ? `https://docs.google.com/document/d/${p.docId}` : ''),
+          },
+        ])
+      );
+      const taskUrlMap = new Map(
+        remainingTaskRows.map((t: any) => [
+          String(t?.id || ''),
+          t?.docUrl || (t?.docId ? `https://docs.google.com/document/d/${t.docId}` : ''),
+        ])
+      );
+      const grouped = new Map<string, typeof remainingTasks>();
+      remainingTasks.forEach((t) => {
+        const key = t.projectId || '';
+        const list = grouped.get(key) || [];
+        list.push(t);
+        grouped.set(key, list);
+      });
+      const lines: string[] = [];
+      grouped.forEach((tasks, pid) => {
+        const proj = projectMap.get(pid) || { name: pid || '未設定', url: '' };
+        const projLine = proj.url ? `- ${proj.name} ${proj.url}` : `- ${proj.name}`;
+        lines.push(projLine);
+        tasks.forEach((t) => {
+          const tUrl = taskUrlMap.get(t.id) || '';
+          const taskLine = tUrl ? `  - ${t.title} ${tUrl}` : `  - ${t.title}`;
+          lines.push(taskLine);
+          if (t.memoText) {
+            lines.push(`    - ${t.memoText}`);
+          }
+        });
+      });
+      remainingBlock = lines.join('\n');
+    }
+  } catch {
+    // ignore
+  }
   const memoOnly = body || '';
   const bodyFilled = memoOnly;
   const fallbackTemplateText =

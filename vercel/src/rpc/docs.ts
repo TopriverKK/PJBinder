@@ -7,6 +7,7 @@ import {
   getLogoDataUrl,
   prependDocText,
   replaceDocWithMemo,
+  replaceRemainingTasksWithBullets,
   setDocLinkShare,
 } from '../google/driveDocs.js';
 import { sbSelect, sbSelectOneById, sbUpsert } from '../supabase/rest.js';
@@ -401,6 +402,11 @@ export async function rpcCreateDailyReportDoc(r: any) {
   // 残タスク（担当者に割り当てられていて未完了のもの）
   let remainingTasks: Array<{ id: string; title: string; projectId: string; memoText: string }> = [];
   let remainingTaskRows: any[] = [];
+  let remainingGroups: Array<{
+    projectName: string;
+    projectUrl?: string;
+    tasks: Array<{ title: string; url?: string; memo?: string }>;
+  }> = [];
   try {
     const uid = encodeURIComponent(userId);
     const rows = await sbSelect(
@@ -417,11 +423,6 @@ export async function rpcCreateDailyReportDoc(r: any) {
         memoText: String(t?.memoText || '').trim(),
       }))
       .filter((t) => t.title);
-  } catch {
-    // ignore
-  }
-  let remainingBlock = '- なし';
-  try {
     if (remainingTasks.length) {
       const projectIds = Array.from(new Set(remainingTasks.map((t) => t.projectId).filter(Boolean)));
       const projects = projectIds.length
@@ -449,21 +450,18 @@ export async function rpcCreateDailyReportDoc(r: any) {
         list.push(t);
         grouped.set(key, list);
       });
-      const lines: string[] = [];
       grouped.forEach((tasks, pid) => {
         const proj = projectMap.get(pid) || { name: pid || '未設定', url: '' };
-        const projLine = proj.url ? `- ${proj.name} ${proj.url}` : `- ${proj.name}`;
-        lines.push(projLine);
-        tasks.forEach((t) => {
-          const tUrl = taskUrlMap.get(t.id) || '';
-          const taskLine = tUrl ? `  - ${t.title} ${tUrl}` : `  - ${t.title}`;
-          lines.push(taskLine);
-          if (t.memoText) {
-            lines.push(`    - ${t.memoText}`);
-          }
+        remainingGroups.push({
+          projectName: proj.name || '未設定',
+          projectUrl: proj.url || undefined,
+          tasks: tasks.map((t) => ({
+            title: t.title,
+            url: taskUrlMap.get(t.id) || undefined,
+            memo: t.memoText || undefined,
+          })),
         });
       });
-      remainingBlock = lines.join('\n');
     }
   } catch {
     // ignore
@@ -475,7 +473,7 @@ export async function rpcCreateDailyReportDoc(r: any) {
     `- [ ] 午前  \n      - [ ]   \n` +
     `- [ ] 午後  \n      - [ ] \n\n` +
     `# 残タスク\n\n` +
-    `${remainingBlock}\n\n` +
+    `【残タスク】\n\n` +
     `# メモ\n\n` +
     `* ${memoOnly}\n`;
 
@@ -507,7 +505,6 @@ export async function rpcCreateDailyReportDoc(r: any) {
           '【工数】': String(hours),
           '【プロジェクト】': projectLabel || '-',
           '【本文】': bodyFilled,
-          '【残タスク】': remainingBlock,
         },
       });
       docId = result.docId;
@@ -526,6 +523,13 @@ export async function rpcCreateDailyReportDoc(r: any) {
       });
       docId = result.docId;
       url = result.url;
+    }
+    if (docId) {
+      try {
+        await replaceRemainingTasksWithBullets(docId, remainingGroups);
+      } catch (e) {
+        console.error('[docs] Failed to replace remaining tasks:', e);
+      }
     }
   } catch (e) {
     // If Google API or folder env isn't configured, still save the daily report row.

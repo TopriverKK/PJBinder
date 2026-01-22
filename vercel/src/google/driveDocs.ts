@@ -1,4 +1,4 @@
-import { getGoogleClients } from './client.js';
+﻿import { getGoogleClients } from './client.js';
 import { loadGoogleEnv } from './env.js';
 
 const GOOGLE_DOC_MIME = 'application/vnd.google-apps.document';
@@ -287,7 +287,7 @@ export async function replaceDocWithMemo(docId: string, memoText: string) {
     const content = (doc.data.body?.content || [])
       .map((c) => c.paragraph?.elements?.map((e) => e.textRun?.content || '').join('') || '')
       .join('');
-    hasPlaceholder = /(\{\{BODY\}\}|【本文】|＜本文＞)/i.test(content);
+    hasPlaceholder = /(\{\{BODY\}\}|【本文】|【メモ】)/i.test(content);
   } catch {
     // ignore
   }
@@ -311,7 +311,7 @@ export async function replaceDocWithMemo(docId: string, memoText: string) {
         },
         {
           replaceAllText: {
-            containsText: { text: '＜本文＞', matchCase: false },
+            containsText: { text: '【メモ】', matchCase: false },
             replaceText: text,
           },
         },
@@ -340,6 +340,114 @@ export async function replaceDocWithMemo(docId: string, memoText: string) {
         },
       ],
     },
+  });
+
+  return true;
+}
+
+type RemainingTaskGroup = {
+  projectName: string;
+  projectUrl?: string;
+  tasks: Array<{ title: string; url?: string; memo?: string }>;
+};
+
+function findTextIndex(doc: any, target: string): { start: number; end: number } | null {
+  const content = doc?.body?.content || [];
+  for (const block of content) {
+    const elements = block?.paragraph?.elements || [];
+    let combined = '';
+    elements.forEach((el: any) => {
+      const t = el?.textRun?.content || '';
+      combined += t;
+    });
+    const idx = combined.indexOf(target);
+    if (idx >= 0) {
+      const start = block.startIndex + idx;
+      return { start, end: start + target.length };
+    }
+  }
+  return null;
+}
+
+export async function replaceRemainingTasksWithBullets(docId: string, groups: RemainingTaskGroup[]) {
+  const { docs } = await getGoogleClients();
+  const doc = await docs.documents.get({ documentId: docId });
+  const placeholder = '【残タスク】';
+  const found = findTextIndex(doc.data, placeholder);
+
+  const endIndex = doc.data.body?.content?.at(-1)?.endIndex;
+  const insertBase = typeof endIndex === 'number' ? Math.max(1, endIndex - 1) : 1;
+  const insertAt = found ? found.start : insertBase;
+
+  const lines: Array<{ text: string; level: number; link?: string }> = [];
+  groups.forEach((g) => {
+    lines.push({ text: g.projectName, level: 0, link: g.projectUrl });
+    g.tasks.forEach((t) => {
+      lines.push({ text: t.title, level: 1, link: t.url });
+      if (t.memo) lines.push({ text: t.memo, level: 2 });
+    });
+  });
+  if (!lines.length) {
+    lines.push({ text: 'なし', level: 0 });
+  }
+  const text = `${lines.map((l) => l.text).join('\n')}\n`;
+
+  const requests: any[] = [];
+  if (found) {
+    requests.push({
+      deleteContentRange: {
+        range: { startIndex: found.start, endIndex: found.end },
+      },
+    });
+  }
+  requests.push({
+    insertText: {
+      location: { index: insertAt },
+      text,
+    },
+  });
+
+  const startIndex = insertAt;
+  const end = insertAt + text.length;
+  requests.push({
+    createParagraphBullets: {
+      range: { startIndex, endIndex: end },
+      bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE',
+    },
+  });
+
+  let cursor = insertAt;
+  lines.forEach((line) => {
+    const lineStart = cursor;
+    const lineEnd = cursor + line.text.length;
+    if (line.link) {
+      requests.push({
+        updateTextStyle: {
+          range: { startIndex: lineStart, endIndex: lineEnd },
+          textStyle: { link: { url: line.link } },
+          fields: 'link',
+        },
+      });
+    }
+    const indent = 18 * line.level;
+    if (indent > 0) {
+      requests.push({
+        updateParagraphStyle: {
+          range: { startIndex: lineStart, endIndex: lineEnd + 1 },
+          paragraphStyle: {
+            indentStart: { magnitude: indent, unit: 'PT' },
+            indentFirstLine: { magnitude: indent, unit: 'PT' },
+          },
+          fields: 'indentStart,indentFirstLine',
+        },
+      });
+    }
+    cursor = lineEnd + 1;
+  });
+
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: { requests },
   });
 
   return true;
@@ -400,3 +508,4 @@ export async function getLogoDataUrl(overrideFileId?: string | null) {
     return null;
   }
 }
+

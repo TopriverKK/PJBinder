@@ -1687,9 +1687,50 @@ button.link:hover { opacity: .8; }
       <h2>ユーザー一覧</h2>
       <div class="body list">
         <table id="userTable">
-          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>勤務形態</th><th>所定(分)</th><th>休憩(分)</th><th>出勤状況に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th>勤怠修正PW</th><th></th></tr></thead>
+          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>勤務形態</th><th>所定(分)</th><th>休憩(分)</th><th>出勤状況に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th>勤怠修正PW</th><th>勤務情報</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
+      </div>
+    </div>
+    <div class="modal-backdrop" id="user-work-modal">
+      <div class="modal-panel">
+        <div class="toolbar" style="justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">勤務情報修正</h3>
+          <button class="secondary" onclick="closeUserWorkModal()">閉じる</button>
+        </div>
+        <div class="body" style="margin-top:8px;">
+          <div class="row">
+            <div><label>ユーザー</label><input id="uw_user_label" disabled/></div>
+            <div><label>勤務パターン</label>
+              <select id="uw_schedule_type">
+                <option value="fixed">固定（開始/終了）</option>
+                <option value="core">コアタイム有り（開始/終了/コア）</option>
+                <option value="flex">完全フレックス</option>
+              </select>
+            </div>
+          </div>
+          <div class="row-3" style="margin-top:8px;">
+            <div><label>開始</label><input type="time" id="uw_start"/></div>
+            <div><label>終了</label><input type="time" id="uw_end"/></div>
+            <div><label>備考</label><input id="uw_note" placeholder="任意"/></div>
+          </div>
+          <div class="row-3" style="margin-top:8px;">
+            <div><label>コア開始</label><input type="time" id="uw_core_start"/></div>
+            <div><label>コア終了</label><input type="time" id="uw_core_end"/></div>
+            <div></div>
+          </div>
+          <div style="margin-top:8px;">
+            <label>休憩時間（複数）</label>
+            <div id="uw_breaks" class="att-breaks"></div>
+            <div class="toolbar" style="gap:6px; margin-top:6px;">
+              <button class="secondary" onclick="addUserBreakRow()">休憩追加</button>
+              <button class="secondary" onclick="clearUserBreaks()">休憩クリア</button>
+            </div>
+          </div>
+          <div class="toolbar" style="justify-content:flex-end; margin-top:12px;">
+            <button onclick="saveUserWorkSettings()">保存</button>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -4709,6 +4750,7 @@ async function refreshAttendance(){
     ATT.dayRows = Array.isArray(rows) ? rows : [];
     document.getElementById('att-status').textContent = `取得: ${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`;
     renderAttendancePage();
+    try { autoApplyAttendanceBreaks(); } catch(_){ }
     // calendar events are best-effort and only when attendance page is open
     if (PAGE === 'attendance' && ATT_VIEW === 'dashboard') {
       await refreshAttendanceCalendars();
@@ -4753,6 +4795,43 @@ async function saveAttendanceSettings(){
 
 function attFindRowForUser(userId){
   return (Array.isArray(ATT.dayRows)?ATT.dayRows:[]).find(r => String(r.user_id||r.user||'') === String(userId));
+}
+
+const ATT_AUTO_BREAK_STATE = {};
+function autoApplyAttendanceBreaks(){
+  const now = new Date();
+  const dateKey = todayStr();
+  const users = attendanceBaseUsers();
+  users.forEach(u=>{
+    const uid = String(u.id||'');
+    const row = attFindRowForUser(uid);
+    if (!row) return;
+    const status = String(row.status||'');
+    if (!(status === 'working' || status === 'break')) return;
+    if (!row.clock_in) return;
+    const breaks = Array.isArray(u.workBreaks) ? u.workBreaks : [];
+    if (!breaks.length) return;
+    const inBreak = breaks.some(b=>{
+      const s = String(b.start||'').trim();
+      const e = String(b.end||'').trim();
+      if (!s || !e) return false;
+      const start = new Date(`${dateKey}T${s}:00`);
+      const end = new Date(`${dateKey}T${e}:00`);
+      if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return false;
+      return now >= start && now <= end;
+    });
+    const last = ATT_AUTO_BREAK_STATE[uid] || { last: 0, inBreak: null };
+    const cooldown = 60 * 1000;
+    if (Date.now() - last.last < cooldown && last.inBreak === inBreak) return;
+    if (inBreak && status === 'working') {
+      ATT_AUTO_BREAK_STATE[uid] = { last: Date.now(), inBreak };
+      patchAttendance(uid, { type:'toggleBreak' });
+    }
+    if (!inBreak && status === 'break') {
+      ATT_AUTO_BREAK_STATE[uid] = { last: Date.now(), inBreak };
+      patchAttendance(uid, { type:'toggleBreak' });
+    }
+  });
 }
 
 async function patchAttendance(userId, action){
@@ -7346,6 +7425,12 @@ function addUser() {
     workType: workType,
     scheduledWorkMinutes: parseMinutesInput(val('u_work_minutes'), defaults.workMinutes),
     fixedBreakMinutes: parseMinutesInput(val('u_break_minutes'), defaults.breakMinutes),
+    workScheduleType: 'fixed',
+    workStartTime: '09:00',
+    workEndTime: '18:00',
+    coreStartTime: '10:00',
+    coreEndTime: '15:00',
+    workBreaks: [{ start: '12:00', end: '13:00' }],
   };
   const pw = String(val('u_password') || '').trim();
   if (pw) u.userPassword = pw;
@@ -7377,7 +7462,8 @@ function renderUsers() {
       <td style="text-align:center;"><input type="checkbox" data-uid="${escapeHtml(u.id)}" data-field="attendanceVisible" ${checked}/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="employeeNumber" value="${escapeHtml(u.employeeNumber||'')}" placeholder="12345"/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="calendarUrl" value="${escapeHtml(u.calendarUrl||'')}" placeholder="https://calendar.google.com/.../basic.ics"/></td>
-      <td><input type="password" data-uid="${escapeHtml(u.id)}" data-field="userPassword" placeholder="変更時のみ入力"/></td>
+      <td><input type="password" data-uid="${escapeHtml(u.id)}" data-field="userPassword" placeholder="${u.userPassword ? '変更時のみ入力' : '（パスワード未設定）'}"/></td>
+      <td><button class="secondary" onclick="openUserWorkModal('${u.id}')">勤務情報修正</button></td>
       <td><button class="secondary" onclick="delUser('${u.id}')">削除</button></td>
     `;
     tb.appendChild(tr);
@@ -7430,6 +7516,107 @@ function bindUserWorkTypeDefaults(){
 }
 function delUser(id) { gsr().withSuccessHandler(()=>{ dropRow('users', id); rerenderAfter('users'); }).deleteUser(id); }
 function delMinute(id) { gsr().withSuccessHandler(()=>{ dropRow('minutes', id); rerenderAfter('minutes'); }).deleteMinute(id); }
+
+function openUserWorkModal(uid){
+  const u = safeArr(DATA.users).find(x=>String(x.id||'')===String(uid));
+  if(!u) return;
+  const modal = el('user-work-modal');
+  if (modal) modal.style.display = 'flex';
+  valSet('uw_user_label', `${u.name||u.email||u.id}`);
+  valSet('uw_schedule_type', String(u.workScheduleType||'fixed'));
+  valSet('uw_start', String(u.workStartTime||''));
+  valSet('uw_end', String(u.workEndTime||''));
+  valSet('uw_core_start', String(u.coreStartTime||''));
+  valSet('uw_core_end', String(u.coreEndTime||''));
+  valSet('uw_note', '');
+  const wrap = el('uw_breaks');
+  if (wrap) wrap.innerHTML = '';
+  const breaks = Array.isArray(u.workBreaks) ? u.workBreaks : [];
+  if (breaks.length) {
+    breaks.forEach(b=> addUserBreakRow(String(b.start||''), String(b.end||'')));
+  } else {
+    addUserBreakRow();
+  }
+  modal.dataset.uid = String(uid);
+  updateUserWorkUiByType();
+}
+// Bind schedule type change for work modal
+document.addEventListener('change', (e)=>{
+  const t = e && e.target;
+  if (t && t.id === 'uw_schedule_type') {
+    updateUserWorkUiByType();
+  }
+});
+function closeUserWorkModal(){
+  const modal = el('user-work-modal');
+  if (modal) modal.style.display = 'none';
+}
+function addUserBreakRow(start='', end=''){
+  const wrap = el('uw_breaks'); if (!wrap) return;
+  const row = document.createElement('div');
+  row.className = 'att-break-row';
+  row.innerHTML = `
+    <input class="att-break-start" type="time" value="${escapeHtml(start)}"/>
+    <span class="muted">～</span>
+    <input class="att-break-end" type="time" value="${escapeHtml(end)}"/>
+    <button class="secondary" onclick="this.parentElement.remove()">削除</button>
+  `;
+  wrap.appendChild(row);
+}
+function clearUserBreaks(){
+  const wrap = el('uw_breaks'); if (wrap) wrap.innerHTML = '';
+  addUserBreakRow();
+}
+function readUserBreaks(){
+  const wrap = el('uw_breaks'); if (!wrap) return [];
+  const rows = Array.from(wrap.querySelectorAll('.att-break-row'));
+  const out = [];
+  rows.forEach(r=>{
+    const s = r.querySelector('.att-break-start');
+    const e = r.querySelector('.att-break-end');
+    const start = String(s ? s.value : '').trim();
+    const end = String(e ? e.value : '').trim();
+    if (start && end) out.push({ start, end });
+  });
+  return out;
+}
+function updateUserWorkUiByType(){
+  const t = String(val('uw_schedule_type')||'fixed');
+  const isCore = t === 'core';
+  const isFlex = t === 'flex';
+  const start = el('uw_start'); const end = el('uw_end');
+  const cs = el('uw_core_start'); const ce = el('uw_core_end');
+  if (start) start.disabled = isFlex;
+  if (end) end.disabled = isFlex;
+  if (cs) cs.disabled = !isCore;
+  if (ce) ce.disabled = !isCore;
+}
+function saveUserWorkSettings(){
+  const modal = el('user-work-modal');
+  const uid = modal ? String(modal.dataset.uid||'') : '';
+  if (!uid) return;
+  const payload = {
+    id: uid,
+    workScheduleType: String(val('uw_schedule_type')||'fixed'),
+    workStartTime: String(val('uw_start')||''),
+    workEndTime: String(val('uw_end')||''),
+    coreStartTime: String(val('uw_core_start')||''),
+    coreEndTime: String(val('uw_core_end')||''),
+    workBreaks: readUserBreaks(),
+  };
+  gsr().withSuccessHandler(row=>{
+        patchRow('users', row);
+        rerenderAfter('users');
+        closeUserWorkModal();
+        toast('勤務情報を保存しました', true);
+      })
+      .withFailureHandler(e=>{ toast('勤務情報の保存に失敗: '+(e && e.message ? e.message : e), false); })
+      .upsertUser(payload);
+}
+
+function valSet(id, value){
+  const el = document.getElementById(id); if (el) el.value = value == null ? '' : String(value);
+}
 
 function deleteProjectHard(id){
   const p = safeArr(DATA.projects).find(x=>String(x.id)===String(id));

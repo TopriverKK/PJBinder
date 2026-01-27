@@ -481,6 +481,7 @@
   .att-calendar-day .att-badge.work{ background:#dcfce7; color:#166534; }
   .att-calendar-day .att-badge.done{ background:#e5e7eb; color:#374151; }
   .att-calendar-day .att-badge.none{ background:#fee2e2; color:#991b1b; }
+  .att-calendar-day .att-badge.holiday{ background:#e0f2fe; color:#075985; }
   .att-calendar-day .att-note{ font-size:11px; color:#374151; margin-top:4px; }
   .att-calendar-day .att-shift{ font-size:11px; margin-top:4px; font-weight:700; color:#111827; }
   .att-calendar-day .att-tasks{ font-size:11px; color:#1f2937; margin-top:4px; }
@@ -488,6 +489,10 @@
   .att-calendar-day .att-tasks li{ margin:2px 0; }
   .att-calendar-day .att-edit{ position:absolute; top:6px; right:6px; }
   .att-calendar-day{ position:relative; }
+  .att-cal-summary{ display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 12px; }
+  .att-cal-summary .item{ background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:6px 10px; font-size:12px; }
+  .att-cal-summary .label{ color:var(--muted); }
+  .att-cal-summary .val{ font-weight:700; color:#111827; }
   .att-vgantt{ display:flex; flex-direction:column; gap:14px; }
   .att-vgantt-user{ border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card); }
   .att-vgantt-title{ font-weight:700; margin-bottom:6px; }
@@ -2118,6 +2123,7 @@ button.link:hover { opacity: .8; }
           <select id="att_cal_user"></select>
           <button onclick="loadAttendanceCalendar()">表示</button>
         </div>
+        <div id="att_cal_summary" class="att-cal-summary"></div>
         <div id="att_calendar"></div>
       </div>
     </div>
@@ -4563,6 +4569,86 @@ function minutesToLabel(mins){
   return `${h}時間${m}分`;
 }
 
+function isPaidLeaveStatus(status, notes){
+  const st = String(status||'').toLowerCase();
+  if (['paid', 'paid-leave', 'paid_leave', 'leave', 'vacation', 'pto', 'paidleave'].includes(st)) return true;
+  const memo = String(notes||'');
+  if (memo.includes('有休') || memo.includes('有給')) return true;
+  return false;
+}
+
+function renderAttendanceCalendarSummary(month, userId){
+  const wrap = el('att_cal_summary');
+  if (!wrap) return;
+  if (!userId) {
+    wrap.innerHTML = '<div class="item"><span class="label">ユーザーを選択してください</span></div>';
+    return;
+  }
+
+  const first = new Date(`${month}-01T00:00:00`);
+  if (!Number.isFinite(first.getTime())) { wrap.innerHTML = ''; return; }
+  const monthStart = new Date(first);
+  const monthEnd = new Date(first);
+  monthEnd.setMonth(monthEnd.getMonth()+1);
+  monthEnd.setDate(0);
+  monthEnd.setHours(0,0,0,0);
+
+  const work = getUserWorkSettings(userId);
+  const u = safeArr(DATA.users).find(x=>String(x.id||'')===String(userId));
+  const scheduleType = String(u?.workScheduleType||'fixed');
+  const dailyScheduled = Number(work.workMinutes||0);
+
+  const rows = safeArr(ATT.monthRows).filter(r=>String(r.user_id||r.user||'')===userId);
+  const byDate = new Map();
+  rows.forEach(r=>{
+    const key = String(r.work_date||'');
+    if (!key) return;
+    byDate.set(key, r);
+  });
+
+  let attendDays = 0;
+  let totalWorkMinutes = 0;
+  let scheduledMinutesTotal = 0;
+  let paidLeaveDays = 0;
+  let withinMinutes = 0;
+  let overtimeMinutes = 0;
+
+  for(let d=new Date(monthStart); d<=monthEnd; d.setDate(d.getDate()+1)){
+    const dateKey = fmtYMDLocal(d);
+    const scheduled = isScheduledWorkday(dateKey, ATT.holidayDates, ATT.companyHolidayDates);
+    if (scheduled) scheduledMinutesTotal += dailyScheduled;
+    const row = byDate.get(dateKey);
+    if (!row) continue;
+    const worked = (row.clock_in && row.clock_out) ? computeWorkedMinutes(row, userId) : 0;
+    if (worked > 0) {
+      attendDays += 1;
+      totalWorkMinutes += worked;
+      if (scheduleType === 'flex') {
+        // defer overtime calc to total
+      } else {
+        const dailyOver = Math.max(0, worked - dailyScheduled);
+        overtimeMinutes += dailyOver;
+        withinMinutes += Math.max(0, worked - dailyOver);
+      }
+    }
+    if (isPaidLeaveStatus(row.status, row.notes)) paidLeaveDays += 1;
+  }
+
+  if (scheduleType === 'flex') {
+    overtimeMinutes = Math.max(0, totalWorkMinutes - scheduledMinutesTotal);
+    withinMinutes = Math.max(0, totalWorkMinutes - overtimeMinutes);
+  }
+
+  wrap.innerHTML = `
+    <div class="item"><div class="label">出勤日数</div><div class="val">${attendDays} 日</div></div>
+    <div class="item"><div class="label">総勤務時間</div><div class="val">${minutesToLabel(totalWorkMinutes)}</div></div>
+    <div class="item"><div class="label">所定労働時間</div><div class="val">${minutesToLabel(scheduledMinutesTotal)}</div></div>
+    <div class="item"><div class="label">所定内労働</div><div class="val">${minutesToLabel(withinMinutes)}</div></div>
+    <div class="item"><div class="label">時間外労働</div><div class="val">${minutesToLabel(overtimeMinutes)}</div></div>
+    <div class="item"><div class="label">有給取得数</div><div class="val">${paidLeaveDays} 日</div></div>
+  `;
+}
+
 function normalizeUrl(url){ return String(url||'').trim().startsWith('http') ? String(url||'').trim() : `https://${String(url||'').trim()}`; }
 function buildIcsProxyUrl(targetUrl){ return `/api/ics?url=${encodeURIComponent(targetUrl)}`; }
 function canonicalizeIcsUrl(raw){
@@ -5532,6 +5618,15 @@ async function loadAttendanceCalendar(){
   const month = String((monthEl||{}).value||todayStr().slice(0,7));
   try{
     await ensureAttendanceWorklogsLoaded();
+    if(!ATT.settings || !ATT.settings.holidayUrl){ await loadAttendanceSettings(); }
+    const holidayUrl = (ATT.settings && ATT.settings.holidayUrl) ? ATT.settings.holidayUrl : defaultHolidayIcs;
+    const companyHolidayUrl = (ATT.settings && ATT.settings.companyHolidayUrl) ? ATT.settings.companyHolidayUrl : '';
+    const [holidaySet, companySet] = await Promise.all([
+      loadHolidaySet(holidayUrl),
+      companyHolidayUrl ? loadHolidaySet(companyHolidayUrl) : Promise.resolve(new Set()),
+    ]);
+    ATT.holidayDates = holidaySet;
+    ATT.companyHolidayDates = companySet;
     const rows = await rpc('getAttendanceMonth', month);
     ATT.monthRows = Array.isArray(rows) ? rows : [];
     renderAttendanceCalendar(month);
@@ -5546,6 +5641,7 @@ function renderAttendanceCalendar(month){
   if (!wrap) return;
   wrap.innerHTML = '';
   const userId = String((el('att_cal_user')||{}).value||'');
+  renderAttendanceCalendarSummary(month, userId);
   const first = new Date(`${month}-01T00:00:00`);
   if (!Number.isFinite(first.getTime())) return;
   const start = new Date(first);
@@ -5604,13 +5700,19 @@ function renderAttendanceCalendar(month){
           : '';
         noteHtml = `<div class="att-shift">${escapeHtml(shift)}</div>${taskHtml}${row.notes ? `<div class="att-note">${escapeHtml(String(row.notes||''))}</div>` : ''}`;
       } else {
-        badgeHtml = `<div class="att-badge none">未打刻</div>`;
+        if (ATT.companyHolidayDates && ATT.companyHolidayDates.has(key)) {
+          badgeHtml = `<div class="att-badge holiday">公休日</div>`;
+        } else {
+          badgeHtml = `<div class="att-badge none">未打刻</div>`;
+        }
       }
     } else {
       const doneCount = items.filter(r=>String(r.status||'')==='done').length;
       const workCount = items.filter(r=>['working','out','break'].includes(String(r.status||''))).length;
       if (doneCount || workCount) {
         badgeHtml = `<div class="att-badge done">退勤 ${doneCount}</div><div class="att-badge work">勤務中 ${workCount}</div>`;
+      } else if (ATT.companyHolidayDates && ATT.companyHolidayDates.has(key)) {
+        badgeHtml = `<div class="att-badge holiday">公休日</div>`;
       } else {
         badgeHtml = `<div class="att-badge none">記録なし</div>`;
       }

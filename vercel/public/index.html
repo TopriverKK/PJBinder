@@ -878,6 +878,10 @@ button.link:hover { opacity: .8; }
       <div class="body">
         <div class="toolbar" style="gap:8px; flex-wrap:wrap; margin-bottom:8px;">
           <input id="proj_f_keyword" placeholder="キーワード（名称/メモ）"/>
+          <input id="proj_f_from" type="date" placeholder="開始日"/>
+          <input id="proj_f_to" type="date" placeholder="終了日"/>
+          <button class="secondary" onclick="setProjectMetricsRange('week')">今週</button>
+          <button class="secondary" onclick="setProjectMetricsRange('month')">今月</button>
           <select id="proj_f_owner"></select>
           <select id="proj_f_priority">
             <option value="">全優先度</option>
@@ -897,7 +901,7 @@ button.link:hover { opacity: .8; }
             <thead>
               <tr>
                 <th>名称</th><th>ステータス</th><th>親</th><th>主担当者</th>
-                <th>優先度</th><th>予算</th><th>期間</th>
+                <th>優先度</th><th>予算</th><th>見積h</th><th>実績h</th><th>工数%</th><th>実績コスト</th><th>予算%</th><th>期間</th>
                 <th>未完了</th><th>完了</th><th>添付</th><th></th>
               </tr>
             </thead>
@@ -1394,7 +1398,7 @@ button.link:hover { opacity: .8; }
                 <input id="p_color" type="color" value="#ffffff"/>
               </div>
               <div><label>予算（円）</label><input id="p_budget" type="number"/></div>
-              <div></div>
+              <div><label>見積工数（h）</label><input id="p_est_hours" type="number" min="0" step="0.1"/></div>
             </div>
 
           </div>
@@ -1445,6 +1449,7 @@ button.link:hover { opacity: .8; }
               </select>
             </div>
             <div><label>期限</label><input id="t_due" type="date"/></div>
+            <div><label>配賦工数（h）</label><input id="t_planned_hours" type="number" min="0" step="0.1"/></div>
           </div>
           <div class="row">
             <div>
@@ -1673,6 +1678,10 @@ button.link:hover { opacity: .8; }
           <div><label>所定勤務時間（分）</label><input id="u_work_minutes" type="number" min="0" placeholder="例: 450" value="450"/></div>
           <div><label>固定休憩（分）</label><input id="u_break_minutes" type="number" min="0" placeholder="例: 90" value="90"/></div>
         </div>
+        <div class="row">
+          <div><label>時給（円）</label><input id="u_hourly_rate" type="number" min="0" placeholder="例: 2000" value="2000"/></div>
+          <div></div>
+        </div>
                 <div class="row">
           <div><label>個人パスワード（勤怠修正用）</label><input id="u_password" type="password" placeholder="初期設定・変更用"/></div>
           <div></div>
@@ -1687,7 +1696,7 @@ button.link:hover { opacity: .8; }
       <h2>ユーザー一覧</h2>
       <div class="body list">
         <table id="userTable">
-          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>勤務形態</th><th>所定(分)</th><th>休憩(分)</th><th>出勤状況に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th>勤怠修正PW</th><th>勤務情報</th><th></th></tr></thead>
+          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>勤務形態</th><th>所定(分)</th><th>休憩(分)</th><th>時給(円)</th><th>出勤状況に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th>勤怠修正PW</th><th>勤務情報</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -7425,6 +7434,7 @@ function addUser() {
     workType: workType,
     scheduledWorkMinutes: parseMinutesInput(val('u_work_minutes'), defaults.workMinutes),
     fixedBreakMinutes: parseMinutesInput(val('u_break_minutes'), defaults.breakMinutes),
+    hourlyRate: parseMinutesInput(val('u_hourly_rate'), 2000),
     workScheduleType: 'fixed',
     workStartTime: '09:00',
     workEndTime: '18:00',
@@ -7459,6 +7469,7 @@ function renderUsers() {
       </td>
       <td><input type="number" min="0" data-uid="${escapeHtml(u.id)}" data-field="scheduledWorkMinutes" value="${escapeHtml(String(work.workMinutes))}"/></td>
       <td><input type="number" min="0" data-uid="${escapeHtml(u.id)}" data-field="fixedBreakMinutes" value="${escapeHtml(String(work.breakMinutes))}"/></td>
+      <td><input type="number" min="0" data-uid="${escapeHtml(u.id)}" data-field="hourlyRate" value="${escapeHtml(String(u.hourlyRate ?? 2000))}"/></td>
       <td style="text-align:center;"><input type="checkbox" data-uid="${escapeHtml(u.id)}" data-field="attendanceVisible" ${checked}/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="employeeNumber" value="${escapeHtml(u.employeeNumber||'')}" placeholder="12345"/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="calendarUrl" value="${escapeHtml(u.calendarUrl||'')}" placeholder="https://calendar.google.com/.../basic.ics"/></td>
@@ -7759,6 +7770,8 @@ function addProject() {
     priority: val('p_priority'),
     color: pc,
     budget: val('p_budget'),
+    budgetAmount: Number(val('p_budget')||0),
+    estimatedHours: Number(val('p_est_hours')||0),
     startDate: val('p_start'),
     endDate: val('p_end'),
     memoText: val('p_memo'),
@@ -7804,6 +7817,7 @@ function addTask() {
     priority: val('t_prio'),
     color: tc,
     memoText: val('t_memo'),
+    plannedHours: Number(val('t_planned_hours')||0),
     estimateHours: '',
     actualHours: '',
     rrule: (el('t_rrule')?.value) || '',
@@ -7818,6 +7832,7 @@ function editTask(id){
   el('t_project_select').value = t.projectId||'';
   el('t_type').value = t.type||'single';
   el('t_due').value = t.dueDate||'';
+  if (el('t_planned_hours')) el('t_planned_hours').value = t.plannedHours || '';
   el('t_owner_select').value = t.ownerUserId||'';
 
   const ms = el('t_assignees_select');
@@ -7952,6 +7967,7 @@ function editProject(id){
   el('p_owner_select').value = p.ownerUserId||'';
   el('p_priority').value = normPriority(p.priority||'')||'';
   el('p_budget').value = p.budget||'';
+  if (el('p_est_hours')) el('p_est_hours').value = p.estimatedHours || '';
   el('p_start').value = p.startDate||'';
   el('p_end').value = p.endDate||'';
   el('p_memo').value = p.memoText||'';
@@ -9901,11 +9917,16 @@ function toggleProjectTasks(projectId, anchor){
 }
 function renderProjectsPage(){
   if (PAGE !== 'projects') return;
+  if (!ATT_WORKLOGS_LOADED) {
+    ensureAttendanceWorklogsLoaded().then(()=>renderProjectsPage());
+  }
   const tb = document.querySelector('#projAllTable tbody'); if (!tb) return;
   tb.innerHTML='';
 
   // フィルタ収集
   const kw  = (document.getElementById('proj_f_keyword')?.value || '').trim().toLowerCase();
+  const from = String(document.getElementById('proj_f_from')?.value || '').trim();
+  const to = String(document.getElementById('proj_f_to')?.value || '').trim();
   const own = document.getElementById('proj_f_owner')?.value || '';
   const pri = document.getElementById('proj_f_priority')?.value || '';
   const stf = document.getElementById('proj_f_status')?.value || ''; // ''|'active'|'archived'
@@ -9928,6 +9949,8 @@ function renderProjectsPage(){
 
   rows.sort((a,b)=> String(a.name||'').localeCompare(String(b.name||'')));
 
+  const metricMap = buildProjectMetrics(from, to);
+
   for (const r of rows){
     const pDocUrl = getProjectDocUrl(r.id);
     const badge   = pDocUrl ? `<span class="doc-badge" title="Project Doc" data-tip="プロジェクトのドキュメントを開きます" onclick="openProjectDocById('${r.id}')">📄PJDoc</span>` : '';
@@ -9943,6 +9966,16 @@ function renderProjectsPage(){
     const prc = prioLabel==='高' ? 'high' : prioLabel==='中' ? 'mid' : prioLabel==='低' ? 'low' : '';
 
     const {open, done} = getProjectTaskCounts(r.id);
+    const metrics = metricMap.get(String(r.id)) || {
+      actualHours: 0,
+      laborCost: 0,
+      otherCost: 0,
+      totalCost: 0,
+      hourRate: null,
+      budgetRate: null,
+    };
+    const estHours = Number(r.estimatedHours || 0);
+    const budgetNum = Number(r.budgetAmount ?? r.budget ?? 0);
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -9953,7 +9986,12 @@ function renderProjectsPage(){
       <td class="cell-prio ${prc?('prio-'+prc):''}">
         <span class="pill prio-badge ${prc?('prio-'+prc):''}">${escapeHtml(prioLabel||'')}</span>
       </td>
-      <td${bg}>${Number(r.budget||0).toLocaleString()}</td>
+      <td${bg}>${Number(budgetNum||0).toLocaleString()}</td>
+      <td${bg}>${estHours ? estHours.toFixed(1) : ''}</td>
+      <td${bg}>${metrics.actualHours ? metrics.actualHours.toFixed(1) : ''}</td>
+      <td${bg}>${(metrics.hourRate!=null) ? `${metrics.hourRate.toFixed(1)}%` : ''}</td>
+      <td${bg}>${Number(metrics.totalCost||0).toLocaleString()}</td>
+      <td${bg}>${(metrics.budgetRate!=null) ? `${metrics.budgetRate.toFixed(1)}%` : ''}</td>
       <td${bg}>${r.startDate||''}?${r.endDate||''}</td>
       <td${bg}><b>${open}</b></td>
       <td${bg}><b>${done}</b></td>
@@ -9971,10 +10009,121 @@ function renderProjectsPage(){
 }
 function applyProjectsFilters(){ try{ renderProjectsPage(); }catch(_){} }
 function clearProjectsFilters(){
-  ['proj_f_keyword','proj_f_owner','proj_f_priority','proj_f_status'].forEach(id=>{
+  ['proj_f_keyword','proj_f_owner','proj_f_priority','proj_f_status','proj_f_from','proj_f_to'].forEach(id=>{
     const e=document.getElementById(id); if(e) e.value='';
   });
   applyProjectsFilters();
+}
+
+function setProjectMetricsRange(kind){
+  const now = new Date();
+  let start = null;
+  let end = null;
+  if (kind === 'week') {
+    const mon = mondayStart(todayStr());
+    start = mon;
+    end = addDaysKey(mon, 6);
+  } else if (kind === 'month') {
+    const y = now.getFullYear();
+    const m = String(now.getMonth()+1).padStart(2,'0');
+    const first = `${y}-${m}-01`;
+    const d = new Date(`${first}T00:00:00`);
+    d.setMonth(d.getMonth()+1);
+    d.setDate(0);
+    const last = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    start = first;
+    end = last;
+  }
+  if (el('proj_f_from')) el('proj_f_from').value = start || '';
+  if (el('proj_f_to')) el('proj_f_to').value = end || '';
+  applyProjectsFilters();
+}
+
+function buildProjectMetrics(from, to){
+  const map = new Map();
+  const dateInRange = (key)=>{
+    if (!key) return false;
+    if (from && key < from) return false;
+    if (to && key > to) return false;
+    return true;
+  };
+  const getDateKey = (w)=>{
+    const raw = String(w.work_date||w.workDate||'').trim();
+    if (raw) return raw;
+    const iso = w.start_at || w.startAt;
+    if (!iso) return '';
+    try{
+      const d = new Date(iso);
+      if (!Number.isFinite(d.getTime())) return '';
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }catch(_){ return ''; }
+  };
+  const worklogs = safeArr(DATA.attendanceWorklogs || []);
+  worklogs.forEach(w=>{
+    const pid = String(w.project_id||w.projectId||'').trim();
+    if (!pid) return;
+    const dateKey = getDateKey(w);
+    if ((from || to) && !dateInRange(dateKey)) return;
+    const start = w.start_at || w.startAt;
+    const end = w.end_at || w.endAt;
+    if (!start || !end) return;
+    const ms = (new Date(end)).getTime() - (new Date(start)).getTime();
+    if (!(ms > 0)) return;
+    const minutes = Math.round(ms/60000);
+    const uid = String(w.user_id||w.userId||'').trim();
+    const user = safeArr(DATA.users).find(u=>String(u.id||'')===uid);
+    const rate = Number(user?.hourlyRate ?? 2000);
+    const labor = (minutes/60) * rate;
+    const cur = map.get(pid) || { minutes:0, laborCost:0, otherCost:0 };
+    cur.minutes += minutes;
+    cur.laborCost += labor;
+    map.set(pid, cur);
+  });
+
+  safeArr(DATA.ledger).forEach(l=>{
+    const pid = String(l.projectId||'').trim();
+    if (!pid) return;
+    if (String(l.type||'') !== 'expense') return;
+    const dateKey = String(l.date||'').trim();
+    if ((from || to) && !dateInRange(dateKey)) return;
+    const amt = Number(l.amount||0);
+    if (!amt) return;
+    const cur = map.get(pid) || { minutes:0, laborCost:0, otherCost:0 };
+    cur.otherCost += amt;
+    map.set(pid, cur);
+  });
+
+  safeArr(DATA.workflowRequests).forEach(w=>{
+    const pid = String(w.projectId||'').trim();
+    if (!pid) return;
+    if (String(w.status||'') !== 'approved') return;
+    const dateKey = String(w.requestDate||'').trim();
+    if ((from || to) && !dateInRange(dateKey)) return;
+    const amt = Number(w.amount||0);
+    if (!amt) return;
+    const cur = map.get(pid) || { minutes:0, laborCost:0, otherCost:0 };
+    cur.otherCost += amt;
+    map.set(pid, cur);
+  });
+
+  const out = new Map();
+  safeArr(DATA.projects).forEach(p=>{
+    const pid = String(p.id||'');
+    const cur = map.get(pid) || { minutes:0, laborCost:0, otherCost:0 };
+    const actualHours = cur.minutes / 60;
+    const totalCost = cur.laborCost + cur.otherCost;
+    const est = Number(p.estimatedHours||0);
+    const budget = Number(p.budgetAmount ?? p.budget ?? 0);
+    out.set(pid, {
+      actualHours,
+      laborCost: cur.laborCost,
+      otherCost: cur.otherCost,
+      totalCost,
+      hourRate: est ? (actualHours / est) * 100 : null,
+      budgetRate: budget ? (totalCost / budget) * 100 : null,
+    });
+  });
+  return out;
 }
 // ★追加：Usersを確実に揃えてから続行
 function ensureUsersLoaded(timeoutMs=1500){

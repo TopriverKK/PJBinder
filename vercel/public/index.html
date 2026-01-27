@@ -486,6 +486,8 @@
   .att-calendar-day .att-tasks{ font-size:11px; color:#1f2937; margin-top:4px; }
   .att-calendar-day .att-tasks ul{ margin:4px 0 0 16px; padding:0; }
   .att-calendar-day .att-tasks li{ margin:2px 0; }
+  .att-calendar-day .att-edit{ position:absolute; top:6px; right:6px; }
+  .att-calendar-day{ position:relative; }
   .att-vgantt{ display:flex; flex-direction:column; gap:14px; }
   .att-vgantt-user{ border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card); }
   .att-vgantt-title{ font-weight:700; margin-bottom:6px; }
@@ -496,6 +498,16 @@
   .att-vgantt-col{ position:relative; border-top:1px solid var(--border); border-left:1px solid var(--border); background:var(--bg); min-height: calc(40px * var(--att-hours)); }
   .att-vgantt-col:last-child{ border-right:1px solid var(--border); }
   .att-vgantt-bar{ position:absolute; left:6px; right:6px; border-radius:8px; padding:2px 6px; font-size:11px; color:#fff; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .att-gantt-wrap{ overflow:auto; }
+  .att-gantt-day{ display:flex; gap:12px; align-items:flex-start; }
+  .att-day-user{ min-width:360px; border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card); }
+  .att-day-user .title{ font-weight:700; margin-bottom:6px; }
+  .att-day-grid{ display:grid; grid-template-columns: 80px repeat(3, minmax(0,1fr)); gap:6px; }
+  .att-week{ display:flex; flex-direction:column; gap:12px; }
+  .att-week-user{ border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card); }
+  .att-week-head{ display:grid; grid-template-columns: 80px repeat(7, var(--att-day-width)); gap:6px; font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .att-week-grid{ display:grid; grid-template-columns: 80px repeat(7, var(--att-day-width)); grid-auto-rows: min-content; gap:6px; }
+  .att-week-cell{ position:relative; border:1px solid var(--border); background:var(--bg); height: calc(var(--att-hours) * 40px); }
   .att-gantt{ display:flex; flex-direction:column; gap:6px; }
   .att-gantt-row{ display:grid; grid-template-columns: 140px 1fr; gap:8px; align-items:center; }
   .att-gantt-name{ font-size:12px; font-weight:700; color:#374151; }
@@ -2063,7 +2075,12 @@ button.link:hover { opacity: .8; }
       <h2>出勤ガント（縦）</h2>
       <div class="body">
         <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
+          <select id="att_gantt_mode" onchange="setAttendanceGanttMode(this.value)">
+            <option value="day">日単位</option>
+            <option value="week">週単位</option>
+          </select>
           <input type="date" id="att_gantt_date"/>
+          <input type="date" id="att_gantt_week" style="display:none;"/>
           <select id="att_gantt_dept"></select>
           <select id="att_gantt_user"></select>
           <button onclick="loadAttendanceGantt()">表示</button>
@@ -4406,8 +4423,24 @@ function setAttendanceView(view, opts){
     } else if (ATT_VIEW === 'calendar') {
       try { loadAttendanceCalendar?.(); } catch(_){ }
     } else if (ATT_VIEW === 'gantt') {
+      try { setAttendanceGanttMode(ATT_GANTT_MODE); } catch(_){ }
       try { loadAttendanceGantt?.(); } catch(_){ }
     }
+  }
+}
+
+let ATT_GANTT_MODE = 'day';
+function setAttendanceGanttMode(mode){
+  const v = String(mode||'day');
+  ATT_GANTT_MODE = (v === 'week') ? 'week' : 'day';
+  const dateEl = el('att_gantt_date');
+  const weekEl = el('att_gantt_week');
+  if (dateEl) dateEl.style.display = ATT_GANTT_MODE === 'day' ? '' : 'none';
+  if (weekEl) weekEl.style.display = ATT_GANTT_MODE === 'week' ? '' : 'none';
+  if (ATT_GANTT_MODE === 'week') {
+    if (weekEl && !weekEl.value) weekEl.value = mondayStart(todayStr());
+  } else {
+    if (dateEl && !dateEl.value) dateEl.value = todayStr();
   }
 }
 
@@ -5383,7 +5416,12 @@ async function saveAttendanceEdit(){
   }catch(e){
     console.error(e);
     if (statusEl) statusEl.textContent = '保存失敗';
-    toast('勤怠修正の保存に失敗: '+(e && e.message ? e.message : e), false);
+    const msg = String(e && e.message ? e.message : e);
+    if (msg.toLowerCase().includes('password') || msg.includes('パスワード')) {
+      alert('パスワードが正しくありません');
+    } else {
+      toast('勤怠修正の保存に失敗: '+msg, false);
+    }
   }
 }
 
@@ -5480,7 +5518,8 @@ function renderAttendanceCalendar(month){
     const cell = document.createElement('div');
     cell.className = 'att-calendar-day';
     if (!inMonth) cell.style.opacity = '0.45';
-    cell.innerHTML = `<div class="att-date">${escapeHtml(key.slice(5))}</div>${badgeHtml}${noteHtml}`;
+    const editBtn = userId ? `<button class="secondary mini att-edit" onclick="openAttendanceEditModal('${key}','${escapeJsSq(userId)}')">編集</button>` : '';
+    cell.innerHTML = `<div class="att-date">${escapeHtml(key.slice(5))}</div>${editBtn}${badgeHtml}${noteHtml}`;
     grid.appendChild(cell);
   });
   wrap.appendChild(grid);
@@ -5494,6 +5533,17 @@ async function loadAttendanceGantt(){
   try{
     await ensureAttendanceWorklogsLoaded();
   }catch(_){ }
+
+  if (ATT_GANTT_MODE === 'week') {
+    await loadAttendanceGanttWeek();
+  } else {
+    await loadAttendanceGanttDay();
+  }
+  renderAttendanceGantt();
+}
+
+async function loadAttendanceGanttDay(){
+  const dateEl = el('att_gantt_date');
   const dateKey = String((dateEl||{}).value||todayStr());
   try{
     const rows = await rpc('getAttendanceDay', dateKey);
@@ -5521,19 +5571,67 @@ async function loadAttendanceGantt(){
     }
   }));
   ATT.ganttEventsByUser = eventsByUser;
-  renderAttendanceGantt();
 }
 
-const ATT_GANTT = { startHour: 5, endHour: 23, hourHeight: 40 };
+async function loadAttendanceGanttWeek(){
+  const weekEl = el('att_gantt_week');
+  if (weekEl && !weekEl.value) weekEl.value = mondayStart(todayStr());
+  const weekStart = String((weekEl||{}).value||mondayStart(todayStr()));
+  const days = Array.from({length:7}, (_,i)=>addDaysKey(weekStart, i));
+
+  const monthKeys = Array.from(new Set(days.map(d=>String(d).slice(0,7))));
+  let rows = [];
+  for (const m of monthKeys){
+    try{
+      const r = await rpc('getAttendanceMonth', m);
+      if (Array.isArray(r)) rows = rows.concat(r);
+    }catch(e){ console.error(e); }
+  }
+  ATT.ganttWeekRows = rows;
+
+  const dept = String((el('att_gantt_dept')||{}).value||'');
+  const userId = String((el('att_gantt_user')||{}).value||'');
+  const users = attendanceBaseUsers().filter(u=>{
+    if (dept && !weeklyDeptMatches(u, dept)) return false;
+    if (userId && String(u.id||'') !== userId) return false;
+    return true;
+  });
+  const eventsByUser = {};
+  await Promise.all(users.map(async u=>{
+    const url = String(u.calendarUrl||'').trim();
+    if(!url){ eventsByUser[u.id]={}; return; }
+    try{
+      const text = await fetchIcsText(url);
+      const map = {};
+      days.forEach(d=>{ map[d] = parseIcsEventsForDate(text, d); });
+      eventsByUser[u.id] = map;
+    }catch(_){
+      const map = {};
+      days.forEach(d=>{ map[d] = []; });
+      eventsByUser[u.id] = map;
+    }
+  }));
+  ATT.ganttWeekEventsByUser = eventsByUser;
+  ATT.ganttWeekDays = days;
+}
+
+const ATT_GANTT = { startHour: 5, endHour: 23, hourHeight: 40, dayWidth: 180 };
 
 function renderAttendanceGantt(){
   const wrap = el('att_gantt');
   if (!wrap) return;
   wrap.innerHTML = '';
+  if (ATT_GANTT_MODE === 'week') {
+    renderAttendanceGanttWeek(wrap);
+  } else {
+    renderAttendanceGanttDay(wrap);
+  }
+}
+
+function renderAttendanceGanttDay(wrap){
   const dateKey = String((el('att_gantt_date')||{}).value||todayStr());
   const dept = String((el('att_gantt_dept')||{}).value||'');
   const userId = String((el('att_gantt_user')||{}).value||'');
-
   const users = attendanceBaseUsers().filter(u=>{
     if (dept && !weeklyDeptMatches(u, dept)) return false;
     if (userId && String(u.id||'') !== userId) return false;
@@ -5541,7 +5639,6 @@ function renderAttendanceGantt(){
   });
   const worklogs = safeArr(DATA.attendanceWorklogs).filter(w=>String(w.work_date||w.workDate||'')===dateKey);
   const dayRows = safeArr(ATT.ganttDayRows);
-
   const toMinutes = (iso)=>{
     if (!iso) return null;
     const d = new Date(iso);
@@ -5552,19 +5649,19 @@ function renderAttendanceGantt(){
   const dayStartMin = ATT_GANTT.startHour * 60;
   const dayEndMin = ATT_GANTT.endHour * 60;
   const now = new Date();
-  const gantt = document.createElement('div');
-  gantt.className = 'att-vgantt';
+
+  const wrapEl = document.createElement('div');
+  wrapEl.className = 'att-gantt-wrap';
+  const row = document.createElement('div');
+  row.className = 'att-gantt-day';
 
   users.forEach(u=>{
     const uid = String(u.id||'');
-    const userBox = document.createElement('div');
-    userBox.className = 'att-vgantt-user';
-    userBox.innerHTML = `<div class="att-vgantt-title">${escapeHtml(u.name||u.email||u.id||'')}</div>`;
-    const head = document.createElement('div');
-    head.className = 'att-vgantt-head';
-    head.innerHTML = `<div></div><div>勤務状況</div><div>タスク</div><div>予定</div>`;
-    const body = document.createElement('div');
-    body.className = 'att-vgantt-body';
+    const box = document.createElement('div');
+    box.className = 'att-day-user';
+    box.innerHTML = `<div class="title">${escapeHtml(u.name||u.email||u.id||'')}</div>`;
+    const grid = document.createElement('div');
+    grid.className = 'att-day-grid';
 
     const timeCol = document.createElement('div');
     timeCol.className = 'att-vgantt-timecol';
@@ -5593,18 +5690,19 @@ function renderAttendanceGantt(){
       if (startMinRaw != null && endMinRaw != null && endMinRaw > startMinRaw){
         const startMin = Math.max(dayStartMin, startMinRaw);
         const endMin = Math.min(dayEndMin, endMinRaw);
-        if (endMin <= startMin) return;
-        const top = ((startMin - dayStartMin) / 60) * ATT_GANTT.hourHeight;
-        const height = ((endMin - startMin) / 60) * ATT_GANTT.hourHeight;
-        const bar = document.createElement('div');
-        bar.className = 'att-vgantt-bar';
-        const loc = String(attRow.location||'office');
-        const color = loc === 'remote' ? '#16a34a' : (loc === 'out' ? '#f97316' : '#2563eb');
-        bar.style.background = color;
-        bar.style.top = `${Math.max(0, top)}px`;
-        bar.style.height = `${Math.max(10, height)}px`;
-        bar.textContent = `${attLocLabel(loc)} ${attFormatTime(attRow.clock_in)}-${attFormatTime(attRow.clock_out)}`;
-        laneAttendance.appendChild(bar);
+        if (endMin > startMin){
+          const top = ((startMin - dayStartMin) / 60) * ATT_GANTT.hourHeight;
+          const height = ((endMin - startMin) / 60) * ATT_GANTT.hourHeight;
+          const bar = document.createElement('div');
+          bar.className = 'att-vgantt-bar';
+          const loc = String(attRow.location||'office');
+          const color = loc === 'remote' ? '#16a34a' : (loc === 'out' ? '#f97316' : '#2563eb');
+          bar.style.background = color;
+          bar.style.top = `${Math.max(0, top)}px`;
+          bar.style.height = `${Math.max(10, height)}px`;
+          bar.textContent = `${attLocLabel(loc)} ${attFormatTime(attRow.clock_in)}-${attFormatTime(attRow.clock_out)}`;
+          laneAttendance.appendChild(bar);
+        }
       }
     }
 
@@ -5650,20 +5748,183 @@ function renderAttendanceGantt(){
       lanePlans.appendChild(bar);
     });
 
-    body.appendChild(timeCol);
-    body.appendChild(laneAttendance);
-    body.appendChild(laneTasks);
-    body.appendChild(lanePlans);
-    userBox.appendChild(head);
-    userBox.appendChild(body);
-    gantt.appendChild(userBox);
+    grid.appendChild(timeCol);
+    grid.appendChild(laneAttendance);
+    grid.appendChild(laneTasks);
+    grid.appendChild(lanePlans);
+    box.appendChild(grid);
+    row.appendChild(box);
   });
 
   if (!users.length) {
     wrap.innerHTML = '<div class="muted">該当ユーザーがいません</div>';
     return;
   }
-  wrap.appendChild(gantt);
+  wrapEl.appendChild(row);
+  wrap.appendChild(wrapEl);
+}
+
+function renderAttendanceGanttWeek(wrap){
+  const weekStart = String((el('att_gantt_week')||{}).value||mondayStart(todayStr()));
+  const days = ATT.ganttWeekDays || Array.from({length:7}, (_,i)=>addDaysKey(weekStart, i));
+  const dept = String((el('att_gantt_dept')||{}).value||'');
+  const userId = String((el('att_gantt_user')||{}).value||'');
+  const users = attendanceBaseUsers().filter(u=>{
+    if (dept && !weeklyDeptMatches(u, dept)) return false;
+    if (userId && String(u.id||'') !== userId) return false;
+    return true;
+  });
+  const worklogs = safeArr(DATA.attendanceWorklogs);
+  const monthRows = safeArr(ATT.ganttWeekRows);
+  const toMinutes = (iso)=>{
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return null;
+    return d.getHours()*60 + d.getMinutes();
+  };
+  const hourCount = Math.max(1, ATT_GANTT.endHour - ATT_GANTT.startHour);
+  const dayStartMin = ATT_GANTT.startHour * 60;
+  const dayEndMin = ATT_GANTT.endHour * 60;
+  const now = new Date();
+
+  const wrapEl = document.createElement('div');
+  wrapEl.className = 'att-gantt-wrap';
+  const root = document.createElement('div');
+  root.className = 'att-week';
+
+  users.forEach(u=>{
+    const uid = String(u.id||'');
+    const box = document.createElement('div');
+    box.className = 'att-week-user';
+    box.style.setProperty('--att-day-width', `${ATT_GANTT.dayWidth}px`);
+    box.style.setProperty('--att-hours', String(hourCount));
+    box.innerHTML = `<div class="title">${escapeHtml(u.name||u.email||u.id||'')}</div>`;
+
+    const head = document.createElement('div');
+    head.className = 'att-week-head';
+    head.innerHTML = `<div></div>${days.map(d=>`<div>${escapeHtml(d.slice(5))}</div>`).join('')}`;
+    box.appendChild(head);
+
+    const grid = document.createElement('div');
+    grid.className = 'att-week-grid';
+
+    const makeTimeCol = ()=>{
+      const col = document.createElement('div');
+      col.className = 'att-vgantt-timecol';
+      for (let h = ATT_GANTT.startHour; h < ATT_GANTT.endHour; h++){
+        const t = document.createElement('div');
+        t.className = 'att-vgantt-time';
+        t.textContent = `${String(h).padStart(2,'0')}:00`;
+        col.appendChild(t);
+      }
+      return col;
+    };
+
+    const lanes = ['attendance','tasks','plans'];
+    lanes.forEach(lane=>{
+      grid.appendChild(makeTimeCol());
+      days.forEach(day=>{
+        const cell = document.createElement('div');
+        cell.className = 'att-week-cell';
+        cell.dataset.day = day;
+        cell.dataset.lane = lane;
+        cell.style.setProperty('--att-hours', String(hourCount));
+        grid.appendChild(cell);
+      });
+    });
+    box.appendChild(grid);
+
+    const cellMap = {};
+    grid.querySelectorAll('.att-week-cell').forEach(c=>{
+      const k = `${c.dataset.day}|${c.dataset.lane}`;
+      cellMap[k] = c;
+    });
+
+    days.forEach(day=>{
+      const attRow = monthRows.find(r=>String(r.work_date||'')===day && String(r.user_id||r.user||'')===uid);
+      const cell = cellMap[`${day}|attendance`];
+      if (cell && attRow && attRow.clock_in && (attRow.clock_out || day===todayStr())) {
+        const startMinRaw = toMinutes(attRow.clock_in);
+        const endMinRaw = toMinutes(attRow.clock_out) || (day===todayStr() ? (now.getHours()*60+now.getMinutes()) : null);
+        if (startMinRaw != null && endMinRaw != null && endMinRaw > startMinRaw){
+          const startMin = Math.max(dayStartMin, startMinRaw);
+          const endMin = Math.min(dayEndMin, endMinRaw);
+          if (endMin > startMin){
+            const top = ((startMin - dayStartMin) / 60) * ATT_GANTT.hourHeight;
+            const height = ((endMin - startMin) / 60) * ATT_GANTT.hourHeight;
+            const bar = document.createElement('div');
+            bar.className = 'att-vgantt-bar';
+            const loc = String(attRow.location||'office');
+            const color = loc === 'remote' ? '#16a34a' : (loc === 'out' ? '#f97316' : '#2563eb');
+            bar.style.background = color;
+            bar.style.top = `${Math.max(0, top)}px`;
+            bar.style.height = `${Math.max(10, height)}px`;
+            bar.textContent = `${attLocLabel(loc)} ${attFormatTime(attRow.clock_in)}-${attFormatTime(attRow.clock_out)}`;
+            cell.appendChild(bar);
+          }
+        }
+      }
+
+      const taskCell = cellMap[`${day}|tasks`];
+      if (taskCell) {
+        worklogs.filter(w=>String(w.work_date||w.workDate||'')===day && String(w.user_id||w.userId||'')===uid)
+          .forEach(w=>{
+            const startMinRaw = toMinutes(w.start_at || w.startAt);
+            const endMinRaw = toMinutes(w.end_at || w.endAt) || (day===todayStr() ? (now.getHours()*60+now.getMinutes()) : null);
+            if (startMinRaw == null || endMinRaw == null || endMinRaw <= startMinRaw) return;
+            const startMin = Math.max(dayStartMin, startMinRaw);
+            const endMin = Math.min(dayEndMin, endMinRaw);
+            if (endMin <= startMin) return;
+            const top = ((startMin - dayStartMin) / 60) * ATT_GANTT.hourHeight;
+            const height = ((endMin - startMin) / 60) * ATT_GANTT.hourHeight;
+            const bar = document.createElement('div');
+            bar.className = 'att-vgantt-bar';
+            bar.style.background = '#0ea5e9';
+            bar.style.top = `${Math.max(0, top)}px`;
+            bar.style.height = `${Math.max(10, height)}px`;
+            const pid = String(w.project_id||w.projectId||'').trim();
+            const tid = String(w.task_id||w.taskId||'').trim();
+            const projName = pid ? (safeArr(DATA.projects).find(p=>String(p.id)===pid)?.name || pid) : '';
+            const taskName = tid ? (safeArr(DATA.tasks).find(t=>String(t.id)===tid)?.title || tid) : '';
+            const label = projName && taskName ? `${projName}/${taskName}` : (projName || taskName || 'タスク');
+            bar.textContent = label;
+            taskCell.appendChild(bar);
+          });
+      }
+
+      const planCell = cellMap[`${day}|plans`];
+      if (planCell) {
+        const eventsMap = ATT.ganttWeekEventsByUser || {};
+        const events = (eventsMap[uid] && eventsMap[uid][day]) ? eventsMap[uid][day] : [];
+        events.forEach(ev=>{
+          const startMinRaw = ev.start.getHours()*60 + ev.start.getMinutes();
+          const endMinRaw = ev.end.getHours()*60 + ev.end.getMinutes();
+          if (endMinRaw <= startMinRaw) return;
+          const startMin = Math.max(dayStartMin, startMinRaw);
+          const endMin = Math.min(dayEndMin, endMinRaw);
+          if (endMin <= startMin) return;
+          const top = ((startMin - dayStartMin) / 60) * ATT_GANTT.hourHeight;
+          const height = ((endMin - startMin) / 60) * ATT_GANTT.hourHeight;
+          const bar = document.createElement('div');
+          bar.className = 'att-vgantt-bar';
+          bar.style.background = '#64748b';
+          bar.style.top = `${Math.max(0, top)}px`;
+          bar.style.height = `${Math.max(10, height)}px`;
+          bar.textContent = String(ev.summary||'予定');
+          planCell.appendChild(bar);
+        });
+      }
+    });
+
+    root.appendChild(box);
+  });
+
+  if (!users.length) {
+    wrap.innerHTML = '<div class="muted">該当ユーザーがいません</div>';
+    return;
+  }
+  wrapEl.appendChild(root);
+  wrap.appendChild(wrapEl);
 }
 
 async function refreshAttendanceCalendars(){

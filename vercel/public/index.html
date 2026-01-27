@@ -9238,6 +9238,11 @@ function showToast(kind, msg, ms=2200){
   setTimeout(()=>{ div.style.opacity=.0; div.style.transform='translateY(6px)'; }, ms);
   setTimeout(()=>div.remove(), ms+350);
 }
+// Backward-compat wrapper (older calls use toast(msg, okBool))
+function toast(msg, ok){
+  const kind = ok === true ? 'ok' : (ok === false ? 'ng' : '');
+  return showToast(kind, msg);
+}
 
 function val(id){
   const n = document.getElementById(id);

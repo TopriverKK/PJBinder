@@ -1,4 +1,5 @@
 import { sbUpsert, sbSelect, sbSelectOneById, sbDelete, sbDeleteWhere } from '../supabase/rest.js';
+import { hashPassword, verifyPassword } from './password.js';
 import {
   rpcCreateDailyReportDoc,
   rpcCreateMinuteDoc,
@@ -188,13 +189,34 @@ export async function rpcUpsertLedgerEntry(e: any) {
 }
 
 export async function rpcUpsertUser(u: any) {
+  const incomingPassword = typeof u?.userPassword === 'string' ? u.userPassword.trim() : '';
+  const currentPassword = typeof u?.currentPassword === 'string' ? u.currentPassword.trim() : '';
+
   u.updatedAt = isoDate(new Date());
   if (!u.id) {
     u.id = `usr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     u.createdAt = u.updatedAt;
   }
-  
-  const results = await sbUpsert('users', u, 'id');
+
+  const row = { ...(u || {}) } as any;
+  delete row.currentPassword;
+
+  if (incomingPassword) {
+    const existing = await sbSelectOneById('users', String(u.id));
+    const stored = existing && typeof (existing as any).userPassword === 'string'
+      ? String((existing as any).userPassword)
+      : '';
+    if (stored) {
+      if (!currentPassword) throw new Error('現在のパスワードを入力してください');
+      const check = verifyPassword(stored, currentPassword);
+      if (!check.ok) throw new Error('現在のパスワードが一致しません');
+    }
+    row.userPassword = hashPassword(incomingPassword);
+  } else {
+    delete row.userPassword;
+  }
+
+  const results = await sbUpsert('users', row, 'id');
   return Array.isArray(results) ? results[0] : results;
 }
 

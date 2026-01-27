@@ -1,5 +1,6 @@
 import { sbSelectAllSafe } from '../supabase/selectAll.js';
 import { sbUpsert, sbSelectOneById, sbDeleteWhere } from '../supabase/rest.js';
+import { hashPassword, verifyPassword } from './password.js';
 import { getSetting, setSetting } from '../supabase/settings.js';
 
 type AttendanceStatus = 'not-clocked' | 'working' | 'break' | 'out' | 'done';
@@ -184,7 +185,7 @@ async function syncWorklogsForPatch(
     await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
   };
 
-  // 強制終了: 退勤操作時は必ず全オープン区間を閉じる（状態が既に非稼働でも閉じる）
+  // 強制終亁E 退勤操作時は忁E��全オープン区間を閉じる（状態が既に非稼働でも閉じる�E�E
   if (actionType === 'clockOut') {
     await closeAll();
     return;
@@ -475,7 +476,15 @@ export async function rpcUpsertAttendanceManual(payloadRaw: unknown) {
 
   const user = await sbSelectOneById('users', userId);
   const stored = user && typeof (user as any).userPassword === 'string' ? String((user as any).userPassword) : '';
-  if (!stored || stored !== password) throw new Error('パスワードが一致しません');
+  const check = verifyPassword(stored, password);
+  if (!check.ok) throw new Error('�p�X���[�h����v���܂���');
+  if (check.needsRehash) {
+    try {
+      await sbUpsert('users', { id: userId, userPassword: hashPassword(password), updatedAt: nowIso() }, 'id');
+    } catch (_) {
+      // best-effort rehash
+    }
+  }
 
   const breaks = Array.isArray(payload.breaks)
     ? payload.breaks

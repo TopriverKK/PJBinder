@@ -1,5 +1,6 @@
 ﻿import { sbSelectAllSafe } from '../supabase/selectAll.js';
-import { sbDelete, sbUpsert } from '../supabase/rest.js';
+import { sbDelete, sbUpsert, sbSelectOneById } from '../supabase/rest.js';
+import { hashPassword, verifyPassword } from './password.js';
 
 export type AllData = {
   version: string | null;
@@ -210,12 +211,29 @@ export async function rpcUpsertCredential(c: any) {
 
 export async function rpcUpsertUser(u: any) {
   const id = deriveUserIdFromEmailOrName(u);
-  const row = {
+  const incomingPassword = typeof u?.userPassword === 'string' ? u.userPassword.trim() : '';
+  const currentPassword = typeof u?.currentPassword === 'string' ? u.currentPassword.trim() : '';
+  const row: any = {
     ...(u || {}),
     id,
     updatedAt: ensureUpdatedAt(u),
     createdAt: ensureCreatedAt(u),
   };
+  delete row.currentPassword;
+  if (incomingPassword) {
+    const existing = await sbSelectOneById('users', String(id));
+    const stored = existing && typeof (existing as any).userPassword === 'string'
+      ? String((existing as any).userPassword)
+      : '';
+    if (stored) {
+      if (!currentPassword) throw new Error('現在のパスワードを入力してください');
+      const check = verifyPassword(stored, currentPassword);
+      if (!check.ok) throw new Error('現在のパスワードが一致しません');
+    }
+    row.userPassword = hashPassword(incomingPassword);
+  } else {
+    delete row.userPassword;
+  }
   return await sbUpsert('users', row, 'id');
 }
 

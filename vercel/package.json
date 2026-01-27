@@ -3,6 +3,7 @@
   "type": "module",
   "private": true,
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "googleapis": "^146.0.0"
   },
   "devDependencies": {

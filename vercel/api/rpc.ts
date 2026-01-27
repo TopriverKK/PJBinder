@@ -502,6 +502,10 @@ const handlers: Record<string, (...args: any[]) => Promise<any> | any> = {
     const att = await getAttendanceMod();
     return await att.rpcPatchAttendance(args[0], args[1], args[2]);
   },
+  async upsertAttendanceManual(...args: any[]) {
+    const att = await getAttendanceMod();
+    return await (att as any).rpcUpsertAttendanceManual(args[0]);
+  },
   async getAttendanceSettings() {
     const att = await getAttendanceMod();
     return await att.rpcGetAttendanceSettings();

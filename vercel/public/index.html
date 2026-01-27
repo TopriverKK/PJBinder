@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+﻿<!DOCTYPE html> 
 <html lang="ja">
 <head>
 <meta charset="utf-8"/>
@@ -468,6 +468,25 @@
   .att-card.card-state-done .row,
   .att-card.card-state-not-clocked .row{ background: rgba(255,255,255,.6); border-radius: 10px; padding: 6px; margin-bottom: 4px; }
   .att-card.is-busy { opacity: .6; pointer-events: none; }
+  #page-attendance.att-layout-edit .grid,
+  #page-attendance.att-layout-calendar .grid,
+  #page-attendance.att-layout-gantt .grid{ grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .att-breaks{ display:flex; flex-direction:column; gap:6px; }
+  .att-break-row{ display:flex; gap:6px; align-items:center; }
+  .att-break-row input{ width:110px; }
+  .att-calendar{ display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap:6px; }
+  .att-calendar-day{ background: var(--card); border:1px solid var(--border); border-radius:10px; padding:6px; min-height:90px; }
+  .att-calendar-day .att-date{ font-weight:700; font-size:12px; color: var(--muted); }
+  .att-calendar-day .att-badge{ display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border-radius:999px; font-size:11px; font-weight:700; margin-top:4px; }
+  .att-calendar-day .att-badge.work{ background:#dcfce7; color:#166534; }
+  .att-calendar-day .att-badge.done{ background:#e5e7eb; color:#374151; }
+  .att-calendar-day .att-badge.none{ background:#fee2e2; color:#991b1b; }
+  .att-calendar-day .att-note{ font-size:11px; color:#374151; margin-top:4px; }
+  .att-gantt{ display:flex; flex-direction:column; gap:6px; }
+  .att-gantt-row{ display:grid; grid-template-columns: 140px 1fr; gap:8px; align-items:center; }
+  .att-gantt-name{ font-size:12px; font-weight:700; color:#374151; }
+  .att-gantt-track{ position:relative; height:28px; background:#f3f4f6; border-radius:8px; border:1px solid var(--border); overflow:hidden; }
+  .att-gantt-bar{ position:absolute; top:4px; height:20px; border-radius:6px; background:#60a5fa; color:#fff; font-size:10px; padding:2px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .wk-scopebar.sticky-wk{
     position: sticky;
     top: calc(var(--header-h) + 8px);
@@ -1627,7 +1646,11 @@ button.link:hover { opacity: .8; }
           <div><label>所定勤務時間（分）</label><input id="u_work_minutes" type="number" min="0" placeholder="例: 450" value="450"/></div>
           <div><label>固定休憩（分）</label><input id="u_break_minutes" type="number" min="0" placeholder="例: 90" value="90"/></div>
         </div>
-        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
+                <div class="row">
+          <div><label>個人パスワード（勤怠修正用）</label><input id="u_password" type="password" placeholder="初期設定・変更用"/></div>
+          <div></div>
+        </div>
+<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
           <button onclick="addUser()">ユーザー追加</button>
         </div>
       </div>
@@ -1637,7 +1660,7 @@ button.link:hover { opacity: .8; }
       <h2>ユーザー一覧</h2>
       <div class="body list">
         <table id="userTable">
-          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>勤務形態</th><th>所定(分)</th><th>休憩(分)</th><th>出勤状況に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th></th></tr></thead>
+          <thead><tr><th>氏名</th><th>メール</th><th>ロール</th><th>所属</th><th>勤務形態</th><th>所定(分)</th><th>休憩(分)</th><th>出勤状況に表示</th><th>freee従業員番号</th><th>個人カレンダー(ICS)</th><th>勤怠修正PW</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -1858,6 +1881,9 @@ button.link:hover { opacity: .8; }
   <div class="tabs" style="margin-bottom:8px;">
     <div class="tab active" id="att-view-tab-dashboard" onclick="setAttendanceView('dashboard')">ダッシュボード</div>
     <div class="tab" id="att-view-tab-summary" onclick="setAttendanceView('summary')">サマリ（月/週）</div>
+    <div class="tab" id="att-view-tab-edit" onclick="setAttendanceView('edit')">修正</div>
+    <div class="tab" id="att-view-tab-calendar" onclick="setAttendanceView('calendar')">カレンダー</div>
+    <div class="tab" id="att-view-tab-gantt" onclick="setAttendanceView('gantt')">ガント</div>
   </div>
   <div class="grid">
     <div class="card" data-att-view="dashboard">
@@ -1930,6 +1956,81 @@ button.link:hover { opacity: .8; }
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </div>    <div class="card" data-att-view="edit">
+      <h2>勤怠修正</h2>
+      <div class="body">
+        <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
+          <label>日付 <input type="date" id="att_edit_date"/></label>
+          <label>ユーザー <select id="att_edit_user"></select></label>
+          <label>パスワード <input type="password" id="att_edit_password" placeholder="ユーザー個人PW"/></label>
+          <button class="secondary" onclick="loadAttendanceEdit()">読み込み</button>
+          <button onclick="saveAttendanceEdit()">保存</button>
+          <span class="muted" id="att_edit_status_msg"></span>
+        </div>
+        <div class="row-3" style="margin-top:8px;">
+          <div><label>ステータス</label>
+            <select id="att_edit_status">
+              <option value="not-clocked">未出勤</option>
+              <option value="working">勤務中</option>
+              <option value="break">休憩中</option>
+              <option value="out">外出中</option>
+              <option value="done">退勤</option>
+            </select>
+          </div>
+          <div><label>場所</label>
+            <select id="att_edit_location">
+              <option value="office">オフィス</option>
+              <option value="remote">リモート</option>
+              <option value="out">外出</option>
+            </select>
+          </div>
+          <div><label>出勤</label><input type="time" id="att_edit_clock_in"/></div>
+        </div>
+        <div class="row-3" style="margin-top:8px;">
+          <div><label>退勤</label><input type="time" id="att_edit_clock_out"/></div>
+          <div><label>プロジェクト</label><select id="att_edit_project"></select></div>
+          <div><label>タスク</label><select id="att_edit_task"></select></div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div>
+            <label>メモ</label>
+            <textarea id="att_edit_notes" rows="2" placeholder="備考"></textarea>
+          </div>
+          <div>
+            <label>休憩（追加）</label>
+            <div id="att_edit_breaks" class="att-breaks"></div>
+            <div class="toolbar" style="gap:6px; margin-top:6px;">
+              <button class="secondary" onclick="addAttendanceBreakRow()">休憩追加</button>
+              <button class="secondary" onclick="clearAttendanceBreaks()">休憩クリア</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" data-att-view="calendar">
+      <h2>出勤カレンダー</h2>
+      <div class="body">
+        <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
+          <input type="month" id="att_cal_month"/>
+          <select id="att_cal_user"></select>
+          <button onclick="loadAttendanceCalendar()">表示</button>
+        </div>
+        <div id="att_calendar"></div>
+      </div>
+    </div>
+
+    <div class="card" data-att-view="gantt">
+      <h2>出勤ガント（縦）</h2>
+      <div class="body">
+        <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
+          <input type="date" id="att_gantt_date"/>
+          <select id="att_gantt_dept"></select>
+          <select id="att_gantt_user"></select>
+          <button onclick="loadAttendanceGantt()">表示</button>
+        </div>
+        <div id="att_gantt"></div>
       </div>
     </div>
   </div>
@@ -2154,7 +2255,7 @@ function applyRouteFromUrl(){
 
   const targetPage = page || PAGE || 'dashboard';
   if (targetPage === 'attendance') {
-    ATT_VIEW = (view === 'summary') ? 'summary' : 'dashboard';
+    ATT_VIEW = normalizeAttendanceView(view);
   }
 
   if (page) {
@@ -2175,6 +2276,12 @@ function applyRouteFromUrl(){
     applyAttendanceViewUi();
     if (ATT_VIEW === 'summary') {
       try { loadAttendanceMonth?.(); } catch(_){ }
+    } else if (ATT_VIEW === 'edit') {
+      try { initAttendanceEditView?.(); } catch(_){ }
+    } else if (ATT_VIEW === 'calendar') {
+      try { loadAttendanceCalendar?.(); } catch(_){ }
+    } else if (ATT_VIEW === 'gantt') {
+      try { loadAttendanceGantt?.(); } catch(_){ }
     }
   }
 }
@@ -4099,7 +4206,12 @@ function scheduleAttendanceWorklogsRefresh(){
   }catch(_){ }
 }
 
-let ATT_VIEW = 'dashboard'; // 'dashboard' | 'summary'
+let ATT_VIEW = 'dashboard'; // 'dashboard' | 'summary' | 'edit' | 'calendar' | 'gantt'
+
+function normalizeAttendanceView(view){
+  const v = String(view||'').trim();
+  return ['dashboard','summary','edit','calendar','gantt'].includes(v) ? v : 'dashboard';
+}
 
 // Default ON (can be turned off by the user)
 let ATT_AUTO_REFRESH_ENABLED = true;
@@ -4208,12 +4320,21 @@ function stopAttendanceAutoRefresh({ uncheck=false, reason='' } = {}){
 function applyAttendanceViewUi(){
   const d = document.getElementById('att-view-tab-dashboard');
   const s = document.getElementById('att-view-tab-summary');
+  const e = document.getElementById('att-view-tab-edit');
+  const c = document.getElementById('att-view-tab-calendar');
+  const g = document.getElementById('att-view-tab-gantt');
   if (d) d.classList.toggle('active', ATT_VIEW === 'dashboard');
   if (s) s.classList.toggle('active', ATT_VIEW === 'summary');
+  if (e) e.classList.toggle('active', ATT_VIEW === 'edit');
+  if (c) c.classList.toggle('active', ATT_VIEW === 'calendar');
+  if (g) g.classList.toggle('active', ATT_VIEW === 'gantt');
   const page = document.getElementById('page-attendance');
   if (page) {
     page.classList.toggle('att-layout-dashboard', ATT_VIEW === 'dashboard');
     page.classList.toggle('att-layout-summary', ATT_VIEW === 'summary');
+    page.classList.toggle('att-layout-edit', ATT_VIEW === 'edit');
+    page.classList.toggle('att-layout-calendar', ATT_VIEW === 'calendar');
+    page.classList.toggle('att-layout-gantt', ATT_VIEW === 'gantt');
   }
   document.querySelectorAll('#page-attendance [data-att-view]').forEach(el=>{
     const v = el.getAttribute('data-att-view');
@@ -4225,7 +4346,7 @@ function applyAttendanceViewUi(){
 
 function setAttendanceView(view, opts){
   opts = opts || {};
-  ATT_VIEW = (String(view) === 'summary') ? 'summary' : 'dashboard';
+  ATT_VIEW = normalizeAttendanceView(view);
   applyAttendanceViewUi();
 
   // If user leaves dashboard view, stop auto-refresh.
@@ -4239,8 +4360,14 @@ function setAttendanceView(view, opts){
     if (ATT_VIEW === 'dashboard') {
       try { refreshAttendance?.(); } catch(_){ }
       try { if (ATT_AUTO_REFRESH_ENABLED) startAttendanceAutoRefresh?.(); } catch(_){ }
-    } else {
+    } else if (ATT_VIEW === 'summary') {
       try { loadAttendanceMonth?.(); } catch(_){ }
+    } else if (ATT_VIEW === 'edit') {
+      try { initAttendanceEditView?.(); } catch(_){ }
+    } else if (ATT_VIEW === 'calendar') {
+      try { loadAttendanceCalendar?.(); } catch(_){ }
+    } else if (ATT_VIEW === 'gantt') {
+      try { loadAttendanceGantt?.(); } catch(_){ }
     }
   }
 }
@@ -4851,6 +4978,412 @@ function renderAttendancePage(){
   if(mi && !mi.value){ mi.value = todayStr().slice(0,7); }
 }
 
+function attendanceBaseUsers(){
+  return safeArr(DATA.users)
+    .filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u))
+    .slice()
+    .sort((a,b)=>{
+      const anum = String(a.employeeNumber||'').replace(/\D/g,'');
+      const bnum = String(b.employeeNumber||'').replace(/\D/g,'');
+      const ai = anum ? parseInt(anum,10) : Number.POSITIVE_INFINITY;
+      const bi = bnum ? parseInt(bnum,10) : Number.POSITIVE_INFINITY;
+      if (ai !== bi) return ai - bi;
+      const an = String(a.name||a.email||a.id||'');
+      const bn = String(b.name||b.email||b.id||'');
+      return an.localeCompare(bn, 'ja');
+    });
+}
+
+function attendanceUserOptions({ includeAll=false } = {}){
+  const users = attendanceBaseUsers();
+  const opts = [];
+  if (includeAll) opts.push({ value:'', label:'全ユーザー' });
+  users.forEach(u=>{
+    const name = String(u.name||u.email||u.id||'');
+    const emp = String(u.employeeNumber||'').trim();
+    const label = emp ? `${name} (${emp})` : name;
+    opts.push({ value:String(u.id||''), label });
+  });
+  return { users, opts };
+}
+
+function ensureAttendanceUserSelects(){
+  const { users, opts } = attendanceUserOptions({ includeAll:false });
+  const editSel = el('att_edit_user');
+  if (editSel) {
+    setSelectOptions(editSel, opts, editSel.value);
+    if (!editSel.value && users[0]) editSel.value = String(users[0].id||'');
+  }
+
+  const { opts: optsWithAll } = attendanceUserOptions({ includeAll:true });
+  const calSel = el('att_cal_user');
+  if (calSel) setSelectOptions(calSel, optsWithAll, calSel.value);
+  const ganttSel = el('att_gantt_user');
+  if (ganttSel) setSelectOptions(ganttSel, optsWithAll, ganttSel.value);
+}
+
+function ensureAttendanceDeptSelect(){
+  const deptSel = el('att_gantt_dept');
+  if (!deptSel) return;
+  const users = attendanceBaseUsers();
+  const depts = Array.from(new Set(users.map(u=>weeklyUserDept(u)).filter(Boolean)))
+    .sort((a,b)=>String(a).localeCompare(String(b), 'ja'));
+  const hasUnset = users.some(u=>!weeklyUserDept(u));
+  const opts = [{ value:'', label:'全所属' }]
+    .concat(hasUnset ? [{ value:'__unset__', label:'（所属未設定）' }] : [])
+    .concat(depts.map(d=>({ value:d, label:d })));
+  setSelectOptions(deptSel, opts, deptSel.value);
+}
+
+function ensureAttendanceProjectTaskSelects(projectId, taskId){
+  const projSel = el('att_edit_project');
+  const taskSel = el('att_edit_task');
+  if (!projSel || !taskSel) return;
+  const projects = safeArr(DATA.projects).filter(p=>String(p.status||'active')!=='archived');
+  const projectOptions = [{ value:'', label:'（未指定）' }].concat(
+    projects.map(p=>({ value:String(p.id||''), label:String(p.name||p.id||'') }))
+  );
+  setSelectOptions(projSel, projectOptions, projectId);
+  const pid = String(projSel.value||'');
+
+  const tasks = safeArr(DATA.tasks)
+    .filter(t=>!pid || String(t.projectId||'')===pid)
+    .slice()
+    .sort((a,b)=>String(a.title||a.id||'').localeCompare(String(b.title||b.id||''),'ja'));
+  const taskOptions = [{ value:'', label:'（未指定）' }].concat(
+    tasks.map(t=>({ value:String(t.id||''), label:String(t.title||t.id||'') }))
+  );
+  setSelectOptions(taskSel, taskOptions, taskId);
+}
+
+function attIsoToTimeInput(iso){
+  if (!iso) return '';
+  try{
+    const d = new Date(iso);
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `${hh}:${mm}`;
+  }catch(_){ return ''; }
+}
+
+function attComposeIso(dateKey, timeValue){
+  const d = String(dateKey||'').trim();
+  const t = String(timeValue||'').trim();
+  if (!d || !t) return null;
+  const safe = t.length === 5 ? `${t}:00` : t;
+  const dt = new Date(`${d}T${safe}`);
+  if (!Number.isFinite(dt.getTime())) return null;
+  return dt.toISOString();
+}
+
+function clearAttendanceBreaks(){
+  const wrap = el('att_edit_breaks');
+  if (wrap) wrap.innerHTML = '';
+}
+
+function addAttendanceBreakRow(startValue='', endValue=''){
+  const wrap = el('att_edit_breaks');
+  if (!wrap) return;
+  const row = document.createElement('div');
+  row.className = 'att-break-row';
+  row.innerHTML = `
+    <input type="time" class="att-break-start" value="${escapeHtml(startValue||'')}"/>
+    <span class="muted">〜</span>
+    <input type="time" class="att-break-end" value="${escapeHtml(endValue||'')}"/>
+    <button class="secondary" type="button">削除</button>
+  `;
+  const btn = row.querySelector('button');
+  if (btn) btn.addEventListener('click', ()=>{ row.remove(); });
+  wrap.appendChild(row);
+}
+
+function setAttendanceBreaksToUi(breaks, dateKey){
+  clearAttendanceBreaks();
+  const list = Array.isArray(breaks) ? breaks : [];
+  list.forEach(b=>{
+    if (!b || !b.start) return;
+    const start = attIsoToTimeInput(b.start);
+    const end = b.end ? attIsoToTimeInput(b.end) : '';
+    addAttendanceBreakRow(start, end);
+  });
+  if (!list.length) addAttendanceBreakRow();
+}
+
+function readAttendanceBreaksFromUi(dateKey){
+  const wrap = el('att_edit_breaks');
+  if (!wrap) return [];
+  const rows = Array.from(wrap.querySelectorAll('.att-break-row'));
+  const out = [];
+  rows.forEach(r=>{
+    const s = r.querySelector('.att-break-start');
+    const e = r.querySelector('.att-break-end');
+    const startIso = attComposeIso(dateKey, s ? s.value : '');
+    const endIso = attComposeIso(dateKey, e ? e.value : '');
+    if (startIso) out.push({ start: startIso, end: endIso || undefined });
+  });
+  return out;
+}
+
+let _attendanceEditBound = false;
+function initAttendanceEditView(){
+  const dateEl = el('att_edit_date');
+  if (dateEl && !dateEl.value) dateEl.value = todayStr();
+  ensureAttendanceUserSelects();
+  ensureAttendanceProjectTaskSelects('', '');
+  const projSel = el('att_edit_project');
+  if (projSel && !_attendanceEditBound) {
+    projSel.addEventListener('change', ()=>{
+      ensureAttendanceProjectTaskSelects(projSel.value || '', '');
+    });
+  }
+  if (!_attendanceEditBound) {
+    const userSel = el('att_edit_user');
+    if (userSel) userSel.addEventListener('change', ()=>{ try { loadAttendanceEdit(); } catch(_){ } });
+    if (dateEl) dateEl.addEventListener('change', ()=>{ try { loadAttendanceEdit(); } catch(_){ } });
+    _attendanceEditBound = true;
+  }
+  try { loadAttendanceEdit(); } catch(_){ }
+}
+
+async function loadAttendanceEdit(){
+  const dateEl = el('att_edit_date');
+  const userSel = el('att_edit_user');
+  if (!dateEl || !userSel) return;
+  const dateKey = String(dateEl.value||'').trim() || todayStr();
+  const userId = String(userSel.value||'').trim();
+  if (!userId) return;
+  const statusEl = el('att_edit_status_msg');
+  if (statusEl) statusEl.textContent = '読み込み中...';
+  try{
+    const rows = await rpc('getAttendanceDay', dateKey);
+    const row = Array.isArray(rows) ? rows.find(r=>String(r.user_id||r.user||'')===userId) : null;
+    const target = row || { user_id:userId, work_date: dateKey, status:'not-clocked', location:'office', breaks:[] };
+    const statusSel = el('att_edit_status');
+    const locSel = el('att_edit_location');
+    const clockInEl = el('att_edit_clock_in');
+    const clockOutEl = el('att_edit_clock_out');
+    const notesEl = el('att_edit_notes');
+    if (statusSel) statusSel.value = String(target.status||'not-clocked');
+    if (locSel) locSel.value = String(target.location||'office');
+    if (clockInEl) clockInEl.value = attIsoToTimeInput(target.clock_in);
+    if (clockOutEl) clockOutEl.value = attIsoToTimeInput(target.clock_out);
+    if (notesEl) notesEl.value = String(target.notes||'');
+    ensureAttendanceProjectTaskSelects(String(target.project_id||''), String(target.task_id||''));
+    setAttendanceBreaksToUi(target.breaks || [], dateKey);
+    if (statusEl) statusEl.textContent = '';
+  }catch(e){
+    console.error(e);
+    if (statusEl) statusEl.textContent = '読み込み失敗';
+    toast('勤怠修正の読み込みに失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+async function saveAttendanceEdit(){
+  const dateEl = el('att_edit_date');
+  const userSel = el('att_edit_user');
+  if (!dateEl || !userSel) return;
+  const dateKey = String(dateEl.value||'').trim() || todayStr();
+  const userId = String(userSel.value||'').trim();
+  if (!userId) return;
+  const statusEl = el('att_edit_status_msg');
+  if (statusEl) statusEl.textContent = '保存中...';
+
+  const payload = {
+    userId,
+    date: dateKey,
+    password: String((el('att_edit_password')||{}).value||''),
+    status: String((el('att_edit_status')||{}).value||'not-clocked'),
+    location: String((el('att_edit_location')||{}).value||'office'),
+    clockIn: attComposeIso(dateKey, (el('att_edit_clock_in')||{}).value || ''),
+    clockOut: attComposeIso(dateKey, (el('att_edit_clock_out')||{}).value || ''),
+    projectId: String((el('att_edit_project')||{}).value||''),
+    taskId: String((el('att_edit_task')||{}).value||''),
+    notes: String((el('att_edit_notes')||{}).value||''),
+    breaks: readAttendanceBreaksFromUi(dateKey),
+  };
+
+  try{
+    const saved = await rpc('upsertAttendanceManual', payload);
+    if (statusEl) statusEl.textContent = '保存しました';
+    const pwEl = el('att_edit_password');
+    if (pwEl) pwEl.value = '';
+    // sync in-memory rows if relevant
+    if (dateKey === todayStr()) {
+      const arr = Array.isArray(ATT.dayRows) ? ATT.dayRows.slice() : [];
+      const idx = arr.findIndex(r=>String(r.user_id||r.user||'')===userId);
+      if (idx >= 0) arr[idx] = saved;
+      else arr.push(saved);
+      ATT.dayRows = arr;
+      if (PAGE === 'attendance' && ATT_VIEW === 'dashboard') renderAttendancePage();
+    }
+    if (Array.isArray(ATT.monthRows) && ATT.monthRows.length && String(dateKey).slice(0,7) === String(ATT.monthRows[0]?.work_date||'').slice(0,7)) {
+      const arr = ATT.monthRows.slice();
+      const idx = arr.findIndex(r=>String(r.user_id||r.user||'')===userId && String(r.work_date||'')===dateKey);
+      if (idx >= 0) arr[idx] = saved;
+      else arr.push(saved);
+      ATT.monthRows = arr;
+    }
+    scheduleAttendanceWorklogsRefresh();
+  }catch(e){
+    console.error(e);
+    if (statusEl) statusEl.textContent = '保存失敗';
+    toast('勤怠修正の保存に失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+async function loadAttendanceCalendar(){
+  const monthEl = el('att_cal_month');
+  if (monthEl && !monthEl.value) monthEl.value = todayStr().slice(0,7);
+  ensureAttendanceUserSelects();
+  const month = String((monthEl||{}).value||todayStr().slice(0,7));
+  try{
+    const rows = await rpc('getAttendanceMonth', month);
+    ATT.monthRows = Array.isArray(rows) ? rows : [];
+    renderAttendanceCalendar(month);
+  }catch(e){
+    console.error(e);
+    toast('出勤カレンダーの読み込みに失敗: '+(e && e.message ? e.message : e), false);
+  }
+}
+
+function renderAttendanceCalendar(month){
+  const wrap = el('att_calendar');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const userId = String((el('att_cal_user')||{}).value||'');
+  const first = new Date(`${month}-01T00:00:00`);
+  if (!Number.isFinite(first.getTime())) return;
+  const start = new Date(first);
+  const offset = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - offset);
+  const days = [];
+  for (let i=0;i<42;i++){
+    const d = new Date(start);
+    d.setDate(start.getDate()+i);
+    days.push(d);
+  }
+  const byDate = new Map();
+  safeArr(ATT.monthRows).forEach(r=>{
+    const key = String(r.work_date||'');
+    if (!key) return;
+    if (!byDate.has(key)) byDate.set(key, []);
+    byDate.get(key).push(r);
+  });
+  const grid = document.createElement('div');
+  grid.className = 'att-calendar';
+  days.forEach(d=>{
+    const key = fmtYMDLocal(d);
+    const items = byDate.get(key) || [];
+    const inMonth = key.slice(0,7) === month;
+    let badgeHtml = '';
+    let noteHtml = '';
+    if (userId) {
+      const row = items.find(r=>String(r.user_id||r.user||'')===userId);
+      if (row) {
+        const st = String(row.status||'');
+        const tone = (st==='working' || st==='out' || st==='break') ? 'work' : (st==='done' ? 'done' : 'none');
+        badgeHtml = `<div class="att-badge ${tone}">${escapeHtml(attStatusLabel(st))}</div>`;
+        noteHtml = row.notes ? `<div class="att-note">${escapeHtml(String(row.notes||''))}</div>` : '';
+      } else {
+        badgeHtml = `<div class="att-badge none">未打刻</div>`;
+      }
+    } else {
+      const doneCount = items.filter(r=>String(r.status||'')==='done').length;
+      const workCount = items.filter(r=>['working','out','break'].includes(String(r.status||''))).length;
+      if (doneCount || workCount) {
+        badgeHtml = `<div class="att-badge done">退勤 ${doneCount}</div><div class="att-badge work">勤務中 ${workCount}</div>`;
+      } else {
+        badgeHtml = `<div class="att-badge none">記録なし</div>`;
+      }
+    }
+    const cell = document.createElement('div');
+    cell.className = 'att-calendar-day';
+    if (!inMonth) cell.style.opacity = '0.45';
+    cell.innerHTML = `<div class="att-date">${escapeHtml(key.slice(5))}</div>${badgeHtml}${noteHtml}`;
+    grid.appendChild(cell);
+  });
+  wrap.appendChild(grid);
+}
+
+async function loadAttendanceGantt(){
+  const dateEl = el('att_gantt_date');
+  if (dateEl && !dateEl.value) dateEl.value = todayStr();
+  ensureAttendanceUserSelects();
+  ensureAttendanceDeptSelect();
+  try{
+    await ensureAttendanceWorklogsLoaded();
+  }catch(_){ }
+  renderAttendanceGantt();
+}
+
+function renderAttendanceGantt(){
+  const wrap = el('att_gantt');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const dateKey = String((el('att_gantt_date')||{}).value||todayStr());
+  const dept = String((el('att_gantt_dept')||{}).value||'');
+  const userId = String((el('att_gantt_user')||{}).value||'');
+
+  const users = attendanceBaseUsers().filter(u=>{
+    if (dept && !weeklyDeptMatches(u, dept)) return false;
+    if (userId && String(u.id||'') !== userId) return false;
+    return true;
+  });
+
+  const rows = safeArr(DATA.attendanceWorklogs)
+    .filter(w=>String(w.work_date||w.workDate||'')===dateKey);
+
+  const toMinutes = (iso)=>{
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return null;
+    return d.getHours()*60 + d.getMinutes();
+  };
+
+  const track = document.createElement('div');
+  track.className = 'att-gantt';
+
+  users.forEach(u=>{
+    const uid = String(u.id||'');
+    const userRows = rows.filter(r=>String(r.user_id||r.userId||'')===uid);
+    const rowEl = document.createElement('div');
+    rowEl.className = 'att-gantt-row';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'att-gantt-name';
+    nameEl.textContent = String(u.name||u.email||u.id||'');
+    const trackEl = document.createElement('div');
+    trackEl.className = 'att-gantt-track';
+    const now = new Date();
+    userRows.forEach(r=>{
+      const startMin = toMinutes(r.start_at || r.startAt);
+      const endMin = toMinutes(r.end_at || r.endAt) || (dateKey===todayStr() ? (now.getHours()*60+now.getMinutes()) : null);
+      if (startMin == null || endMin == null || endMin <= startMin) return;
+      const leftPct = (startMin / (24*60)) * 100;
+      const widthPct = ((endMin - startMin) / (24*60)) * 100;
+      const bar = document.createElement('div');
+      bar.className = 'att-gantt-bar';
+      bar.style.left = `${leftPct}%`;
+      bar.style.width = `${widthPct}%`;
+      const pid = String(r.project_id||r.projectId||'').trim();
+      const tid = String(r.task_id||r.taskId||'').trim();
+      const projName = pid ? (safeArr(DATA.projects).find(p=>String(p.id)===pid)?.name || pid) : '';
+      const taskName = tid ? (safeArr(DATA.tasks).find(t=>String(t.id)===tid)?.title || tid) : '';
+      const label = projName && taskName ? `${projName}/${taskName}` : (projName || taskName || '勤務');
+      bar.textContent = label;
+      trackEl.appendChild(bar);
+    });
+    rowEl.appendChild(nameEl);
+    rowEl.appendChild(trackEl);
+    track.appendChild(rowEl);
+  });
+
+  if (!users.length) {
+    wrap.innerHTML = '<div class="muted">該当ユーザーがいません</div>';
+    return;
+  }
+  wrap.appendChild(track);
+}
+
 async function refreshAttendanceCalendars(){
   const users = safeArr(DATA.users).filter(u=>!isUnsetUser(u) && isAttendanceVisibleUser(u));
   const nextMap = {};
@@ -5253,6 +5786,12 @@ window.addEventListener('load', ()=>{
 
     const mi = document.getElementById('att_month');
     if(mi && !mi.value) mi.value = todayStr().slice(0,7);
+    const calMi = document.getElementById('att_cal_month');
+    if (calMi && !calMi.value) calMi.value = todayStr().slice(0,7);
+    const gDate = document.getElementById('att_gantt_date');
+    if (gDate && !gDate.value) gDate.value = todayStr();
+    ensureAttendanceUserSelects();
+    ensureAttendanceDeptSelect();
     loadAttendanceSettings();
 
     // Auto-refresh UI (default ON)
@@ -6223,8 +6762,10 @@ function addUser() {
     scheduledWorkMinutes: parseMinutesInput(val('u_work_minutes'), defaults.workMinutes),
     fixedBreakMinutes: parseMinutesInput(val('u_break_minutes'), defaults.breakMinutes),
   };
+  const pw = String(val('u_password') || '').trim();
+  if (pw) u.userPassword = pw;
   if(!u.name || !u.email){ alert('氏名とメールは必須です'); return; }
-  gsr().withSuccessHandler(row => { patchRow('users', row); rerenderAfter('users'); }).upsertUser(u);
+  gsr().withSuccessHandler(row => { patchRow('users', row); rerenderAfter('users'); const pwEl = document.getElementById('u_password'); if (pwEl) pwEl.value = ''; }).upsertUser(u);
 }
 function renderUsers() {
   const tb = document.querySelector('#userTable tbody'); if (!tb) return;
@@ -6251,6 +6792,7 @@ function renderUsers() {
       <td style="text-align:center;"><input type="checkbox" data-uid="${escapeHtml(u.id)}" data-field="attendanceVisible" ${checked}/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="employeeNumber" value="${escapeHtml(u.employeeNumber||'')}" placeholder="12345"/></td>
       <td><input data-uid="${escapeHtml(u.id)}" data-field="calendarUrl" value="${escapeHtml(u.calendarUrl||'')}" placeholder="https://calendar.google.com/.../basic.ics"/></td>
+      <td><input type="password" data-uid="${escapeHtml(u.id)}" data-field="userPassword" placeholder="変更時のみ入力"/></td>
       <td><button class="secondary" onclick="delUser('${u.id}')">削除</button></td>
     `;
     tb.appendChild(tr);
@@ -6268,9 +6810,17 @@ function renderUsers() {
       else if (inp.type === 'number') value = parseMinutesInput(inp.value, 0);
       else value = inp.value;
 
+      const isPassword = field === 'userPassword';
+      if (isPassword && !String(value || '').trim()) return;
+
       const patch = { id: uid };
       patch[field] = value;
-      gsr().withSuccessHandler(row=>{ patchRow('users', row); rerenderAfter('users'); toast('ユーザー設定を保存しました', true); })
+      gsr().withSuccessHandler(row=>{
+            patchRow('users', row);
+            rerenderAfter('users');
+            if (isPassword) inp.value = '';
+            toast(isPassword ? 'パスワードを更新しました' : 'ユーザー設定を保存しました', true);
+          })
           .withFailureHandler(e=>{ toast('ユーザー設定保存に失敗: '+(e && e.message ? e.message : e), false); })
           .upsertUser(patch);
     }, { once:false });
@@ -10405,6 +10955,16 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
+
+
+
+
+
+
+
+
+
 
 
 

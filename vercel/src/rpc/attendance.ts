@@ -1,5 +1,5 @@
 import { sbSelectAllSafe } from '../supabase/selectAll.js';
-import { sbUpsert } from '../supabase/rest.js';
+import { sbUpsert, sbSelectOneById, sbDeleteWhere } from '../supabase/rest.js';
 import { getSetting, setSetting } from '../supabase/settings.js';
 
 type AttendanceStatus = 'not-clocked' | 'working' | 'break' | 'out' | 'done';
@@ -260,6 +260,34 @@ function makeValueJson(r: AttendanceRow): string {
   return JSON.stringify(payload);
 }
 
+function subtractInterval(interval: [Date, Date], cut: [Date, Date]): [Date, Date][] {
+  const [s, e] = interval;
+  const [cs, ce] = cut;
+  if (ce <= s || cs >= e) return [interval];
+  const out: [Date, Date][] = [];
+  if (cs > s) out.push([s, new Date(cs)]);
+  if (ce < e) out.push([new Date(ce), e]);
+  return out;
+}
+
+function buildWorkIntervalsForManual(row: AttendanceRow): [Date, Date][] {
+  if (!row.clock_in || !row.clock_out) return [];
+  const start = new Date(row.clock_in);
+  const end = new Date(row.clock_out);
+  if (!(end > start)) return [];
+  let intervals: [Date, Date][] = [[start, end]];
+  const breaks = Array.isArray(row.breaks) ? row.breaks : [];
+  for (const b of breaks) {
+    if (!b || !b.start || !b.end) continue;
+    const bs = new Date(b.start);
+    const be = new Date(b.end);
+    if (!(be > bs)) continue;
+    intervals = intervals.flatMap((iv) => subtractInterval(iv, [bs, be]));
+    if (!intervals.length) break;
+  }
+  return intervals;
+}
+
 async function selectAttendanceDay(date: string): Promise<AttendanceRow[]> {
   assertYmd(date);
 
@@ -434,6 +462,74 @@ export async function rpcPatchAttendance(userIdRaw: unknown, dateRaw: unknown, a
   }
 
   // Attach debug field for UI; not persisted to DB.
+  return { ...after, _worklogSyncError: worklogSyncError } as any;
+}
+
+export async function rpcUpsertAttendanceManual(payloadRaw: unknown) {
+  const payload = (payloadRaw && typeof payloadRaw === 'object') ? (payloadRaw as any) : {};
+  const userId = String(payload.userId || '').trim();
+  const date = String(payload.date || '').trim();
+  const password = String(payload.password || '');
+  if (!userId) throw new Error('userId is required');
+  assertYmd(date);
+
+  const user = await sbSelectOneById('users', userId);
+  const stored = user && typeof (user as any).userPassword === 'string' ? String((user as any).userPassword) : '';
+  if (!stored || stored !== password) throw new Error('パスワードが一致しません');
+
+  const breaks = Array.isArray(payload.breaks)
+    ? payload.breaks
+        .map((b: any) => ({
+          start: String(b?.start || '').trim(),
+          end: b?.end ? String(b.end).trim() : undefined,
+        }))
+        .filter((b: any) => b.start)
+    : [];
+
+  const row: AttendanceRow = normalizeRow({
+    user_id: userId,
+    user: userId,
+    work_date: date,
+    status: payload.status as AttendanceStatus,
+    location: payload.location as AttendanceLocation,
+    clock_in: payload.clockIn ? String(payload.clockIn) : null,
+    clock_out: payload.clockOut ? String(payload.clockOut) : null,
+    project_id: payload.projectId ? String(payload.projectId) : null,
+    task_id: payload.taskId ? String(payload.taskId) : null,
+    notes: payload.notes ? String(payload.notes) : '',
+    breaks,
+    updated_at: nowIso(),
+  });
+
+  row.value = makeValueJson(row);
+
+  const saved = await sbUpsert('attendancemanager', row as any, 'user_id,work_date');
+  const after = normalizeRow(saved as any);
+
+  let worklogSyncError: string | null = null;
+  try {
+    await sbDeleteWhere(
+      'attendance_worklogs',
+      `user_id=eq.${encodeURIComponent(userId)}&work_date=eq.${encodeURIComponent(date)}`
+    );
+    const intervals = buildWorkIntervalsForManual(after);
+    for (const iv of intervals) {
+      await sbUpsert('attendance_worklogs', {
+        user_id: userId,
+        work_date: date,
+        start_at: iv[0].toISOString(),
+        end_at: iv[1].toISOString(),
+        project_id: after.project_id ?? null,
+        task_id: after.task_id ?? null,
+        source: 'manual',
+      } as any);
+    }
+  } catch (e) {
+    const msg = (e instanceof Error) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e));
+    worklogSyncError = msg;
+    console.error('[attendance_worklogs] manual sync failed:', e);
+  }
+
   return { ...after, _worklogSyncError: worklogSyncError } as any;
 }
 

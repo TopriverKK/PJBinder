@@ -497,7 +497,8 @@
   .att-vgantt-time{ height:40px; font-size:11px; color:var(--muted); border-top:1px solid var(--border); padding-top:2px; }
   .att-vgantt-col{ position:relative; border-top:1px solid var(--border); border-left:1px solid var(--border); background:var(--bg); min-height: calc(40px * var(--att-hours)); }
   .att-vgantt-col:last-child{ border-right:1px solid var(--border); }
-  .att-vgantt-bar{ position:absolute; left:6px; right:6px; border-radius:8px; padding:2px 6px; font-size:11px; color:#fff; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .att-vgantt-bar{ position:absolute; left:6px; right:6px; border-radius:8px; padding:4px 6px; font-size:11px; color:#fff; overflow:hidden; white-space:pre-line; line-height:1.2; }
+  .att-vgantt-bar.muted{ background:#9ca3af !important; color:#111827; }
   .att-gantt-wrap{ overflow:auto; }
   .att-gantt-day{ display:flex; gap:12px; align-items:flex-start; }
   .att-day-user{ min-width:360px; border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card); }
@@ -5713,10 +5714,12 @@ function renderAttendanceGanttDay(wrap){
           bar.style.background = color;
           bar.style.top = `${Math.max(0, top)}px`;
           bar.style.height = `${Math.max(10, height)}px`;
-          bar.textContent = `${attLocLabel(loc)} ${attFormatTime(attRow.clock_in)}-${attFormatTime(attRow.clock_out)}`;
-          laneAttendance.appendChild(bar);
-        }
+        const workedMin = (attRow.clock_in && attRow.clock_out) ? computeWorkedMinutes(attRow, uid) : 0;
+        bar.textContent = `${attLocLabel(loc)}\n${attFormatTime(attRow.clock_in)}\n～\n${attFormatTime(attRow.clock_out)}\n計:${minutesToLabel(workedMin)}`;
+        bar.title = `${attLocLabel(loc)} ${attFormatTime(attRow.clock_in)}～${attFormatTime(attRow.clock_out)} / 計:${minutesToLabel(workedMin)}`;
+        laneAttendance.appendChild(bar);
       }
+    }
     }
 
     worklogs.filter(w=>String(w.user_id||w.userId||'')===uid).forEach(w=>{
@@ -5737,8 +5740,15 @@ function renderAttendanceGanttDay(wrap){
       const tid = String(w.task_id||w.taskId||'').trim();
       const projName = pid ? (safeArr(DATA.projects).find(p=>String(p.id)===pid)?.name || pid) : '';
       const taskName = tid ? (safeArr(DATA.tasks).find(t=>String(t.id)===tid)?.title || tid) : '';
-      const label = projName && taskName ? `${projName}/${taskName}` : (projName || taskName || 'タスク');
-      bar.textContent = label;
+      const label = projName && taskName ? `${projName}\n${taskName}` : (projName || taskName || '');
+      if (label) {
+        bar.textContent = label;
+        bar.title = label.replace(/\n/g, ' / ');
+      } else {
+        bar.textContent = 'タスク未設定';
+        bar.classList.add('muted');
+        bar.title = 'タスク未設定';
+      }
       laneTasks.appendChild(bar);
     });
 
@@ -5757,7 +5767,9 @@ function renderAttendanceGanttDay(wrap){
       bar.style.background = '#64748b';
       bar.style.top = `${Math.max(0, top)}px`;
       bar.style.height = `${Math.max(10, height)}px`;
-      bar.textContent = String(ev.summary||'予定');
+      const label = `${String(ev.summary||'予定')}\n${attFormatTime(ev.start)}\n～\n${attFormatTime(ev.end)}`;
+      bar.textContent = label;
+      bar.title = `${String(ev.summary||'予定')} ${attFormatTime(ev.start)}～${attFormatTime(ev.end)}`;
       lanePlans.appendChild(bar);
     });
 
@@ -5877,7 +5889,9 @@ function renderAttendanceGanttWeek(wrap){
             bar.style.background = color;
             bar.style.top = `${Math.max(0, top)}px`;
             bar.style.height = `${Math.max(10, height)}px`;
-            bar.textContent = `${attLocLabel(loc)} ${attFormatTime(attRow.clock_in)}-${attFormatTime(attRow.clock_out)}`;
+            const workedMin = (attRow.clock_in && attRow.clock_out) ? computeWorkedMinutes(attRow, uid) : 0;
+            bar.textContent = `${attLocLabel(loc)}\n${attFormatTime(attRow.clock_in)}\n～\n${attFormatTime(attRow.clock_out)}\n計:${minutesToLabel(workedMin)}`;
+            bar.title = `${attLocLabel(loc)} ${attFormatTime(attRow.clock_in)}～${attFormatTime(attRow.clock_out)} / 計:${minutesToLabel(workedMin)}`;
             cell.appendChild(bar);
           }
         }
@@ -5904,8 +5918,15 @@ function renderAttendanceGanttWeek(wrap){
             const tid = String(w.task_id||w.taskId||'').trim();
             const projName = pid ? (safeArr(DATA.projects).find(p=>String(p.id)===pid)?.name || pid) : '';
             const taskName = tid ? (safeArr(DATA.tasks).find(t=>String(t.id)===tid)?.title || tid) : '';
-            const label = projName && taskName ? `${projName}/${taskName}` : (projName || taskName || 'タスク');
-            bar.textContent = label;
+            const label = projName && taskName ? `${projName}\n${taskName}` : (projName || taskName || '');
+            if (label) {
+              bar.textContent = label;
+              bar.title = label.replace(/\n/g, ' / ');
+            } else {
+              bar.textContent = 'タスク未設定';
+              bar.classList.add('muted');
+              bar.title = 'タスク未設定';
+            }
             taskCell.appendChild(bar);
           });
       }
@@ -5928,7 +5949,9 @@ function renderAttendanceGanttWeek(wrap){
           bar.style.background = '#64748b';
           bar.style.top = `${Math.max(0, top)}px`;
           bar.style.height = `${Math.max(10, height)}px`;
-          bar.textContent = String(ev.summary||'予定');
+          const label = `${String(ev.summary||'予定')}\n${attFormatTime(ev.start)}\n～\n${attFormatTime(ev.end)}`;
+          bar.textContent = label;
+          bar.title = `${String(ev.summary||'予定')} ${attFormatTime(ev.start)}～${attFormatTime(ev.end)}`;
           planCell.appendChild(bar);
         });
       }

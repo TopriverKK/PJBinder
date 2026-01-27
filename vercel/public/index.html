@@ -505,9 +505,8 @@
   .att-day-grid{ display:grid; grid-template-columns: 80px repeat(3, minmax(0,1fr)); gap:6px; }
   .att-week{ display:flex; flex-direction:column; gap:12px; }
   .att-week-user{ border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card); }
-  .att-week-lanes{ display:grid; grid-template-columns: repeat(3, auto); gap:12px; align-items:flex-start; }
-  .att-week-head{ display:grid; grid-template-columns: 60px repeat(7, var(--att-day-width)); gap:6px; font-size:12px; color:var(--muted); margin-bottom:6px; }
-  .att-week-grid{ display:grid; grid-template-columns: 60px repeat(7, var(--att-day-width)); gap:6px; }
+  .att-week-head{ display:grid; grid-template-columns: 60px repeat(21, var(--att-day-width)); gap:6px; font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .att-week-grid{ display:grid; grid-template-columns: 60px repeat(21, var(--att-day-width)); gap:6px; }
   .att-week-cell{ position:relative; border:1px solid var(--border); background:var(--bg); height: calc(var(--att-hours) * 40px); }
   .att-gantt{ display:flex; flex-direction:column; gap:6px; }
   .att-gantt-row{ display:grid; grid-template-columns: 140px 1fr; gap:8px; align-items:center; }
@@ -5530,8 +5529,10 @@ function renderAttendanceCalendar(month){
     const cell = document.createElement('div');
     cell.className = 'att-calendar-day';
     if (!inMonth) cell.style.opacity = '0.45';
+    const w = ['日','月','火','水','木','金','土'][d.getDay()];
+    const dateLabel = `${key.slice(5)}(${w})`;
     const editBtn = userId ? `<button class="secondary mini att-edit" onclick="openAttendanceEditModal('${key}','${escapeJsSq(userId)}')">編集</button>` : '';
-    cell.innerHTML = `<div class="att-date">${escapeHtml(key.slice(5))}</div>${editBtn}${badgeHtml}${noteHtml}`;
+    cell.innerHTML = `<div class="att-date">${escapeHtml(dateLabel)}</div>${editBtn}${badgeHtml}${noteHtml}`;
     grid.appendChild(cell);
   });
   wrap.appendChild(grid);
@@ -5812,8 +5813,6 @@ function renderAttendanceGanttWeek(wrap){
     box.style.setProperty('--att-hours', String(hourCount));
     box.innerHTML = `<div class="title">${escapeHtml(u.name||u.email||u.id||'')}</div>`;
 
-    const lanesWrap = document.createElement('div');
-    lanesWrap.className = 'att-week-lanes';
     const makeTimeCol = ()=>{
       const col = document.createElement('div');
       col.className = 'att-vgantt-timecol';
@@ -5825,39 +5824,39 @@ function renderAttendanceGanttWeek(wrap){
       }
       return col;
     };
-    const cellMap = {};
+    const head = document.createElement('div');
+    head.className = 'att-week-head';
+    head.style.setProperty('--att-day-width', `${ATT_GANTT.dayWidth}px`);
+    head.innerHTML = `<div></div>${days.map(d=>`<div style="grid-column: span 3;">${escapeHtml(d.slice(5))}</div>`).join('')}`;
+    box.appendChild(head);
+
+    const grid = document.createElement('div');
+    grid.className = 'att-week-grid';
+    grid.style.setProperty('--att-day-width', `${ATT_GANTT.dayWidth}px`);
+    grid.appendChild(makeTimeCol());
     const lanes = [
       { key:'attendance', label:'勤務状況' },
       { key:'tasks', label:'タスク' },
       { key:'plans', label:'予定' }
     ];
-    lanes.forEach(lane=>{
-      const laneBox = document.createElement('div');
-      laneBox.style.setProperty('--att-day-width', `${ATT_GANTT.dayWidth}px`);
-      laneBox.style.setProperty('--att-hours', String(hourCount));
-      const head = document.createElement('div');
-      head.className = 'att-week-head';
-      head.innerHTML = `<div>${lane.label}</div>${days.map(d=>`<div>${escapeHtml(d.slice(5))}</div>`).join('')}`;
-      const grid = document.createElement('div');
-      grid.className = 'att-week-grid';
-      grid.appendChild(makeTimeCol());
-      days.forEach(day=>{
+    const cellMap = {};
+    days.forEach(day=>{
+      lanes.forEach(lane=>{
         const cell = document.createElement('div');
         cell.className = 'att-week-cell';
         cell.dataset.day = day;
         cell.dataset.lane = lane.key;
+        cell.dataset.laneLabel = lane.label;
         cell.style.setProperty('--att-hours', String(hourCount));
         grid.appendChild(cell);
       });
-      laneBox.appendChild(head);
-      laneBox.appendChild(grid);
-      lanesWrap.appendChild(laneBox);
-      grid.querySelectorAll('.att-week-cell').forEach(c=>{
-        const k = `${c.dataset.day}|${c.dataset.lane}`;
-        cellMap[k] = c;
-      });
     });
-    box.appendChild(lanesWrap);
+    box.appendChild(grid);
+
+    grid.querySelectorAll('.att-week-cell').forEach(c=>{
+      const k = `${c.dataset.day}|${c.dataset.lane}`;
+      cellMap[k] = c;
+    });
 
     days.forEach(day=>{
       const attRow = monthRows.find(r=>String(r.work_date||'')===day && String(r.user_id||r.user||'')===uid);

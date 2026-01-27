@@ -505,8 +505,9 @@
   .att-day-grid{ display:grid; grid-template-columns: 80px repeat(3, minmax(0,1fr)); gap:6px; }
   .att-week{ display:flex; flex-direction:column; gap:12px; }
   .att-week-user{ border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card); }
-  .att-week-head{ display:grid; grid-template-columns: 80px repeat(7, var(--att-day-width)); gap:6px; font-size:12px; color:var(--muted); margin-bottom:6px; }
-  .att-week-grid{ display:grid; grid-template-columns: 80px repeat(7, var(--att-day-width)); grid-auto-rows: min-content; gap:6px; }
+  .att-week-lanes{ display:grid; grid-template-columns: repeat(3, auto); gap:12px; align-items:flex-start; }
+  .att-week-head{ display:grid; grid-template-columns: 60px repeat(7, var(--att-day-width)); gap:6px; font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .att-week-grid{ display:grid; grid-template-columns: 60px repeat(7, var(--att-day-width)); gap:6px; }
   .att-week-cell{ position:relative; border:1px solid var(--border); background:var(--bg); height: calc(var(--att-hours) * 40px); }
   .att-gantt{ display:flex; flex-direction:column; gap:6px; }
   .att-gantt-row{ display:grid; grid-template-columns: 140px 1fr; gap:8px; align-items:center; }
@@ -1906,10 +1907,9 @@ button.link:hover { opacity: .8; }
 <section class="page" id="page-attendance">
   <div class="tabs" style="margin-bottom:8px;">
     <div class="tab active" id="att-view-tab-dashboard" onclick="setAttendanceView('dashboard')">ダッシュボード</div>
-    <div class="tab" id="att-view-tab-summary" onclick="setAttendanceView('summary')">サマリ（月/週）</div>
-    <div class="tab" id="att-view-tab-edit" onclick="setAttendanceView('edit')">修正</div>
     <div class="tab" id="att-view-tab-calendar" onclick="setAttendanceView('calendar')">カレンダー</div>
     <div class="tab" id="att-view-tab-gantt" onclick="setAttendanceView('gantt')">ガント</div>
+    <div class="tab" id="att-view-tab-data" onclick="setAttendanceView('data')">データ</div>
   </div>
   <div class="grid">
     <div class="card" data-att-view="dashboard">
@@ -1954,7 +1954,7 @@ button.link:hover { opacity: .8; }
       </div>
     </div>
 
-    <div class="card" data-att-view="summary">
+    <div class="card" data-att-view="data">
       <h2>月次CSV / 閲覧（freee集計）</h2>
       <div class="body">
         <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
@@ -1972,7 +1972,7 @@ button.link:hover { opacity: .8; }
       </div>
     </div>
 
-    <div class="card" data-att-view="summary">
+    <div class="card" data-att-view="data">
       <h2>週次サマリ</h2>
       <div class="body">
         <div class="muted" id="att-week-summary" style="margin-top:6px;"></div>
@@ -1985,7 +1985,7 @@ button.link:hover { opacity: .8; }
       </div>
     </div>
 
-    <div class="card" data-att-view="edit">
+    <div class="card" data-att-view="data">
       <h2>勤怠修正（リスト）</h2>
       <div class="body">
         <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
@@ -2012,6 +2012,7 @@ button.link:hover { opacity: .8; }
         <div class="body" style="margin-top:8px;">
           <div class="toolbar" style="gap:8px; flex-wrap:wrap;">
             <label>日付 <input type="date" id="att_edit_date"/></label>
+            <span class="muted" id="att_edit_weekday"></span>
             <label>ユーザー <select id="att_edit_user"></select></label>
             <label>パスワード <input type="password" id="att_edit_password" placeholder="ユーザー個人PW"/></label>
             <button onclick="saveAttendanceEdit()">保存</button>
@@ -4262,11 +4263,11 @@ function scheduleAttendanceWorklogsRefresh(){
   }catch(_){ }
 }
 
-let ATT_VIEW = 'dashboard'; // 'dashboard' | 'summary' | 'edit' | 'calendar' | 'gantt'
+let ATT_VIEW = 'dashboard'; // 'dashboard' | 'calendar' | 'gantt' | 'data'
 
 function normalizeAttendanceView(view){
   const v = String(view||'').trim();
-  return ['dashboard','summary','edit','calendar','gantt'].includes(v) ? v : 'dashboard';
+  return ['dashboard','calendar','gantt','data'].includes(v) ? v : 'dashboard';
 }
 
 // Default ON (can be turned off by the user)
@@ -4375,22 +4376,19 @@ function stopAttendanceAutoRefresh({ uncheck=false, reason='' } = {}){
 
 function applyAttendanceViewUi(){
   const d = document.getElementById('att-view-tab-dashboard');
-  const s = document.getElementById('att-view-tab-summary');
-  const e = document.getElementById('att-view-tab-edit');
   const c = document.getElementById('att-view-tab-calendar');
   const g = document.getElementById('att-view-tab-gantt');
+  const dt = document.getElementById('att-view-tab-data');
   if (d) d.classList.toggle('active', ATT_VIEW === 'dashboard');
-  if (s) s.classList.toggle('active', ATT_VIEW === 'summary');
-  if (e) e.classList.toggle('active', ATT_VIEW === 'edit');
   if (c) c.classList.toggle('active', ATT_VIEW === 'calendar');
   if (g) g.classList.toggle('active', ATT_VIEW === 'gantt');
+  if (dt) dt.classList.toggle('active', ATT_VIEW === 'data');
   const page = document.getElementById('page-attendance');
   if (page) {
     page.classList.toggle('att-layout-dashboard', ATT_VIEW === 'dashboard');
-    page.classList.toggle('att-layout-summary', ATT_VIEW === 'summary');
-    page.classList.toggle('att-layout-edit', ATT_VIEW === 'edit');
     page.classList.toggle('att-layout-calendar', ATT_VIEW === 'calendar');
     page.classList.toggle('att-layout-gantt', ATT_VIEW === 'gantt');
+    page.classList.toggle('att-layout-data', ATT_VIEW === 'data');
   }
   document.querySelectorAll('#page-attendance [data-att-view]').forEach(el=>{
     const v = el.getAttribute('data-att-view');
@@ -4416,9 +4414,8 @@ function setAttendanceView(view, opts){
     if (ATT_VIEW === 'dashboard') {
       try { refreshAttendance?.(); } catch(_){ }
       try { if (ATT_AUTO_REFRESH_ENABLED) startAttendanceAutoRefresh?.(); } catch(_){ }
-    } else if (ATT_VIEW === 'summary') {
+    } else if (ATT_VIEW === 'data') {
       try { loadAttendanceMonth?.(); } catch(_){ }
-    } else if (ATT_VIEW === 'edit') {
       try { initAttendanceEditView?.(); } catch(_){ }
     } else if (ATT_VIEW === 'calendar') {
       try { loadAttendanceCalendar?.(); } catch(_){ }
@@ -5249,6 +5246,8 @@ function initAttendanceEditView(){
     const listUser = el('att_edit_list_user');
     if (listUser) listUser.addEventListener('change', ()=>{ try { loadAttendanceEditList(); } catch(_){ } });
     if (monthEl) monthEl.addEventListener('change', ()=>{ try { loadAttendanceEditList(); } catch(_){ } });
+    const dateEl = el('att_edit_date');
+    if (dateEl) dateEl.addEventListener('change', updateAttendanceEditWeekday);
     _attendanceEditBound = true;
   }
   try { loadAttendanceEditList(); } catch(_){ }
@@ -5268,7 +5267,20 @@ function openAttendanceEditModal(dateKey, userId){
   const pwEl = el('att_edit_password'); if (pwEl) pwEl.value = '';
   const modal = el('att-edit-modal');
   if (modal) modal.style.display = 'flex';
+  updateAttendanceEditWeekday();
   try { loadAttendanceEdit(); } catch(_){ }
+}
+
+function updateAttendanceEditWeekday(){
+  const dateEl = el('att_edit_date');
+  const label = el('att_edit_weekday');
+  if (!dateEl || !label) return;
+  const val = String(dateEl.value||'').trim();
+  if (!val) { label.textContent = ''; return; }
+  const d = new Date(`${val}T00:00:00`);
+  if (!Number.isFinite(d.getTime())) { label.textContent = ''; return; }
+  const w = ['日','月','火','水','木','金','土'][d.getDay()];
+  label.textContent = `(${w})`;
 }
 
 function renderAttendanceEditList(month, userId){
@@ -5800,14 +5812,8 @@ function renderAttendanceGanttWeek(wrap){
     box.style.setProperty('--att-hours', String(hourCount));
     box.innerHTML = `<div class="title">${escapeHtml(u.name||u.email||u.id||'')}</div>`;
 
-    const head = document.createElement('div');
-    head.className = 'att-week-head';
-    head.innerHTML = `<div></div>${days.map(d=>`<div>${escapeHtml(d.slice(5))}</div>`).join('')}`;
-    box.appendChild(head);
-
-    const grid = document.createElement('div');
-    grid.className = 'att-week-grid';
-
+    const lanesWrap = document.createElement('div');
+    lanesWrap.className = 'att-week-lanes';
     const makeTimeCol = ()=>{
       const col = document.createElement('div');
       col.className = 'att-vgantt-timecol';
@@ -5819,26 +5825,39 @@ function renderAttendanceGanttWeek(wrap){
       }
       return col;
     };
-
-    const lanes = ['attendance','tasks','plans'];
+    const cellMap = {};
+    const lanes = [
+      { key:'attendance', label:'勤務状況' },
+      { key:'tasks', label:'タスク' },
+      { key:'plans', label:'予定' }
+    ];
     lanes.forEach(lane=>{
+      const laneBox = document.createElement('div');
+      laneBox.style.setProperty('--att-day-width', `${ATT_GANTT.dayWidth}px`);
+      laneBox.style.setProperty('--att-hours', String(hourCount));
+      const head = document.createElement('div');
+      head.className = 'att-week-head';
+      head.innerHTML = `<div>${lane.label}</div>${days.map(d=>`<div>${escapeHtml(d.slice(5))}</div>`).join('')}`;
+      const grid = document.createElement('div');
+      grid.className = 'att-week-grid';
       grid.appendChild(makeTimeCol());
       days.forEach(day=>{
         const cell = document.createElement('div');
         cell.className = 'att-week-cell';
         cell.dataset.day = day;
-        cell.dataset.lane = lane;
+        cell.dataset.lane = lane.key;
         cell.style.setProperty('--att-hours', String(hourCount));
         grid.appendChild(cell);
       });
+      laneBox.appendChild(head);
+      laneBox.appendChild(grid);
+      lanesWrap.appendChild(laneBox);
+      grid.querySelectorAll('.att-week-cell').forEach(c=>{
+        const k = `${c.dataset.day}|${c.dataset.lane}`;
+        cellMap[k] = c;
+      });
     });
-    box.appendChild(grid);
-
-    const cellMap = {};
-    grid.querySelectorAll('.att-week-cell').forEach(c=>{
-      const k = `${c.dataset.day}|${c.dataset.lane}`;
-      cellMap[k] = c;
-    });
+    box.appendChild(lanesWrap);
 
     days.forEach(day=>{
       const attRow = monthRows.find(r=>String(r.work_date||'')===day && String(r.user_id||r.user||'')===uid);

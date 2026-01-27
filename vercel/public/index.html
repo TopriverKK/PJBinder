@@ -7781,8 +7781,9 @@ function addProject() {
     priority: val('p_priority'),
     color: pc,
     budget: val('p_budget'),
-    budgetAmount: Number(val('p_budget')||0),
-    estimatedHours: Number(val('p_est_hours')||0),
+    budgetAmount: toNumberOrNull(val('p_budget')),
+    budget: toNumberOrNull(val('p_budget')),
+    estimatedHours: toNumberOrNull(val('p_est_hours')),
     startDate: val('p_start'),
     endDate: val('p_end'),
     memoText: val('p_memo'),
@@ -7828,7 +7829,7 @@ function addTask() {
     priority: val('t_prio'),
     color: tc,
     memoText: val('t_memo'),
-    plannedHours: Number(val('t_planned_hours')||0),
+    plannedHours: toNumberOrNull(val('t_planned_hours')),
     estimateHours: '',
     actualHours: '',
     rrule: (el('t_rrule')?.value) || '',
@@ -10154,6 +10155,13 @@ function buildTaskHoursMap(){
   return map;
 }
 
+function toNumberOrNull(value){
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const num = Number(raw);
+  return Number.isFinite(num) ? num : null;
+}
+
 function formatHoursPair(actualHours, plannedHours){
   const act = Number(actualHours || 0);
   const plan = plannedHours == null || plannedHours === '' ? null : Number(plannedHours);
@@ -11495,9 +11503,9 @@ function saveProjectFromModal(id){
     ownerUserId: sel('pm_owner'),
     priority: val('pm_prio'),
     color: val('pm_color'),
-    budget: val('pm_budget'),
-    budgetAmount: val('pm_budget'),
-    estimatedHours: val('pm_est_hours'),
+    budget: toNumberOrNull(val('pm_budget')),
+    budgetAmount: toNumberOrNull(val('pm_budget')),
+    estimatedHours: toNumberOrNull(val('pm_est_hours')),
     startDate: val('pm_start'),
     endDate: val('pm_end'),
     memoText: val('pm_memo'),
@@ -11606,7 +11614,7 @@ function saveTaskFromModal(id){
     priority: val('tm_prio'),
     color: val('tm_color'),
     memoText: val('tm_memo'),
-    plannedHours: val('tm_planned_hours')
+    plannedHours: toNumberOrNull(val('tm_planned_hours'))
   };
   gsr().withSuccessHandler(row=>{
     patchRow('tasks', row);

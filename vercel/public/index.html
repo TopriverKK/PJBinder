@@ -318,8 +318,8 @@
   #taskTable td.cell-due { text-align: center; }
 
   /* プロジェクト一覧の期間列は幅を抑えてメモ列を広く */
-  #projTable th:nth-child(8),
-  #projTable td:nth-child(8){
+  #projTable th:nth-child(9),
+  #projTable td:nth-child(9){
     width: 120px;
     max-width: 120px;
     white-space: nowrap;
@@ -1563,7 +1563,7 @@ button.link:hover { opacity: .8; }
               <table id="taskTable">
                 <thead>
                   <tr>
-                    <th>期限</th><th>タイトル</th><th>担当</th><th>優先度</th><th>状態</th><th>メモ</th><th></th>
+                    <th>期限</th><th>タイトル</th><th>担当</th><th>工数</th><th>優先度</th><th>状態</th><th>メモ</th><th></th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -1617,7 +1617,7 @@ button.link:hover { opacity: .8; }
           <div class="body list see-through" style="padding:0;">
             <table id="projTable">
               <thead><tr>
-                <th>名称</th><th>親</th><th>主担当者</th><th>優先度</th>
+                <th>名称</th><th>親</th><th>主担当者</th><th>工数</th><th>優先度</th>
                 <th>タスク(未/完)</th>  <!-- ← 追加 -->
                 <th>メモ</th>
                 <th>予算</th><th>期間</th><th></th>
@@ -6749,9 +6749,13 @@ function renderBudget(){
 // tasks table (with Docs buttons)
 function renderTasksTable() {
   const tb = document.querySelector('#taskTable tbody'); if (!tb) return;
+  if (!ATT_WORKLOGS_LOADED) {
+    ensureAttendanceWorklogsLoaded().then(()=>renderTasksTable());
+  }
   tb.innerHTML='';
   let rows = filterTasks(safeArr(DATA.tasks));
   rows = rows.sort((a,b)=>String(a.dueDate||'9999-12-31').localeCompare(String(b.dueDate||'9999-12-31'))).slice(0,500);
+  const taskHoursMap = buildTaskHoursMap();
 
   for (const r of rows) {
     const assignees = orderedAssigneeIds(r.ownerUserId || '', r.assignees || '')
@@ -6793,6 +6797,7 @@ function renderTasksTable() {
         <div class="muted" style="font-size:12px;">${escapeHtml(nameByProjectId(r.projectId||''))}</div>
       </td>
       <td${bg}>${escapeHtml(assignees||'')}</td>
+      <td${bg}>${escapeHtml(formatHoursPair((taskHoursMap.get(String(r.id))||0)/60, r.plannedHours))}</td>
       <td class="cell-prio ${prc?('prio-'+prc):''}" data-field="priority">
         <span class="pill prio-badge ${prc?('prio-'+prc):''}">${escapeHtml(prioLabel)}</span>
       </td>
@@ -7184,7 +7189,9 @@ function renderKanban() {
 // Projects table
 function renderProjects() {
   const tb = document.querySelector('#projTable tbody'); if (!tb) return;
-
+  if (!ATT_WORKLOGS_LOADED) {
+    ensureAttendanceWorklogsLoaded().then(()=>renderProjects());
+  }
   tb.innerHTML = '';
   let rows = safeArr(DATA.projects)
     .filter(p => String(p.status||'').toLowerCase() !== 'archived');
@@ -7233,6 +7240,7 @@ function renderProjects() {
   }
 
   rows = rows.slice(0,500);
+  const projMetrics = buildProjectMetrics('', '');
 
   for (const r of rows) {
     const prioLabel = normPriority(r.priority || '');
@@ -7275,10 +7283,13 @@ function renderProjects() {
       : '';
 
     tr.dataset.id = r.id;
+    const metrics = projMetrics.get(String(r.id)) || { actualHours: 0 };
+
     tr.innerHTML =
       '<td'+bg+'>'+escapeHtml(r.name||'')+badge+' '+attBadge+'</td>'+
       '<td'+bg+'>'+escapeHtml(parentName)+'</td>'+
       '<td'+bg+'>'+escapeHtml(nameByUserId(r.ownerUserId||''))+'</td>'+
+      '<td'+bg+'>'+escapeHtml(formatHoursPair(metrics.actualHours, r.estimatedHours))+'</td>'+
       '<td class="cell-prio '+(prc?('prio-'+prc):'')+'" data-field="priority">'+
         '<span class="pill prio-badge '+(prc?('prio-'+prc):'')+'">'+
           escapeHtml(prioLabel || '')+
@@ -7288,7 +7299,7 @@ function renderProjects() {
       '<td class="cell-memo"'+bg+'>'+
         '<textarea class="memo-edit" data-kind="project" data-id="'+r.id+'" placeholder="メモ...">'+escapeHtml(r.memoText||'')+'</textarea>'+
       '</td>'+
-      '<td'+bg+'>'+(r.budget||'')+'</td>'+
+      '<td'+bg+'>'+((r.budgetAmount ?? r.budget) || '')+'</td>'+
       '<td'+bg+'>'+(r.startDate||'')+'-'+(r.endDate||'')+'</td>'+
       '<td>'+
         attBtn+
@@ -10125,6 +10136,31 @@ function buildProjectMetrics(from, to){
   });
   return out;
 }
+
+function buildTaskHoursMap(){
+  const map = new Map();
+  const worklogs = safeArr(DATA.attendanceWorklogs || []);
+  worklogs.forEach(w=>{
+    const tid = String(w.task_id||w.taskId||'').trim();
+    if (!tid) return;
+    const start = w.start_at || w.startAt;
+    const end = w.end_at || w.endAt;
+    if (!start || !end) return;
+    const ms = (new Date(end)).getTime() - (new Date(start)).getTime();
+    if (!(ms > 0)) return;
+    const minutes = Math.round(ms/60000);
+    map.set(tid, (map.get(tid) || 0) + minutes);
+  });
+  return map;
+}
+
+function formatHoursPair(actualHours, plannedHours){
+  const act = Number(actualHours || 0);
+  const plan = plannedHours == null || plannedHours === '' ? null : Number(plannedHours);
+  const actLabel = act ? act.toFixed(1) : '0.0';
+  const planLabel = (plan || plan === 0) ? Number(plan).toFixed(1) : '-';
+  return `${actLabel} / ${planLabel}`;
+}
 // ★追加：Usersを確実に揃えてから続行
 function ensureUsersLoaded(timeoutMs=1500){
   return new Promise(res=>{
@@ -11266,6 +11302,10 @@ function openProjectFormModal(){
       <div><label>予算（円）(任意)</label><input id="mp_budget" type="number" value="${escapeHtml(val('p_budget'))}"/></div>
     </div>
     <div class="row">
+      <div><label>見積工数（h）</label><input id="mp_est_hours" type="number" min="0" step="0.1" value="${escapeHtml(val('p_est_hours'))}"/></div>
+      <div></div>
+    </div>
+    <div class="row">
       <div><label>開始日(任意)</label><input id="mp_start" type="date" value="${escapeHtml(val('p_start'))}"/></div>
       <div><label>終了日(任意)</label><input id="mp_end" type="date" value="${escapeHtml(val('p_end'))}"/></div>
     </div>
@@ -11281,6 +11321,7 @@ function openProjectFormModal(){
         el('p_priority').value = val('mp_priority');
         el('p_color').value = val('mp_color');
         el('p_budget').value = val('mp_budget');
+        if (el('p_est_hours')) el('p_est_hours').value = val('mp_est_hours');
         el('p_start').value = val('mp_start');
         el('p_end').value = val('mp_end');
         el('p_memo').value = val('mp_memo');
@@ -11327,6 +11368,10 @@ function openTaskFormModal(){
       <div><label>優先度(必須)</label>${document.getElementById('t_prio').outerHTML.replace('t_prio','mt_prio')}</div>
       <div><label>カラー(任意)</label><input id="mt_color" data-tip="タスクに色を指定すると、一覧中でタスクが見つけやすくなります。" type="color" value="${escapeHtml(val('t_color'))||'#ffffff'}"/></div>
     </div>
+    <div class="row">
+      <div><label>配賦工数（h）</label><input id="mt_planned_hours" type="number" min="0" step="0.1" value="${escapeHtml(val('t_planned_hours'))}"/></div>
+      <div></div>
+    </div>
     <div><label>メモ(任意)</label><textarea id="mt_memo">${escapeHtml(val('t_memo'))}</textarea></div>
 
     <div class="toolbar" style="justify-content:flex-end; gap:8px;">
@@ -11349,6 +11394,7 @@ function openTaskFormModal(){
         }
         el('t_prio').value = sel('mt_prio');
         el('t_color').value = val('mt_color');
+        if (el('t_planned_hours')) el('t_planned_hours').value = val('mt_planned_hours');
         el('t_memo').value = val('mt_memo');
         closeModal();
         addTask();
@@ -11408,7 +11454,11 @@ function showProjectModal(id){
     </div>
     <div class="row">
       <div><label>カラー</label><input id="pm_color" type="color" value="${/^#[0-9a-fA-F]{6}$/.test(p.color||'')?escapeHtml(p.color):'#ffffff'}"/></div>
-      <div><label>予算（円）</label><input id="pm_budget" type="number" value="${escapeHtml(String(p.budget||''))}"/></div>
+      <div><label>予算（円）</label><input id="pm_budget" type="number" value="${escapeHtml(String(p.budgetAmount ?? p.budget ?? ''))}"/></div>
+    </div>
+    <div class="row">
+      <div><label>見積工数（h）</label><input id="pm_est_hours" type="number" min="0" step="0.1" value="${escapeHtml(String(p.estimatedHours||''))}"/></div>
+      <div></div>
     </div>
     <div class="row">
       <div><label>開始日</label><input id="pm_start" type="date" value="${escapeHtml(p.startDate||'')}"/></div>
@@ -11446,6 +11496,8 @@ function saveProjectFromModal(id){
     priority: val('pm_prio'),
     color: val('pm_color'),
     budget: val('pm_budget'),
+    budgetAmount: val('pm_budget'),
+    estimatedHours: val('pm_est_hours'),
     startDate: val('pm_start'),
     endDate: val('pm_end'),
     memoText: val('pm_memo'),
@@ -11513,6 +11565,10 @@ function showTaskModal(id){
       </div>
     </div>
     <div class="row">
+      <div><label>配賦工数（h）</label><input id="tm_planned_hours" type="number" min="0" step="0.1" value="${escapeHtml(String(t.plannedHours||''))}"/></div>
+      <div></div>
+    </div>
+    <div class="row">
       <div>
         <label>タスクメモ</label>
         <textarea id="tm_memo" style="min-height:120px;">${escapeHtml(t.memoText||'')}</textarea>
@@ -11549,7 +11605,8 @@ function saveTaskFromModal(id){
     status: (safeArr(DATA.tasks).find(x=>String(x.id)===String(id))?.status)||'todo',
     priority: val('tm_prio'),
     color: val('tm_color'),
-    memoText: val('tm_memo')
+    memoText: val('tm_memo'),
+    plannedHours: val('tm_planned_hours')
   };
   gsr().withSuccessHandler(row=>{
     patchRow('tasks', row);

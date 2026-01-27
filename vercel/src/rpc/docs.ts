@@ -415,7 +415,10 @@ export async function rpcCreateDailyReportDoc(r: any) {
     );
     remainingTaskRows = Array.isArray(rows) ? rows : [];
     remainingTasks = remainingTaskRows
-      .filter((t) => String(t?.status || '').toLowerCase() !== 'done')
+      .filter((t) => {
+        const st = String(t?.status || '').toLowerCase();
+        return st !== 'done' && st !== 'blocked';
+      })
       .map((t) => ({
         id: String(t?.id || '').trim(),
         title: String(t?.title || t?.id || '').trim(),

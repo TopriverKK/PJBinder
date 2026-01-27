@@ -429,7 +429,7 @@ export async function replaceRemainingTasksWithBullets(docId: string, groups: Re
         },
       });
     }
-    const indent = 18 * line.level;
+    const indent = 36 * line.level;
     if (indent > 0) {
       requests.push({
         updateParagraphStyle: {

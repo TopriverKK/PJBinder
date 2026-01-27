@@ -2997,7 +2997,8 @@ function hydrateSelects(){
 
   // --- Minutes/日報の「関連タスク」：未完＋アクティブPJのみ ---
   const openTasks = safeArr(DATA.tasks).filter(t=>{
-    const notDone  = String(t.status||'').toLowerCase() !== 'done';
+    const st = String(t.status||'').toLowerCase();
+    const notDone  = (st !== 'done' && st !== 'blocked');
     const pj       = projects.find(p=>String(p.id)===String(t.projectId));
     const pjActive = !pj || String(pj.status||'').toLowerCase() !== 'archived';
     return notDone && pjActive;
@@ -6137,6 +6138,7 @@ function renderTasksTable() {
       <td style="white-space:nowrap;">
         <button class="secondary" data-tip="この項目を編集します" onclick="editTask('${r.id}')">編集</button>
         <button class="secondary" onclick="moveStatus('${r.id}','doing')">→進行中</button>
+        <button class="secondary" onclick="moveStatus('${r.id}','blocked')">保留</button>
         <button class="secondary" onclick="moveStatus('${r.id}','done')">✅完了</button>
         <button class="secondary" data-tip="添付を追加・削除します。" onclick="openAttachmentModal('task','${r.id}','${escapeJsSq(r.title||r.id)}')">📎添付を追加</button>
         <button class="secondary" onclick="delTask('${r.id}')">削除</button>
@@ -9075,6 +9077,7 @@ function toggleProjectTaskList(projectId, anchor){
             <span class="toolbar" style="gap:6px;">
               ${docLink} ${attBtn}
               <button class="secondary mini" onclick="openTaskDocById('${t.id}')">Task</button>
+              <button class="secondary mini" onclick="moveStatus('${t.id}','blocked')">保留</button>
               <button class="secondary mini" onclick="moveStatus('${t.id}','done')">完了</button>
             </span>
           </div>`;

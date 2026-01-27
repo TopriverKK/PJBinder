@@ -4781,7 +4781,7 @@ async function fetchIcsText(url){
   throw lastErr || new Error('ICS fetch failed');
 }
 
-function parseHolidayDatesFromIcs(text){
+function parseHolidayDatesFromIcs(text, rangeStart, rangeEnd){
   const toLocalDateKey = d => {
     const y=d.getFullYear();
     const m=String(d.getMonth()+1).padStart(2,'0');
@@ -4800,39 +4800,188 @@ function parseHolidayDatesFromIcs(text){
 
   const result = new Set();
   const blocks = String(text||'').split('BEGIN:VEVENT').slice(1);
+
+  const safeDate = (d) => (d && !isNaN(d.getTime())) ? d : null;
+  const toMidnight = d => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+  const defaultStart = rangeStart ? toMidnight(rangeStart) : (()=>{ const d=new Date(); d.setMonth(d.getMonth()-6); d.setHours(0,0,0,0); return d; })();
+  const defaultEnd = rangeEnd ? toMidnight(rangeEnd) : (()=>{ const d=new Date(); d.setMonth(d.getMonth()+12); d.setHours(23,59,59,999); return d; })();
+
+  const parseLine = (lines, prefix) => {
+    const line = lines.find(l=>String(l||'').startsWith(prefix));
+    if(!line) return null;
+    const idx = line.indexOf(':');
+    if (idx === -1) return { line, value: '' };
+    return { line, value: line.slice(idx+1) };
+  };
+  const parseParams = (line) => {
+    const out = {};
+    const head = String(line||'').split(':')[0];
+    const parts = head.split(';').slice(1);
+    parts.forEach(p=>{
+      const [k,v] = p.split('=');
+      if(k) out[k.toUpperCase()] = (v||'').toUpperCase();
+    });
+    return out;
+  };
+  const parseExdates = (lines) => {
+    const ex = new Set();
+    lines.filter(l=>String(l||'').startsWith('EXDATE')).forEach(line=>{
+      const idx = line.indexOf(':');
+      if(idx===-1) return;
+      const payload = line.slice(idx+1);
+      payload.split(',').forEach(raw=>{
+        const d = parseIcsDate(raw);
+        if(d && !isNaN(d.getTime())) ex.add(toLocalDateKey(d));
+      });
+    });
+    return ex;
+  };
+  const weekdayMap = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+  const parseByDay = (str) => {
+    if(!str) return [];
+    return String(str).split(',').map(s=>s.trim()).map(s=>{
+      const key = s.replace(/^[+-]?\d+/,'');
+      return weekdayMap[key] ?? null;
+    }).filter(v=>v!==null);
+  };
+
   for (const block of blocks){
     const lines = String(block||'').split(/\r?\n/);
-    const findLine = prefix => lines.find(l=>String(l||'').startsWith(prefix));
-    const dtStartLine = findLine('DTSTART');
-    if(!dtStartLine) continue;
-    const startRaw = String(dtStartLine).split(':').slice(1).join(':');
-    const startDate = parseIcsDate(startRaw);
-    if(!startDate || isNaN(startDate.getTime())) continue;
-    const dtEndLine = findLine('DTEND');
-    const endRaw = dtEndLine ? String(dtEndLine).split(':').slice(1).join(':') : '';
-    const endDate = endRaw ? parseIcsDate(endRaw) : undefined;
-    const isAllDayStart = /^\d{8}$/.test(startRaw);
+    const dtStart = parseLine(lines, 'DTSTART');
+    if(!dtStart) continue;
+    const startRaw = String(dtStart.value||'');
+    const startDate = safeDate(parseIcsDate(startRaw));
+    if(!startDate) continue;
+    const startParams = parseParams(dtStart.line);
+    const dtEnd = parseLine(lines, 'DTEND');
+    const endRaw = dtEnd ? String(dtEnd.value||'') : '';
+    const endDate = endRaw ? safeDate(parseIcsDate(endRaw)) : null;
+    const isAllDayStart = /^\d{8}$/.test(startRaw) || startParams.VALUE === 'DATE';
     const isAllDayEnd = /^\d{8}$/.test(endRaw);
-    if(isAllDayStart && endDate && isAllDayEnd){
-      for (const k of addDateRange(startDate, endDate)) result.add(k);
+    const exdates = parseExdates(lines);
+    const rruleLine = parseLine(lines, 'RRULE');
+    const rrule = {};
+    if(rruleLine){
+      String(rruleLine.value||'').split(';').forEach(part=>{
+        const [k,v] = part.split('=');
+        if(k) rrule[k.toUpperCase()] = v;
+      });
+    }
+
+    const durationDays = (() => {
+      if(isAllDayStart && endDate && isAllDayEnd){
+        const s = toMidnight(startDate);
+        const e = toMidnight(endDate);
+        return Math.max(1, Math.round((e - s) / (24*60*60*1000)));
+      }
+      return 1;
+    })();
+
+    const addOccurrence = (occStart) => {
+      if(!occStart) return;
+      const startKey = toLocalDateKey(occStart);
+      if(exdates.has(startKey)) return;
+      for (let i=0;i<durationDays;i++){
+        const d = new Date(occStart);
+        d.setDate(d.getDate()+i);
+        if (d < defaultStart || d > defaultEnd) continue;
+        result.add(toLocalDateKey(d));
+      }
+    };
+
+    if(!rrule.FREQ){
+      if(isAllDayStart && endDate && isAllDayEnd){
+        for (const k of addDateRange(startDate, endDate)) {
+          const d = parseIcsDate(k.replaceAll('-',''));
+          if(d && d >= defaultStart && d <= defaultEnd) result.add(k);
+        }
+      }else{
+        if(startDate >= defaultStart && startDate <= defaultEnd) result.add(toLocalDateKey(startDate));
+      }
       continue;
     }
-    result.add(toLocalDateKey(startDate));
+
+    // Recurrence (all-day only)
+    if(!isAllDayStart) continue;
+    const freq = String(rrule.FREQ||'').toUpperCase();
+    const interval = Math.max(1, parseInt(rrule.INTERVAL||'1',10) || 1);
+    const untilDate = rrule.UNTIL ? safeDate(parseIcsDate(rrule.UNTIL)) : null;
+    const countLimit = rrule.COUNT ? parseInt(rrule.COUNT,10) : null;
+    let added = 0;
+    const rangeStop = untilDate && untilDate < defaultEnd ? untilDate : defaultEnd;
+
+    if(freq === 'DAILY'){
+      for(let d=new Date(startDate); d<=rangeStop; d.setDate(d.getDate()+interval)){
+        if(d < defaultStart) continue;
+        addOccurrence(d);
+        if(countLimit && ++added >= countLimit) break;
+      }
+    }else if(freq === 'WEEKLY'){
+      const bydays = parseByDay(rrule.BYDAY);
+      const base = new Date(startDate);
+      const baseWeekStart = new Date(base);
+      baseWeekStart.setDate(base.getDate() - base.getDay());
+      for(let ws=new Date(baseWeekStart); ws<=rangeStop; ws.setDate(ws.getDate()+7*interval)){
+        const days = bydays.length ? bydays : [base.getDay()];
+        for(const dow of days){
+          const d = new Date(ws);
+          d.setDate(ws.getDate()+dow);
+          if(d < startDate) continue;
+          if(d < defaultStart || d > rangeStop) continue;
+          addOccurrence(d);
+          if(countLimit && ++added >= countLimit) break;
+        }
+        if(countLimit && added >= countLimit) break;
+      }
+    }else if(freq === 'MONTHLY'){
+      const byMonthDay = rrule.BYMONTHDAY ? String(rrule.BYMONTHDAY).split(',').map(v=>parseInt(v,10)).filter(v=>v) : [startDate.getDate()];
+      for(let d=new Date(startDate); d<=rangeStop; d.setMonth(d.getMonth()+interval)){
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        for(const md of byMonthDay){
+          const cand = new Date(year, month, md);
+          if(cand < startDate) continue;
+          if(cand < defaultStart || cand > rangeStop) continue;
+          addOccurrence(cand);
+          if(countLimit && ++added >= countLimit) break;
+        }
+        if(countLimit && added >= countLimit) break;
+      }
+    }else if(freq === 'YEARLY'){
+      const byMonths = rrule.BYMONTH ? String(rrule.BYMONTH).split(',').map(v=>parseInt(v,10)-1).filter(v=>v>=0) : [startDate.getMonth()];
+      const byMonthDay = rrule.BYMONTHDAY ? String(rrule.BYMONTHDAY).split(',').map(v=>parseInt(v,10)).filter(v=>v) : [startDate.getDate()];
+      for(let y=startDate.getFullYear(); y<=rangeStop.getFullYear(); y+=interval){
+        for(const m of byMonths){
+          for(const md of byMonthDay){
+            const cand = new Date(y, m, md);
+            if(cand < startDate) continue;
+            if(cand < defaultStart || cand > rangeStop) continue;
+            addOccurrence(cand);
+            if(countLimit && ++added >= countLimit) break;
+          }
+          if(countLimit && added >= countLimit) break;
+        }
+        if(countLimit && added >= countLimit) break;
+      }
+    }else{
+      if(startDate >= defaultStart && startDate <= defaultEnd) addOccurrence(startDate);
+    }
   }
   return result;
 }
 
-const _holidayCache = new Map(); // url -> {dates:Set, ts}
-async function loadHolidaySet(url){
+const _holidayCache = new Map(); // key -> {dates:Set, ts}
+async function loadHolidaySet(url, rangeStart, rangeEnd){
   const raw = String(url||'').trim();
   if(!raw) return new Set();
   const target = canonicalizeIcsUrl(raw);
-  const cached = _holidayCache.get(target);
+  const cacheKey = `${target}|${rangeStart?rangeStart.toISOString().slice(0,10):''}|${rangeEnd?rangeEnd.toISOString().slice(0,10):''}`;
+  const cached = _holidayCache.get(cacheKey);
   const TTL = 24*60*60*1000;
   if(cached && (Date.now()-cached.ts) < TTL) return cached.dates;
   const text = await fetchIcsText(target);
-  const dates = parseHolidayDatesFromIcs(text);
-  _holidayCache.set(target, {dates, ts: Date.now()});
+  const dates = parseHolidayDatesFromIcs(text, rangeStart, rangeEnd);
+  _holidayCache.set(cacheKey, {dates, ts: Date.now()});
   return dates;
 }
 
@@ -5621,9 +5770,15 @@ async function loadAttendanceCalendar(){
     if(!ATT.settings || !ATT.settings.holidayUrl){ await loadAttendanceSettings(); }
     const holidayUrl = (ATT.settings && ATT.settings.holidayUrl) ? ATT.settings.holidayUrl : defaultHolidayIcs;
     const companyHolidayUrl = (ATT.settings && ATT.settings.companyHolidayUrl) ? ATT.settings.companyHolidayUrl : '';
+    const first = new Date(`${month}-01T00:00:00`);
+    const start = new Date(first);
+    const offset = (start.getDay() + 6) % 7;
+    start.setDate(start.getDate() - offset);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 41);
     const [holidaySet, companySet] = await Promise.all([
-      loadHolidaySet(holidayUrl),
-      companyHolidayUrl ? loadHolidaySet(companyHolidayUrl) : Promise.resolve(new Set()),
+      loadHolidaySet(holidayUrl, start, end),
+      companyHolidayUrl ? loadHolidaySet(companyHolidayUrl, start, end) : Promise.resolve(new Set()),
     ]);
     ATT.holidayDates = holidaySet;
     ATT.companyHolidayDates = companySet;
@@ -6421,9 +6576,14 @@ async function exportFreeeAttendanceCsv(){
     if(!ATT.settings || !ATT.settings.holidayUrl){ await loadAttendanceSettings(); }
     const holidayUrl = (ATT.settings && ATT.settings.holidayUrl) ? ATT.settings.holidayUrl : defaultHolidayIcs;
     const companyHolidayUrl = (ATT.settings && ATT.settings.companyHolidayUrl) ? ATT.settings.companyHolidayUrl : '';
+    const monthStart = new Date(`${month}-01T00:00:00`);
+    const monthEnd = new Date(monthStart);
+    monthEnd.setMonth(monthEnd.getMonth()+1);
+    monthEnd.setDate(0);
+    monthEnd.setHours(23,59,59,999);
     const [holidaySet, companySet] = await Promise.all([
-      loadHolidaySet(holidayUrl),
-      companyHolidayUrl ? loadHolidaySet(companyHolidayUrl) : Promise.resolve(new Set()),
+      loadHolidaySet(holidayUrl, monthStart, monthEnd),
+      companyHolidayUrl ? loadHolidaySet(companyHolidayUrl, monthStart, monthEnd) : Promise.resolve(new Set()),
     ]);
     ATT.holidayDates = holidaySet;
     ATT.companyHolidayDates = companySet;
@@ -6437,10 +6597,6 @@ async function exportFreeeAttendanceCsv(){
       return raw;
     };
 
-    const monthStart = new Date(`${month}-01T00:00:00`);
-    const monthEnd = new Date(monthStart);
-    monthEnd.setMonth(monthEnd.getMonth()+1);
-    monthEnd.setDate(0);
     monthEnd.setHours(0,0,0,0);
 
     const toDateKey = (d) => {

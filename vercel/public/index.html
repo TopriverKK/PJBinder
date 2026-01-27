@@ -5185,13 +5185,18 @@ async function saveAttendanceEdit(){
   const dateKey = String(dateEl.value||'').trim() || todayStr();
   const userId = String(userSel.value||'').trim();
   if (!userId) return;
+  const pwRaw = String((el('att_edit_password')||{}).value||'').trim();
+  if (!pwRaw) {
+    toast('パスワードを入力してください', false);
+    return;
+  }
   const statusEl = el('att_edit_status_msg');
   if (statusEl) statusEl.textContent = '保存中...';
 
   const payload = {
     userId,
     date: dateKey,
-    password: String((el('att_edit_password')||{}).value||''),
+    password: pwRaw,
     status: String((el('att_edit_status')||{}).value||'not-clocked'),
     location: String((el('att_edit_location')||{}).value||'office'),
     clockIn: attComposeIso(dateKey, (el('att_edit_clock_in')||{}).value || ''),

@@ -5031,7 +5031,6 @@ async function refreshAttendance(){
     ATT.dayRows = Array.isArray(rows) ? rows : [];
     document.getElementById('att-status').textContent = `取得: ${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`;
     renderAttendancePage();
-    try { autoApplyAttendanceBreaks(); } catch(_){ }
     // calendar events are best-effort and only when attendance page is open
     if (PAGE === 'attendance' && ATT_VIEW === 'dashboard') {
       await refreshAttendanceCalendars();
@@ -5078,7 +5077,6 @@ function attFindRowForUser(userId){
   return (Array.isArray(ATT.dayRows)?ATT.dayRows:[]).find(r => String(r.user_id||r.user||'') === String(userId));
 }
 
-const ATT_AUTO_BREAK_STATE = {};
 let ATT_DISPLAY_TICKER = null;
 function ensureAttendanceDisplayTicker(){
   if (ATT_DISPLAY_TICKER) return;
@@ -5088,42 +5086,6 @@ function ensureAttendanceDisplayTicker(){
   }, 60 * 1000);
 }
 
-function autoApplyAttendanceBreaks(){
-  return;
-  const now = new Date();
-  const dateKey = todayStr();
-  const users = attendanceBaseUsers();
-  users.forEach(u=>{
-    const uid = String(u.id||'');
-    const row = attFindRowForUser(uid);
-    if (!row) return;
-    const status = String(row.status||'');
-    if (!(status === 'working' || status === 'break')) return;
-    if (!row.clock_in) return;
-    const breaks = Array.isArray(u.workBreaks) ? u.workBreaks : [];
-    if (!breaks.length) return;
-    const inBreak = breaks.some(b=>{
-      const s = String(b.start||'').trim();
-      const e = String(b.end||'').trim();
-      if (!s || !e) return false;
-      const start = new Date(`${dateKey}T${s}:00`);
-      const end = new Date(`${dateKey}T${e}:00`);
-      if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return false;
-      return now >= start && now <= end;
-    });
-    const last = ATT_AUTO_BREAK_STATE[uid] || { last: 0, inBreak: null };
-    const cooldown = 60 * 1000;
-    if (Date.now() - last.last < cooldown && last.inBreak === inBreak) return;
-    if (inBreak && status === 'working') {
-      ATT_AUTO_BREAK_STATE[uid] = { last: Date.now(), inBreak };
-      patchAttendance(uid, { type:'toggleBreak' });
-    }
-    if (!inBreak && status === 'break') {
-      ATT_AUTO_BREAK_STATE[uid] = { last: Date.now(), inBreak };
-      patchAttendance(uid, { type:'toggleBreak' });
-    }
-  });
-}
 
 async function patchAttendance(userId, action){
   const date = todayStr();

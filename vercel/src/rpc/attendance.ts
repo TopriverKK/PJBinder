@@ -1,4 +1,8 @@
-﻿
+﻿import { sbSelectAllSafe } from '../supabase/selectAll.js';
+import { sbUpsert, sbSelectOneById, sbDeleteWhere } from '../supabase/rest.js';
+import { hashPassword, verifyPassword } from './password.js';
+import { getSetting, setSetting } from '../supabase/settings.js';
+
 type UserBreakSetting = { start?: string; end?: string };
 function normalizeUserBreaks(raw: unknown): UserBreakSetting[] {
   if (!raw) return [];
@@ -22,10 +26,7 @@ function buildBreakIso(date: string, time: string) {
   const dt = new Date(`${date}T${time}:00`);
   if (!Number.isFinite(dt.getTime())) return '';
   return dt.toISOString();
-}\nimport { sbSelectAllSafe } from '../supabase/selectAll.js';
-import { sbUpsert, sbSelectOneById, sbDeleteWhere } from '../supabase/rest.js';
-import { hashPassword, verifyPassword } from './password.js';
-import { getSetting, setSetting } from '../supabase/settings.js';
+}
 
 type AttendanceStatus = 'not-clocked' | 'working' | 'break' | 'out' | 'done';
 type AttendanceLocation = 'office' | 'remote' | 'out';
@@ -599,6 +600,10 @@ export async function rpcSetAttendanceSettings(settingsRaw: unknown) {
   ]);
   return { ok: true };
 }
+
+
+
+
 
 
 

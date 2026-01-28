@@ -4572,7 +4572,8 @@ function getEffectiveClockOutIso(att, userId){
 }
 function isAutoClockOutApplied(att, userId){
   return !!(att && !att.clock_out && getEffectiveClockOutIso(att, userId));
-}function getDisplayAttendanceStatus(row, userId){
+}
+function getDisplayAttendanceStatus(row, userId){
   const st = String(row && row.status || 'not-clocked');
   if (st === 'working' && isAutoClockOutApplied(row, userId)) return 'done';
   if (st === 'working' && isNowInAttendanceBreak(row)) return 'break';
@@ -6581,7 +6582,7 @@ function computeWorkedMinutes(att, userId){
   const breakMin = (work && Number.isFinite(work.breakMinutes)) ? work.breakMinutes : fixedBreakMinutes;
   return Math.max(0, Math.round(total - breakMin));
 }
-function computeNightMinutes(att){
+function computeNightMinutes(att, userId){
   const intervals = computeWorkIntervals(att, userId);
   let total=0;
   for (const iv of intervals){
@@ -6684,7 +6685,7 @@ async function exportFreeeAttendanceCsv(){
         const dateKey = String(att.work_date||'');
         if(!dateKey) return;
         const workedMinutes = (att.clock_in && att.clock_out) ? computeWorkedMinutes(att, uid) : 0;
-        const nightMinutes = computeNightMinutes(att);
+        const nightMinutes = computeNightMinutes(att, uid);
         const prev = workedByDay.get(dateKey);
         if(!prev) workedByDay.set(dateKey, { workedMinutes, nightMinutes });
         else workedByDay.set(dateKey, { workedMinutes: prev.workedMinutes + workedMinutes, nightMinutes: prev.nightMinutes + nightMinutes });
@@ -12266,6 +12267,8 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
+
 
 
 

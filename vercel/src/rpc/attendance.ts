@@ -1,4 +1,28 @@
-import { sbSelectAllSafe } from '../supabase/selectAll.js';
+﻿
+type UserBreakSetting = { start?: string; end?: string };
+function normalizeUserBreaks(raw: unknown): UserBreakSetting[] {
+  if (!raw) return [];
+  const list = Array.isArray(raw) ? raw : (() => {
+    if (typeof raw !== 'string') return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
+  return list
+    .map((b: any) => ({
+      start: b && typeof b.start === 'string' ? b.start.trim() : '',
+      end: b && typeof b.end === 'string' ? b.end.trim() : '',
+    }))
+    .filter(b => b.start && b.end);
+}
+function buildBreakIso(date: string, time: string) {
+  const dt = new Date(`${date}T${time}:00`);
+  if (!Number.isFinite(dt.getTime())) return '';
+  return dt.toISOString();
+}\nimport { sbSelectAllSafe } from '../supabase/selectAll.js';
 import { sbUpsert, sbSelectOneById, sbDeleteWhere } from '../supabase/rest.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { getSetting, setSetting } from '../supabase/settings.js';
@@ -185,7 +209,7 @@ async function syncWorklogsForPatch(
     await openWorklog(userId, date, now, afterProjectId, afterTaskId, actionType);
   };
 
-  // 強制終亁E 退勤操作時は忁E��全オープン区間を閉じる（状態が既に非稼働でも閉じる�E�E
+  // 蠑ｷ蛻ｶ邨ゆｺ・ 騾蜍､謫堺ｽ懈凾縺ｯ蠢・★蜈ｨ繧ｪ繝ｼ繝励Φ蛹ｺ髢薙ｒ髢峨§繧具ｼ育憾諷九′譌｢縺ｫ髱樒ｨｼ蜒阪〒繧る哩縺倥ｋ・・
   if (actionType === 'clockOut') {
     await closeAll();
     return;
@@ -369,6 +393,23 @@ export async function rpcPatchAttendance(userIdRaw: unknown, dateRaw: unknown, a
       if (action.location) row.location = action.location;
       const effectiveLocation = (action.location || row.location || 'office') as AttendanceLocation;
       row.status = effectiveLocation === 'out' ? 'out' : 'working';
+
+      if (!row.breaks || (Array.isArray(row.breaks) && row.breaks.length === 0)) {
+        try {
+          const user = await sbSelectOneById('users', userId);
+          const workBreaks = normalizeUserBreaks((user as any)?.workBreaks);
+          if (workBreaks.length) {
+            row.breaks = workBreaks
+              .map(b => ({
+                start: buildBreakIso(date, b.start || ''),
+                end: buildBreakIso(date, b.end || ''),
+              }))
+              .filter(b => b.start && b.end);
+          }
+        } catch (_) {
+          // best-effort only
+        }
+      }
       break;
     }
     case 'clockOut': {
@@ -477,7 +518,7 @@ export async function rpcUpsertAttendanceManual(payloadRaw: unknown) {
   const user = await sbSelectOneById('users', userId);
   const stored = user && typeof (user as any).userPassword === 'string' ? String((user as any).userPassword) : '';
   const check = verifyPassword(stored, password);
-  if (!check.ok) throw new Error('�p�X���[�h����v���܂���');
+  if (!check.ok) throw new Error('パスワードが一致しません');
   if (check.needsRehash) {
     try {
       await sbUpsert('users', { id: userId, userPassword: hashPassword(password), updatedAt: nowIso() }, 'id');
@@ -558,3 +599,8 @@ export async function rpcSetAttendanceSettings(settingsRaw: unknown) {
   ]);
   return { ok: true };
 }
+
+
+
+
+

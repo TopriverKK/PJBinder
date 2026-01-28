@@ -4526,7 +4526,8 @@ function getUserWorkSettingsByUser(u){
     u && (u.fixedBreakMinutes ?? u.breakMinutes ?? u.fixed_break_minutes),
     defaults.breakMinutes
   );
-  return { type, workMinutes, breakMinutes };
+  const hasScheduledBreaks = Array.isArray(u && u.workBreaks) && (u.workBreaks || []).length > 0;
+  return { type, workMinutes, breakMinutes: hasScheduledBreaks ? 0 : breakMinutes };
 }
 function getUserWorkSettings(userId){
   const u = safeArr(DATA.users).find(x=>String(x.id||'')===String(userId||''));
@@ -4542,6 +4543,23 @@ function parseTaxRate(input){
   return n > 1 ? (n / 100) : n;
 }
 
+
+function isNowInAttendanceBreak(row){
+  const now = new Date();
+  const list = Array.isArray(row && row.breaks) ? row.breaks : [];
+  return list.some(b=>{
+    if(!b || !b.start || !b.end) return false;
+    const s = new Date(b.start);
+    const e = new Date(b.end);
+    if (!Number.isFinite(s.getTime()) || !Number.isFinite(e.getTime())) return false;
+    return now >= s && now < e;
+  });
+}
+function getDisplayAttendanceStatus(row){
+  const st = String(row && row.status || 'not-clocked');
+  if (st === 'working' && isNowInAttendanceBreak(row)) return 'break';
+  return st;
+}
 function attStatusLabel(s){
   return ({'not-clocked':'未打刻', working:'出勤中', break:'休憩中', out:'外出中', done:'退勤済'})[String(s||'not-clocked')] || String(s||'');
 }
@@ -5042,7 +5060,17 @@ function attFindRowForUser(userId){
 }
 
 const ATT_AUTO_BREAK_STATE = {};
+let ATT_DISPLAY_TICKER = null;
+function ensureAttendanceDisplayTicker(){
+  if (ATT_DISPLAY_TICKER) return;
+  ATT_DISPLAY_TICKER = setInterval(()=>{
+    if (PAGE !== 'attendance' || ATT_VIEW !== 'dashboard') return;
+    try { renderAttendancePage(); } catch(_){ }
+  }, 60 * 1000);
+}
+
 function autoApplyAttendanceBreaks(){
+  return;
   const now = new Date();
   const dateKey = todayStr();
   const users = attendanceBaseUsers();
@@ -5173,6 +5201,7 @@ function renderAttendanceUserSettings(){
 function renderAttendancePage(){
   if (PAGE !== 'attendance') return;
   if (ATT_VIEW !== 'dashboard') return;
+  ensureAttendanceDisplayTicker();
   const label = document.getElementById('att-today-label');
   if(label) label.textContent = todayStr();
 
@@ -5197,6 +5226,7 @@ function renderAttendancePage(){
     const uid = u.id;
     const row = attFindRowForUser(uid) || { user_id: uid, status:'not-clocked', location:'office', breaks:[], clock_in:'', clock_out:'', notes:'', project_id:'', task_id:'' };
     const status = String(row.status||'not-clocked');
+    const displayStatus = getDisplayAttendanceStatus(row);
     const location = String(row.location||'office');
     const clockIn = row.clock_in || '';
     const clockOut = row.clock_out || '';
@@ -5220,17 +5250,17 @@ function renderAttendancePage(){
       return h;
     })();
     const tone = (function(){
-      if(status==='working') return 'green';
-      if(status==='break' || status==='out') return 'yellow';
-      if(status==='done') return 'gray';
+      if(displayStatus==='working') return 'green';
+      if(displayStatus==='break' || displayStatus==='out') return 'yellow';
+      if(displayStatus==='done') return 'gray';
       return 'red';
     })();
     const stateClass = (function(){
-      if(status==='done') return 'card-state-done';
-      if(status==='not-clocked') return 'card-state-not-clocked';
-      if(status==='out' || status==='break') return 'card-state-event';
-      if(status==='working' && location==='remote') return 'card-state-working-remote';
-      if(status==='working' && location==='office') return 'card-state-working-office';
+      if(displayStatus==='done') return 'card-state-done';
+      if(displayStatus==='not-clocked') return 'card-state-not-clocked';
+      if(displayStatus==='out' || displayStatus==='break') return 'card-state-event';
+      if(displayStatus==='working' && location==='remote') return 'card-state-working-remote';
+      if(displayStatus==='working' && location==='office') return 'card-state-working-office';
       return 'card-state-not-clocked';
     })();
 
@@ -5314,7 +5344,7 @@ function renderAttendancePage(){
           <span class="att-k">出勤</span><span class="att-v">${escapeHtml(attFormatTime(clockIn))}</span>
           <span class="att-k">退勤</span><span class="att-v">${escapeHtml(attFormatTime(clockOut))}</span>
           <span class="att-k">勤務時間</span><span class="att-v">${escapeHtml(workedLabel)}</span>
-          <span class="att-status-pill tone-${tone}">${escapeHtml(attStatusLabel(status))}</span>
+          <span class="att-status-pill tone-${tone}">${escapeHtml(attStatusLabel(displayStatus))}</span>
         </div>
 
         <div class="att-line">
@@ -6691,7 +6721,8 @@ async function exportFreeeAttendanceCsv(){
       return row.map(v=>csvEscape(v)).join(',');
     });
 
-    const csv = [freeeHeaders.map(h=>csvEscape(h)).join(','), ...lines].join('\r\n');
+    const csv = [freeeHeaders.map(h=>csvEscape(h)).join(','), ...lines].join('
+');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -12215,6 +12246,16 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
+
+
+
+
+
+
+
+
+
 
 
 

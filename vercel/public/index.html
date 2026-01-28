@@ -4555,8 +4555,26 @@ function isNowInAttendanceBreak(row){
     return now >= s && now < e;
   });
 }
-function getDisplayAttendanceStatus(row){
+function getEffectiveClockOutIso(att, userId){
+  if(!att || !att.clock_in) return att && att.clock_out ? String(att.clock_out) : '';
+  if(att.clock_out) return String(att.clock_out);
+  const dateKey = String(att.work_date||'').slice(0,10);
+  if(!dateKey) return '';
+  const today = todayStr();
+  if(dateKey >= today) return '';
+  const u = safeArr(DATA.users).find(x=>String(x.id||'')===String(userId||''));
+  const endTime = String((u && (u.workEndTime || u.work_end_time)) || '18:00');
+  const end = new Date(${dateKey}T:00);
+  if(!Number.isFinite(end.getTime())) return '';
+  const start = new Date(att.clock_in);
+  if(Number.isFinite(start.getTime()) && end <= start) return start.toISOString();
+  return end.toISOString();
+}
+function isAutoClockOutApplied(att, userId){
+  return !!(att && !att.clock_out && getEffectiveClockOutIso(att, userId));
+}function getDisplayAttendanceStatus(row, userId){
   const st = String(row && row.status || 'not-clocked');
+  if (st === 'working' && isAutoClockOutApplied(row, userId)) return 'done';
   if (st === 'working' && isNowInAttendanceBreak(row)) return 'break';
   return st;
 }
@@ -5226,12 +5244,12 @@ function renderAttendancePage(){
     const uid = u.id;
     const row = attFindRowForUser(uid) || { user_id: uid, status:'not-clocked', location:'office', breaks:[], clock_in:'', clock_out:'', notes:'', project_id:'', task_id:'' };
     const status = String(row.status||'not-clocked');
-    const displayStatus = getDisplayAttendanceStatus(row);
+    const displayStatus = getDisplayAttendanceStatus(row, uid);
     const location = String(row.location||'office');
     const clockIn = row.clock_in || '';
-    const clockOut = row.clock_out || '';
+    const clockOut = getEffectiveClockOutIso(row, uid) || (row.clock_out || '');
     const worked = computeWorkedMinutes(row, uid);
-    const grossMinutes = row.clock_in ? minutesBetweenIso(row.clock_in, row.clock_out) : 0;
+    const grossMinutes = row.clock_in ? minutesBetweenIso(row.clock_in, clockOut || row.clock_out) : 0;
     const workSettings = getUserWorkSettings(uid);
     const breakMinutes = row.clock_in ? (computeBreakMinutes(row) + (workSettings.breakMinutes || 0)) : 0;
     const workedLabel = row.clock_in
@@ -5864,10 +5882,12 @@ function renderAttendanceCalendar(month){
       const row = items.find(r=>String(r.user_id||r.user||'')===userId);
       if (row) {
         const st = String(row.status||'');
-        const tone = (st==='working' || st==='out' || st==='break') ? 'work' : (st==='done' ? 'done' : 'none');
-        badgeHtml = `<div class="att-badge ${tone}">${escapeHtml(attStatusLabel(st))}</div>`;
-        const worked = (row.clock_in && row.clock_out) ? computeWorkedMinutes(row, userId) : 0;
-        const shift = `${attFormatTime(row.clock_in)}〜${attFormatTime(row.clock_out)} (${worked?minutesToLabel(worked):'0時間0分'})`;
+        const displayStatus = getDisplayAttendanceStatus(row, userId);
+        const tone = (displayStatus==='working' || displayStatus==='out' || displayStatus==='break') ? 'work' : (displayStatus==='done' ? 'done' : 'none');
+        badgeHtml = `<div class="att-badge ${tone}">${escapeHtml(attStatusLabel(displayStatus))}</div>`;
+        const effectiveOut = getEffectiveClockOutIso(row, userId) || row.clock_out;
+        const worked = row.clock_in ? computeWorkedMinutes(row, userId) : 0;
+        const shift = `${attFormatTime(row.clock_in)}〜${attFormatTime(effectiveOut)} (${worked?minutesToLabel(worked):'0時間0分'})`;
         const dayLogs = (worklogByDate.get(key) || []).filter(w=>String(w.user_id||w.userId||'')===userId);
         const taskMap = new Map();
         dayLogs.forEach(w=>{
@@ -6497,10 +6517,11 @@ function subtractInterval(interval, cut){
   if(e > rightStart) out.push([rightStart, e]);
   return out;
 }
-function computeWorkIntervals(att){
+function computeWorkIntervals(att, userId){
   if(!att.clock_in) return [];
   const start = new Date(att.clock_in);
-  const end = new Date(att.clock_out || new Date().toISOString());
+  const effectiveOut = getEffectiveClockOutIso(att, userId) || att.clock_out || new Date().toISOString();
+  const end = new Date(effectiveOut);
   if(!(end > start)) return [];
   let intervals=[[start,end]];
   const br = Array.isArray(att.breaks) ? att.breaks : [];
@@ -6554,14 +6575,14 @@ function computeBreakMinutes(att){
 }
 function computeWorkedMinutes(att, userId){
   if(!att || !att.clock_in) return 0;
-  const intervals = computeWorkIntervals(att);
+  const intervals = computeWorkIntervals(att, userId);
   const total = intervals.reduce((sum, iv)=> sum + ((iv[1]-iv[0]) / 60000), 0);
   const work = getUserWorkSettings(userId);
   const breakMin = (work && Number.isFinite(work.breakMinutes)) ? work.breakMinutes : fixedBreakMinutes;
   return Math.max(0, Math.round(total - breakMin));
 }
 function computeNightMinutes(att){
-  const intervals = computeWorkIntervals(att);
+  const intervals = computeWorkIntervals(att, userId);
   let total=0;
   for (const iv of intervals){
     const start=iv[0], end=iv[1];
@@ -12246,6 +12267,9 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
+
+
 
 
 

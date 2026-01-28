@@ -4564,7 +4564,7 @@ function getEffectiveClockOutIso(att, userId){
   if(dateKey >= today) return '';
   const u = safeArr(DATA.users).find(x=>String(x.id||'')===String(userId||''));
   const endTime = String((u && (u.workEndTime || u.work_end_time)) || '18:00');
-  const end = new Date(${dateKey}T:00);
+  const end = new Date(`${dateKey}T00:00:00`);
   if(!Number.isFinite(end.getTime())) return '';
   const start = new Date(att.clock_in);
   if(Number.isFinite(start.getTime()) && end <= start) return start.toISOString();
@@ -6742,8 +6742,7 @@ async function exportFreeeAttendanceCsv(){
       return row.map(v=>csvEscape(v)).join(',');
     });
 
-    const csv = [freeeHeaders.map(h=>csvEscape(h)).join(','), ...lines].join('
-');
+    const csv = [freeeHeaders.map(h=>csvEscape(h)).join(','), ...lines].join('\\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -12267,6 +12266,9 @@ function closestSafe(target, selector){
 </body>
 
 </html>
+
+
+
 
 
 

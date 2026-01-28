@@ -5042,6 +5042,19 @@ function attFindRowForUser(userId){
 }
 
 const ATT_AUTO_BREAK_STATE = {};
+let ATT_AUTO_BREAK_TICKER = null;
+function ensureAutoBreakTicker(){
+  if (ATT_AUTO_BREAK_TICKER) return;
+  ATT_AUTO_BREAK_TICKER = setInterval(()=>{
+    if (PAGE !== 'attendance') return;
+    try { autoApplyAttendanceBreaks(); } catch(_){ }
+  }, 60 * 1000);
+}
+function setManualBreakLock(uid, minutes=2){
+  const st = ATT_AUTO_BREAK_STATE[uid] || { last: 0, inBreak: null, manualUntil: 0 };
+  st.manualUntil = Date.now() + (minutes * 60 * 1000);
+  ATT_AUTO_BREAK_STATE[uid] = st;
+}
 function autoApplyAttendanceBreaks(){
   const now = new Date();
   const dateKey = todayStr();
@@ -5062,17 +5075,19 @@ function autoApplyAttendanceBreaks(){
       const start = new Date(`${dateKey}T${s}:00`);
       const end = new Date(`${dateKey}T${e}:00`);
       if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return false;
-      return now >= start && now <= end;
+      const endWithGrace = new Date(end.getTime() + 30 * 1000);
+      return now >= start && now < endWithGrace;
     });
-    const last = ATT_AUTO_BREAK_STATE[uid] || { last: 0, inBreak: null };
+    const last = ATT_AUTO_BREAK_STATE[uid] || { last: 0, inBreak: null, manualUntil: 0 };
     const cooldown = 60 * 1000;
     if (Date.now() - last.last < cooldown && last.inBreak === inBreak) return;
+    if (last.manualUntil && Date.now() < last.manualUntil) return;
     if (inBreak && status === 'working') {
       ATT_AUTO_BREAK_STATE[uid] = { last: Date.now(), inBreak };
       patchAttendance(uid, { type:'toggleBreak' });
     }
     if (!inBreak && status === 'break') {
-      ATT_AUTO_BREAK_STATE[uid] = { last: Date.now(), inBreak };
+      ATT_AUTO_BREAK_STATE[uid] = { last: Date.now(), inBreak, manualUntil: last.manualUntil || 0 };
       patchAttendance(uid, { type:'toggleBreak' });
     }
   });
@@ -5173,6 +5188,7 @@ function renderAttendanceUserSettings(){
 function renderAttendancePage(){
   if (PAGE !== 'attendance') return;
   if (ATT_VIEW !== 'dashboard') return;
+  ensureAutoBreakTicker();
   const label = document.getElementById('att-today-label');
   if(label) label.textContent = todayStr();
 
@@ -5360,6 +5376,7 @@ function renderAttendancePage(){
         }else if(action==='clockOut'){
           patchAttendance(uid, { type:'clockOut' });
         }else if(action==='toggleBreak'){
+          setManualBreakLock(uid, 2);
           patchAttendance(uid, { type:'toggleBreak' });
         }else if(action==='toggleOut'){
           patchAttendance(uid, { type:'toggleOut' });
@@ -5761,6 +5778,7 @@ async function saveAttendanceEdit(){
 }
 
 async function loadAttendanceCalendar(){
+  ensureAutoBreakTicker();
   const monthEl = el('att_cal_month');
   if (monthEl && !monthEl.value) monthEl.value = todayStr().slice(0,7);
   ensureAttendanceUserSelects();
@@ -6335,6 +6353,7 @@ async function refreshAttendanceCalendars(){
 }
 
 async function loadAttendanceMonth(){
+  ensureAutoBreakTicker();
   const mi = document.getElementById('att_month');
   const month = mi && mi.value ? mi.value : todayStr().slice(0,7);
   try{

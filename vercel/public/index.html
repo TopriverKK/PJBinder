@@ -3853,6 +3853,18 @@ function weeklyRow(ws, uid, projectId){
   return (WEEKLY.rowsByKey && WEEKLY.rowsByKey[k]) ? WEEKLY.rowsByKey[k] : null;
 }
 
+function weeklyHasMeaningfulText(text){
+  const raw = String(text||'').trim();
+  if (!raw) return false;
+  const normalized = raw
+    .replace(/[・•\-\u2022]/g,'')
+    .replace(/\s+/g,'')
+    .toLowerCase();
+  if (!normalized) return false;
+  if (normalized === 'なし' || normalized === '無し' || normalized === 'none' || normalized === 'na' || normalized === 'n/a') return false;
+  return true;
+}
+
 function normalizeWeeklyRowIds(row, knownUsers, knownProjects){
   let uid = String(row && row.userId ? row.userId : '').trim();
   let pid = String(row && row.projectId ? row.projectId : '').trim();
@@ -4133,7 +4145,7 @@ function renderWeeklyPage(){
       const kPid = parts[2];
       if (String(kUid) === uid) {
         const row = WEEKLY.rowsByKey[k] || {};
-        const hasContent = !!String(row.issues||'').trim() || !!String(row.done||'').trim();
+        const hasContent = weeklyHasMeaningfulText(row.issues) || weeklyHasMeaningfulText(row.done);
         if (!hasContent) return;
         const pid = String(kPid||'').trim();
         if (pid) weeklyProjectIds.add(pid);

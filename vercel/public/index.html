@@ -4051,7 +4051,13 @@ function renderWeeklyPage(){
     </thead>
   `;
 
-  const activeProjects = safeArr(DATA.projects).filter(p=>String(p.status||'active').toLowerCase() !== 'archived');
+  const activeProjects = safeArr(DATA.projects).filter(p=>{
+    const raw = String(p.status||'active').trim();
+    const st = raw.toLowerCase();
+    if (st === 'archived' || raw === 'アーカイブ') return false;
+    if (st === 'done' || st === 'completed' || raw === '完了') return false;
+    return true;
+  });
   const projNameById = (pid)=>{
     if (!pid) return '（共通・その他）';
     const p = activeProjects.find(x=>String(x.id)===String(pid));
@@ -4126,6 +4132,9 @@ function renderWeeklyPage(){
       const kUid = parts[1];
       const kPid = parts[2];
       if (String(kUid) === uid) {
+        const row = WEEKLY.rowsByKey[k] || {};
+        const hasContent = !!String(row.issues||'').trim() || !!String(row.done||'').trim();
+        if (!hasContent) return;
         const pid = String(kPid||'').trim();
         if (pid) weeklyProjectIds.add(pid);
         markProject(pid);

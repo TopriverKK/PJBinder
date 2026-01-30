@@ -4096,20 +4096,26 @@ function renderWeeklyPage(){
       })
       .filter(t => taskMemberIds(t).includes(uid));
     const projectIdsSet = new Set();
+    const taskProjectIds = new Set();
+    const weeklyProjectIds = new Set();
+    const hoursProjectIds = new Set();
     const markProject = (pidRaw)=>{
       const pidTrim = String(pidRaw||'').trim();
       if (pidTrim) projectIdsSet.add(pidTrim);
     };
-    openTasksForUser.forEach(t=>markProject(t.projectId));
-    activeProjects.forEach(p=>{
-      const owner = String(p.ownerUserId || p.owner || '').trim();
-      const memberList = String(p.members || p.assignees || p.memberIds || '').split(',').map(s=>s.trim()).filter(Boolean);
-      if (owner === uid || memberList.includes(uid)) markProject(p.id);
+    openTasksForUser.forEach(t=>{
+      const pid = String(t.projectId||'').trim();
+      if (pid) taskProjectIds.add(pid);
+      markProject(pid);
     });
     const collectFromMap = (map)=>{
       Object.keys(map||{}).forEach(k=>{
         const [kUid, kPid=''] = String(k||'').split('|');
-        if (String(kUid) === uid) markProject(kPid);
+        if (String(kUid) === uid) {
+          const pid = String(kPid||'').trim();
+          if (pid) hoursProjectIds.add(pid);
+          markProject(pid);
+        }
       });
     };
     collectFromMap(wkHoursMap);
@@ -4119,7 +4125,25 @@ function renderWeeklyPage(){
       if (parts.length < 3) return;
       const kUid = parts[1];
       const kPid = parts[2];
-      if (String(kUid) === uid) markProject(kPid);
+      if (String(kUid) === uid) {
+        const pid = String(kPid||'').trim();
+        if (pid) weeklyProjectIds.add(pid);
+        markProject(pid);
+      }
+    });
+    activeProjects.forEach(p=>{
+      const owner = String(p.ownerUserId || p.owner || '').trim();
+      const memberList = String(p.members || p.assignees || p.memberIds || '').split(',').map(s=>s.trim()).filter(Boolean);
+      if (owner === uid) {
+        markProject(p.id);
+        return;
+      }
+      if (memberList.includes(uid)) {
+        const pid = String(p.id||'').trim();
+        if (pid && (taskProjectIds.has(pid) || weeklyProjectIds.has(pid) || hoursProjectIds.has(pid))) {
+          markProject(pid);
+        }
+      }
     });
     const priorityRank = (pid)=>{
       const pr = projPriorityLabel(pid);

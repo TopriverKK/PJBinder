@@ -4132,7 +4132,6 @@ function renderWeeklyPage(){
         if (String(kUid) === uid) {
           const pid = String(kPid||'').trim();
           if (pid) hoursProjectIds.add(pid);
-          markProject(pid);
         }
       });
     };
